@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Logs
+*.log
+backend/crash.log
+backend/serial_trace.log
+npm-debug.log*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
+backend/tmp/
+*.pdf
+test_connection_simple.py
+output/

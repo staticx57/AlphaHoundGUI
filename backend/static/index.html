@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N42 Spectrum Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+</head>
+
+<body>
+    <header>
+        <h1>N42 Spectrum Viewer</h1>
+        <div class="header-controls">
+            <button id="btn-theme" title="Toggle Light/Dark Mode">🌓</button>
+            <button id="btn-history" title="File History">📜 History</button>
+            <button id="btn-device" title="Device Control">🔌 Device</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="upload-container" id="drop-zone">
+            <div class="upload-icon">📂</div>
+            <h2>Drop your N42 or CSV file here</h2>
+            <p>or click to browse</p>
+            <input type="file" id="file-input" accept=".n42,.xml,.csv">
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <div class="metadata-panel" id="metadata-panel">
+                <!-- Populated by JS -->
+            </div>
+
+            <div class="controls">
+                <button id="btn-lin" class="active">Linear</button>
+                <button id="btn-log">Logarithmic</button>
+                <button id="btn-reset-zoom">Reset Zoom</button>
+                <button id="btn-export-json">Export JSON</button>
+                <button id="btn-export-csv">Export CSV</button>
+                <button id="btn-export-pdf" style="background-color: var(--accent-color); color: white;">📄 Export
+                    PDF</button>
+                <button id="btn-compare" title="Compare Mode">📊 Compare</button>
+                <button id="btn-analysis" title="Advanced Analysis">🔬 Analysis</button>
+            </div>
+
+            <div id="compare-panel" style="display: none;" class="compare-panel">
+                <strong>Comparison Mode:</strong>
+                <span id="overlay-count">0 spectra loaded</span>
+                <button id="btn-add-file">+ Add Spectrum</button>
+                <button id="btn-clear-overlays">Clear All</button>
+                <input type="file" id="compare-file-input" accept=".n42,.xml,.csv" style="display:none;">
+            </div>
+
+            <div id="analysis-panel" style="display: none;" class="compare-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <strong>Spectral Analysis</strong>
+                    <button id="btn-run-fit" class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem;">Run Peak
+                        Fitting</button>
+                </div>
+                <div id="analysis-results" style="margin-top: 10px; width: 100%; overflow-x: auto;">
+                    <p style="color: #94a3b8; font-size: 0.9rem;">Click "Run Peak Fitting" to calculate FWHM and Net
+                        Area for detected peaks.</p>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="spectrumChart"></canvas>
+            </div>
+
+            <div id="peaks-container" style="display: none;">
+                <h3>Detected Peaks</h3>
+                <table id="peaks-table">
+                    <thead>
+                        <tr>
+                            <th>Energy (keV)</th>
+                            <th>Counts</th>
+                        </tr>
+                    </thead>
+                    <tbody id="peaks-tbody"></tbody>
+                </table>
+            </div>
+
+            <div id="isotopes-container" style="display: none;">
+                <h3>Identified Isotopes</h3>
+                <table id="isotopes-table">
+                    <thead>
+                        <tr>
+                            <th>Isotope</th>
+                            <th>Confidence</th>
+                            <th>Matched Lines</th>
+                        </tr>
+                    </thead>
+                    <tbody id="isotopes-tbody"></tbody>
+                </table>
+            </div>
+
+            <div id="analysis-panel" style="display: none; margin-top: 2rem;">
+                <div class="modal-header">
+                    <h3>🔍 Advanced Analysis (Gaussian Fit)</h3>
+                    <button id="btn-run-analysis" class="btn-primary" style="font-size: 0.8rem;">Run Fit</button>
+                </div>
+                <table id="analysis-table" style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+                    <thead>
+                        <tr style="text-align: left; border-bottom: 1px solid var(--border-color);">
+                            <th style="padding: 0.5rem;">Energy</th>
+                            <th style="padding: 0.5rem;">FWHM</th>
+                            <th style="padding: 0.5rem;">Net Area</th>
+                            <th style="padding: 0.5rem;">Res (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="analysis-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- File History Modal -->
+        <div id="history-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>File History</h3>
+                    <button id="close-history" class="close-btn">✕</button>
+                </div>
+                <div id="history-list"></div>
+            </div>
+        </div>
+
+        <!-- Device Control Panel -->
+        <!-- Device Sidebar (Non-blocking) -->
+        <div id="device-sidebar" class="device-sidebar">
+            <div class="modal-header">
+                <h3>🔌 AlphaHound</h3>
+                <button id="close-device-sidebar" class="close-btn">✕</button>
+            </div>
+
+            <div id="device-alert" class="ephemeral-message"></div>
+
+            <div id="device-disconnected" style="display: block;">
+                <label for="port-select">Serial Port:</label>
+                <select id="port-select" style="margin: 0.5rem 0; width: 100%; padding: 0.5rem;">
+                    <option value="">Loading ports...</option>
+                </select>
+                <div style="display:flex; gap:0.5rem;">
+                    <button id="btn-refresh-ports" style="flex:1;">🔄 Refresh</button>
+                    <button id="btn-connect-device" class="btn-primary" style="flex:1;">Connect</button>
+                </div>
+            </div>
+
+            <div id="device-connected" style="display: none;">
+                <div class="device-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">DOSE RATE</div>
+                        <div class="stat-value" id="dose-display">-- µRem/hr</div>
+                    </div>
+                </div>
+
+                <div class="device-controls">
+                    <label for="count-time">Count Duration:</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="number" id="count-time" value="5" min="0.1" max="1440" step="1"
+                            style="flex: 1; padding: 0.5rem;">
+                        <span>min</span>
+                    </div>
+
+                    <div style="height: 1rem;"></div>
+
+                    <button id="btn-start-acquire" class="btn-primary" style="padding: 0.75rem;">▶️ Start Live
+                        Count</button>
+                    <button id="btn-stop-acquire" class="btn-stop" style="display:none; padding: 0.75rem;">⏹️ Stop
+                        Acquisition</button>
+
+                    <div id="acquisition-status"
+                        style="text-align: center; font-size: 0.9rem; color: var(--accent-color); display:none; margin: 0.5rem 0;">
+                        Running: <span id="acquisition-timer" style="font-weight:bold;">0s</span>
+                    </div>
+
+                    <div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>
+
+                    <div style="display:flex; gap:0.5rem;">
+                        <button id="btn-clear-device" style="flex:1;">🗑️ Clear</button>
+                        <button id="btn-disconnect-device" style="flex:1;">Disconnect</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/app.js?v=3"></script>
+</body>
+
+</html>

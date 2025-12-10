@@ -1,0 +1,123 @@
+
+# AlphaHound Device Control Endpoints
+# Add this to the end of main.py before if __name__ == "__main__"
+
+@app.get("/device/ports")
+async def list_serial_ports():
+    """List available serial ports for AlphaHound device"""
+    try:
+        ports = alphahound_device.list_ports()
+        return {"ports": ports}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing ports: {str(e)}")
+
+
+@app.post("/device/connect")
+async def connect_device(port: str):
+    """Connect to AlphaHound device on specified port"""
+    if alphahound_device.is_connected():
+        return {"status": "already_connected", "port": port}
+    
+    success = alphahound_device.connect(port)
+    if success:
+        return {"status": "connected", "port": port}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to connect to device")
+
+
+@app.post("/device/disconnect")
+async def disconnect_device():
+    """Disconnect from AlphaHound device"""
+    alphahound_device.disconnect()
+    return {"status": "disconnected"}
+
+
+@app.get("/device/status")
+async def device_status():
+    """Get device connection status"""
+    return {
+        "connected": alphahound_device.is_connected(),
+        "dose_rate": alphahound_device.get_dose_rate() if alphahound_device.is_connected() else None
+    }
+
+
+@app.get("/device/dose")
+async def get_dose_rate():
+    """Get current dose rate from device"""
+    if not alphahound_device.is_connected():
+        raise HTTPException(status_code=400, detail="Device not connected")
+    
+    return {"dose_rate": alphahound_device.get_dose_rate()}
+
+
+@app.post("/device/spectrum")
+async def acquire_spectrum():
+    """Request spectrum acquisition from device"""
+    if not alphahound_device.is_connected():
+        raise HTTPException(status_code=400, detail="Device not connected")
+    
+    alphahound_device.request_spectrum()
+    
+    # Wait for spectrum (with timeout)
+    max_wait = 10  # seconds
+    waited = 0
+    while waited < max_wait:
+        await asyncio.sleep(0.5)
+        waited += 0.5
+        spectrum = alphahound_device.get_spectrum()
+        if len(spectrum) >= 1024:
+            break
+    
+    spectrum = alphahound_device.get_spectrum()
+    if len(spectrum) < 1024:
+        raise HTTPException(status_code=408, detail="Spectrum acquisition timeout")
+    
+    # Convert to counts and energies arrays
+    counts = [count for count, energy in spectrum]
+    energies = [energy for count, energy in spectrum]
+    
+    # Perform analysis
+    peaks = detect_peaks(energies, counts)
+    isotopes = identify_isotopes(peaks) if peaks else []
+    
+    return {
+        "counts": counts,
+        "energies": energies,
+        "peaks": peaks,
+        "isotopes": isotopes,
+        "metadata": {
+            "source": "AlphaHound Device",
+            "device": "RadView Detection AlphaHound",
+            "channels": len(counts)
+        }
+    }
+
+
+@app.post("/device/clear")
+async def clear_device_spectrum():
+    """Clear spectrum on device"""
+    if not alphahound_device.is_connected():
+        raise HTTPException(status_code=400, detail="Device not connected")
+    
+    alphahound_device.clear_spectrum()
+    return {"status": "cleared"}
+
+
+@app.websocket("/ws/dose")
+async def websocket_dose_stream(websocket: WebSocket):
+    """WebSocket endpoint for real-time dose rate streaming"""
+    await websocket.accept()
+    
+    try:
+        while True:
+            if alphahound_device.is_connected():
+                dose = alphahound_device.get_dose_rate()
+                await websocket.send_json({"dose_rate": dose, "timestamp": asyncio.get_event_loop().time()})
+            else:
+                await websocket.send_json({"dose_rate": None, "status": "disconnected"})
+            
+            await asyncio.sleep(1)  # Update every second
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+    finally:
+        await websocket.close()
