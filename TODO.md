@@ -27,8 +27,11 @@
     - ✅ Generate PDF reports of the spectrum.
 - [x] **Stability Fixes**:
     - ✅ Fix persistent serial disconnection issues (killed zombie processes, simplified serial loop).
+- [x] **Deployment Improvements**:
+    - ✅ Remove virtual environment requirement
+    - ✅ Create simplified one-click launch process
+    - ✅ Support running without AlphaHound device connected
 
 ## Technical Debt
 - [ ] Add unit tests for the frontend javascript.
-- [ ] Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.
-
+- [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.

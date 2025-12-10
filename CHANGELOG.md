@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - v1.9 (Deployment Improvements)
+- **Simplified Setup**:
+  - Removed virtual environment requirement
+  - Created `install_deps.bat` for one-time dependency installation
+  - Created `run.bat` for simplified application startup
+  - Dependencies now install to system Python user packages
+- **Enhanced User Experience**:
+  - No venv activation required - just run `run.bat`
+  - Application works without AlphaHound device connected
+  - Clearer error messages and installation feedback
+- **Documentation Updates**:
+  - Updated README.md with new installation instructions
+  - Added deployment walkthrough
+
+
 ### Added - v1.0 (Initial Release)
 - **Multi-Format Support**: Added robust handling for `.n42` (custom parser) and `.csv` (via `becquerel`) files.
 - **Frontend**: Created a modern, responsive "Vanilla JS" frontend without build steps.

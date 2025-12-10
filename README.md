@@ -57,26 +57,26 @@ A modern, web-based GUI for viewing gamma spectroscopy N42 and CSV files with au
 1. **Clone the repository**:
    ```bash
    git clone <repo-url>
-   cd N42-viewer
+   cd AlphaHoundGUI
    ```
 
-2. **Backend Setup**:
+2. **Install Dependencies** (one-time setup):
    ```bash
-   cd backend
-   python -m venv venv
-   .\venv\Scripts\activate
-   pip install -r requirements.txt
+   install_deps.bat
    ```
+   This installs all required packages to your system Python (no virtual environment needed).
 
 ## Usage
 
 ### Quick Start
-Double-click `launch.bat` in the root directory - the application will automatically start and open in your browser at `http://localhost:8080`.
+Double-click **`run.bat`** in the root directory - the application will automatically start and open in your browser at `http://localhost:8080`.
+
+> **Note**: AlphaHound device is **optional** - the application works without hardware connected for N42/CSV file analysis.
 
 ### Manual Start
 ```bash
 cd backend
-uvicorn main:app --reload --port 8080
+python -m uvicorn main:app --reload --port 8080
 ```
 
 Then navigate to `http://localhost:8080` and drag & drop an `.n42` or `.csv` file.
@@ -96,7 +96,8 @@ N42 viewer/
 │       ├── style.css
 │       └── app.js
 ├── AlphaHound-main/        # AlphaHound integration (see Credits)
-├── launch.bat              # Quick-start script
+├── install_deps.bat        # One-time dependency installer
+├── run.bat                 # Quick-start script (no venv required)
 └── test.n42                # Sample spectrum file
 ```
 
@@ -126,11 +127,46 @@ The AlphaHound interface provides:
 
 Special thanks to Nick Conner at RadView Detection for creating the AlphaHound device.
 
+## System Requirements
+
+- **Python**: 3.10 or higher (tested on 3.10.11)
+- **Operating System**: Windows (batch scripts), macOS/Linux compatible with manual commands
+- **Hardware**: Optional - RadView Detection AlphaHound™ for live acquisition
+
 ## Dependencies
 
-- **Backend**: FastAPI, uvicorn, scipy, numpy, becquerel, python-multipart
-- **Frontend**: Chart.js, chartjs-plugin-zoom
-- **Integration**: AlphaHound interface by NuclearGeekETH
+### Python Packages (Auto-installed via `install_deps.bat`)
+
+**Core Framework:**
+- `fastapi` - Modern web framework for building APIs
+- `uvicorn` - Lightning-fast ASGI server
+- `python-multipart` - File upload support
+
+**Scientific Computing:**
+- `numpy` - Numerical arrays and mathematical operations
+- `scipy` - Peak detection algorithms
+- `matplotlib` - Spectrum plotting for PDF reports
+
+**Specialized:**
+- `becquerel` - Advanced gamma spectroscopy analysis (optional for CSV support)
+- `pyserial` - Serial communication with AlphaHound device
+- `websockets` - Real-time dose rate streaming
+- `reportlab` - PDF report generation
+
+### Frontend (CDN - No Installation Required)
+- **Chart.js** - Interactive spectrum visualization
+- **chartjs-plugin-zoom** - Zoom/pan capabilities
+
+### Installation
+All Python dependencies are automatically installed by running:
+```bash
+install_deps.bat
+```
+
+Or manually:
+```bash
+pip install -r backend/requirements.txt
+```
 
 ## License
 
