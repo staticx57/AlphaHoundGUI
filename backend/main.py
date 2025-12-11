@@ -172,16 +172,25 @@ async def upload_file(file: UploadFile = File(...)):
                 if peaks:
                     try:
                         # DYNAMIC SETTINGS SELECTION
-                        # If file is calibrated (keV energies), use Strict settings (Default) to avoid false positives.
-                        # If uncalibrated (Channels), use Robust settings (Upload) to find structure.
-                        is_calibrated = result.get("is_calibrated", True) # Default to True (Strict) if unknown
+                        # If file is calibrated (keV energies) AND has sufficient statistics (>30s),
+                        # use Strict settings (Default) to avoid false positives.
+                        # If uncalibrated OR very short/noisy, use Robust settings (Upload).
+                        is_calibrated = result.get("is_calibrated", True)
+                        live_time = 0.0
+                        if result.get("metadata") and result["metadata"].get("live_time"):
+                            try:
+                                live_time = float(result["metadata"]["live_time"])
+                            except:
+                                pass
                         
-                        if is_calibrated:
+                        # Strict Mode Requirements: Calibrated + > 30 seconds data
+                        if is_calibrated and live_time > 30.0:
                             current_settings = DEFAULT_SETTINGS
-                            print(f"[DEBUG] File is CALIBRATED. Using STRICT settings.")
+                            print(f"[DEBUG] File is High Quality (Calibrated, {live_time}s). Using STRICT settings.")
                         else:
                             current_settings = UPLOAD_SETTINGS
-                            print(f"[DEBUG] File is UNCALIBRATED. Using ROBUST settings.")
+                            quality_reason = "Uncalibrated" if not is_calibrated else f"Short Duration ({live_time}s)"
+                            print(f"[DEBUG] File needs Robustness ({quality_reason}). Using ROBUST settings.")
 
                         # Get ALL isotopes and chains (no filtering at detection level) using selected settings
                         all_isotopes = identify_isotopes(

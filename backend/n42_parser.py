@@ -38,8 +38,13 @@ def parse_n42(file_content: str):
         # If no explicit energies, we might need coefficients, but for now let's use what we found
         # If energies array length matches counts, we are good.
         
-        live_time = find_text(spectrum, 'n42:LiveTime')
-        real_time = find_text(spectrum, 'n42:RealTime')
+        # Parse Duration (float)
+        try:
+             live_time_val = float(live_time) if live_time else 0.0
+             real_time_val = float(real_time) if real_time else 0.0
+        except:
+             live_time_val = 0.0
+             real_time_val = 0.0
 
         # Determine calibration status
         is_calibrated = len(energies) > 0 and len(energies) == len(counts)
@@ -49,8 +54,8 @@ def parse_n42(file_content: str):
             "energies": energies.tolist() if len(energies) > 0 else [],
             "is_calibrated": is_calibrated,
             "metadata": {
-                "live_time": live_time,
-                "real_time": real_time
+                "live_time": live_time_val,
+                "real_time": real_time_val
             }
         }
 
