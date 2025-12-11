@@ -1,5 +1,7 @@
 # SpecTrek 🚀
 
+![SpecTrek Banner](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_github_banner_1765461262612.png)
+
 > [!CAUTION]
 > **RADIATION SAFETY NOTICE & DISCLAIMER**
 > 
@@ -73,6 +75,12 @@
   - Decay chains with confidence levels
   - Metadata and timestamps
 - **History Management**: Save & reload previous analyses (last 10 files)
+
+## 📸 Screenshot
+
+![SpecTrek User Interface](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_ui_mockup_1765461305029.png)
+
+*SpecTrek's intuitive interface showing real-time spectrum analysis, decay chain detection, and isotope identification with confidence scoring.*
 
 ## Installation
 
