@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Main Fuselage -->
+  <path d="M12 2.5c0 0-5 6.5-5 11.5a5 5 0 0 0 10 0c0-5-5-11.5-5-11.5z"></path>
+  <!-- Window -->
+  <circle cx="12" cy="11.5" r="2.5"></circle>
+  <!-- Left Fin -->
+  <path d="M7 13l-3 6 4-1"></path>
+  <!-- Right Fin -->
+  <path d="M17 13l3 6-4-1"></path>
+  <!-- Engine/Flame -->
+  <path d="M10 21l2 3 2-3"></path>
+</svg>

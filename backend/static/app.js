@@ -185,7 +185,7 @@ async function handleFile(file) {
 
         // Reset upload zone text but keep it accessible for new uploads
         setTimeout(() => {
-            dropZone.innerHTML = '<div class="upload-icon">📂</div><h2>Drop new file to replace</h2><input type="file" id="file-input" accept=".n42,.xml,.csv">';
+            dropZone.innerHTML = '<div class="upload-icon"><img src="/static/icons/upload.svg" style="width: 64px; height: 64px;"></div><h2>Drop new file to replace</h2><input type="file" id="file-input" accept=".n42,.xml,.csv">';
         }, 1000);
 
     } catch (err) {
@@ -318,7 +318,9 @@ function renderDashboard(data) {
 
 
     // Chart
-    renderChart(data.energies, data.counts, data.peaks, 'linear');
+    // Preserve current scale if chart exists, otherwise default to linear
+    const currentScale = (chart && chart.options.scales.y.type) ? chart.options.scales.y.type : 'linear';
+    renderChart(data.energies, data.counts, data.peaks, currentScale);
 }
 
 function renderChart(labels, dataPoints, peaks, scaleType) {
@@ -373,6 +375,7 @@ function renderChart(labels, dataPoints, peaks, scaleType) {
                 },
                 y: {
                     type: scaleType,
+                    min: scaleType === 'logarithmic' ? 0.5 : undefined,
                     title: { display: true, text: 'Counts', color: '#94a3b8' },
                     grid: { color: 'rgba(255, 255, 255, 0.05)' },
                     ticks: { color: '#94a3b8' }
@@ -514,7 +517,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', async () => 
     } catch (err) {
         alert('Error generating PDF: ' + err.message);
         const btn = document.getElementById('btn-export-pdf');
-        btn.innerHTML = '📄 Export PDF';
+        btn.innerHTML = '<img src="/static/icons/pdf.svg" class="icon"> Export PDF';
         btn.disabled = false;
     }
 });
@@ -872,67 +875,8 @@ document.getElementById('btn-connect-device').addEventListener('click', async ()
     }
 });
 
-// Acquire Spectrum from device with stop capability
-let acquisitionAbortController = null;
+// [REMOVED] Legacy blocking acquisition listener to prevent double-execution
 
-document.getElementById('btn-start-acquire').addEventListener('click', async () => {
-    console.log("[Device] Acquire Spectrum button clicked");
-    const btnStart = document.getElementById('btn-start-acquire');
-    const btnStop = document.getElementById('btn-stop-acquire');
-    const originalText = btnStart.innerHTML;
-    const countMinutes = parseFloat(document.getElementById('count-time').value) || 5;
-
-    try {
-        // Create abort controller for stopping acquisition
-        acquisitionAbortController = new AbortController();
-
-        // Show stop button, hide start button
-        btnStart.style.display = 'none';
-        btnStop.style.display = 'inline-block';
-        btnStop.innerHTML = `⏹️ Stop (${countMinutes} min)`;
-
-        // Call the spectrum acquisition endpoint
-        const response = await fetch('/device/spectrum', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ count_minutes: countMinutes }),
-            signal: acquisitionAbortController.signal
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Spectrum acquisition failed');
-        }
-
-        const data = await response.json();
-        console.log("[Device] Spectrum acquired:", data);
-
-        // Display the spectrum in the dashboard
-        currentData = data;
-        renderDashboard(data);
-
-        // Show success message
-        alert(`Spectrum acquired successfully! ${data.peaks.length} peaks detected after ${countMinutes} minute(s).`);
-
-        // Reset buttons
-        btnStart.innerHTML = originalText;
-        btnStart.style.display = 'inline-block';
-        btnStop.style.display = 'none';
-    } catch (err) {
-        if (err.name === 'AbortError') {
-            console.log("[Device] Acquisition stopped by user");
-            // Note: Backend should return partial spectrum on abort
-            alert('Acquisition stopped. Attempting to retrieve partial spectrum...');
-        } else {
-            console.error("[Device] Spectrum acquisition error:", err);
-            alert('Error acquiring spectrum: ' + err.message);
-        }
-        // Reset buttons
-        btnStart.innerHTML = originalText;
-        btnStart.style.display = 'inline-block';
-        btnStop.style.display = 'none';
-    }
-});
 
 // Stop acquisition button
 document.getElementById('btn-stop-acquire').addEventListener('click', () => {
@@ -1032,8 +976,12 @@ document.getElementById('btn-disconnect-device').addEventListener('click', async
 document.getElementById('btn-start-acquire').addEventListener('click', async () => {
     if (isAcquiring) return;
 
-    const countMinutes = parseFloat(document.getElementById('count-time').value) || 1;
+    // Get value, trim whitespace, default to 5 if invalid
+    const inputVal = document.getElementById('count-time').value;
+    const countMinutes = parseFloat(inputVal) || 5;
     const countSeconds = countMinutes * 60;
+
+    console.log(`[Device] Starting acquisition for ${countMinutes} minutes (${countSeconds}s)`);
 
     // 1. Clear Device
     try {
@@ -1058,7 +1006,28 @@ document.getElementById('btn-start-acquire').addEventListener('click', async () 
         // Check if time is up BEFORE polling again
         if (elapsed >= countSeconds) {
             stopAcquisition();
-            showDeviceAlert("Acquisition Complete", 'success');
+
+            // Fetch final spectrum to ensure we have the latest data
+            try {
+                const res = await fetch('/device/spectrum', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ count_minutes: 0 })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    currentData = data;
+                    renderDashboard(data);
+                    // Show SINGLE success message
+                    setTimeout(() => {
+                        alert(`Acquisition Complete! ${data.peaks ? data.peaks.length : 0} peaks detected.`);
+                    }, 100);
+                }
+            } catch (e) {
+                console.error("[Device] Final poll error:", e);
+            }
+
             console.log("[Device] Acquisition Complete");
             return;
         }

@@ -10,17 +10,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css?v=2">
     <link rel="stylesheet" href="/static/button-fixes.css?v=2">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 
 <body>
     <header>
-        <h1>SpecTrek 🚀</h1>
+        <h1><img src="/static/icons/rocket.svg" class="icon icon-xl" style="margin-right:0.5rem;">SpecTrek</h1>
         <div class="header-controls">
-            <button id="btn-history" title="File History">📜 History</button>
-            <button id="btn-settings" title="Analysis Settings">⚙️ Settings</button>
-            <button id="btn-theme" title="Toggle Light/Dark Mode">🌓</button>
+            <button id="btn-history" title="File History"><img src="/static/icons/history.svg" class="icon">
+                History</button>
+            <button id="btn-settings" title="Analysis Settings"><img src="/static/icons/settings.svg" class="icon">
+                Settings</button>
+            <button id="btn-theme" title="Toggle Light/Dark Mode"><img src="/static/icons/theme.svg"
+                    class="icon"></button>
         </div>
     </header>
 
@@ -32,7 +36,7 @@
             style="background: var(--card-bg); border: 2px solid var(--accent-color); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="font-size: 1.5rem;">🔌</span>
+                    <img src="/static/icons/device.svg" class="icon icon-xl" alt="Device">
                     <h3 style="margin: 0; color: var(--accent-color);">AlphaHound Device</h3>
                 </div>
 
@@ -42,7 +46,8 @@
                         <option value="">Select Serial Port...</option>
                     </select>
                     <button id="btn-refresh-ports"
-                        style="padding: 0.5rem 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;">🔄</button>
+                        style="padding: 0.5rem 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;"><img
+                            src="/static/icons/refresh.svg" class="icon" style="margin:0;"></button>
                 </div>
 
                 <div style="display: flex; gap: 0.5rem;">
@@ -71,10 +76,12 @@
                         <span style="color: var(--text-secondary); font-size: 0.875rem;">min</span>
                     </div>
                     <button id="btn-start-acquire" class="btn-primary"
-                        style="padding: 0.5rem 1rem; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer;">▶️
+                        style="padding: 0.5rem 1rem; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer;"><img
+                            src="/static/icons/play.svg" class="icon">
                         Acquire Spectrum</button>
                     <button id="btn-stop-acquire" class="btn-stop"
-                        style="padding: 0.5rem 1rem; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; display: none;">⏹️
+                        style="padding: 0.5rem 1rem; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; display: none;"><img
+                            src="/static/icons/stop.svg" class="icon">
                         Stop Acquisition</button>
                     <div id="acquisition-status"
                         style="display: none; padding: 0.5rem 1rem; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
@@ -88,7 +95,7 @@
         </div>
 
         <div class="upload-container" id="drop-zone">
-            <div class="upload-icon">📂</div>
+            <div class="upload-icon"><img src="/static/icons/upload.svg" style="width: 64px; height: 64px;"></div>
             <h2>Drop your N42 or CSV file here</h2>
             <p>or click to browse</p>
             <input type="file" id="file-input" accept=".n42,.xml,.csv">
@@ -105,10 +112,13 @@
                 <button id="btn-reset-zoom">Reset Zoom</button>
                 <button id="btn-export-json">Export JSON</button>
                 <button id="btn-export-csv">Export CSV</button>
-                <button id="btn-export-pdf" style="background-color: var(--accent-color); color: white;">📄 Export
+                <button id="btn-export-pdf" style="background-color: var(--accent-color); color: white;"><img
+                        src="/static/icons/pdf.svg" class="icon"> Export
                     PDF</button>
-                <button id="btn-compare" title="Compare Mode">📊 Compare</button>
-                <button id="btn-analysis" title="Advanced Analysis">🔬 Analysis</button>
+                <button id="btn-compare" title="Compare Mode"><img src="/static/icons/compare.svg" class="icon">
+                    Compare</button>
+                <button id="btn-analysis" title="Advanced Analysis"><img src="/static/icons/analysis.svg" class="icon">
+                    Analysis</button>
             </div>
 
             <div id="compare-panel" style="display: none;" class="compare-panel">
@@ -163,7 +173,7 @@
             </div>
 
             <div id="decay-chains-container" style="display: none; margin-top: 2rem;">
-                <h3>🔬 Decay Chains Detected</h3>
+                <h3><img src="/static/icons/analysis.svg" class="icon"> Decay Chains Detected</h3>
                 <div id="decay-chains-list">
                     <!-- Populated by JS -->
                 </div>
@@ -185,7 +195,7 @@
         <div id="settings-modal" class="modal" style="display: none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>⚙️ Analysis Settings</h3>
+                    <h3><img src="/static/icons/settings.svg" class="icon"> Analysis Settings</h3>
                     <button id="close-settings" class="close-btn">✕</button>
                 </div>
 

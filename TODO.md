@@ -71,11 +71,11 @@
 - [ ] **Background Subtraction**:
     - Load background spectrum and subtract from samples
     - Improves detection of weak sources
-- [ ] **UI Icon Polish**:
-    - Replace all emoji icons with professional SVG/PNG assets
-    - Icons needed: 📜 History, ⚙️ Settings, 🌓 Theme, 🔌 Device, 🔄 Refresh, ▶️ Play, ⏹️ Stop, 📂 Upload, 📄 PDF, 📊 Compare, 🔬 Analysis, 🚀 Rocket
-    - Add favicon to browser tab
-    - Consistent icon styling across all buttons
+- [x] **UI Icon Polish**:
+    - ✅ Replace all emoji icons with professional SVG/PNG assets
+    - ✅ Icons needed: 📜 History, ⚙️ Settings, 🌓 Theme, 🔌 Device, 🔄 Refresh, ▶️ Play, ⏹️ Stop, 📂 Upload, 📄 PDF, 📊 Compare, 🔬 Analysis, 🚀 Rocket
+    - ✅ Add favicon to browser tab
+    - ✅ Consistent icon styling across all buttons
 
 ## Technical Debt
 - [ ] Add unit tests for the frontend javascript.

@@ -38,7 +38,14 @@ def fit_gaussian(energies, counts, peak_centers, window_width=10):
             def gaussian_bg(x, a, mu, sigma, c):
                 return a * np.exp(-(x - mu)**2 / (2 * sigma**2)) + c
             
-            popt, pcov = scipy.optimize.curve_fit(gaussian_bg, x_window, y_window, p0=p0)
+            # Bounds: [min_amp, min_mu, min_sigma, min_bg], [max_amp, max_mu, max_sigma, max_bg]
+            # Enforce positive amplitude, center within window, width positive but not huge, background positive
+            bounds = (
+                [0, center - window_width, 0.01, 0],
+                [np.inf, center + window_width, window_width * 2, np.inf]
+            )
+            
+            popt, pcov = scipy.optimize.curve_fit(gaussian_bg, x_window, y_window, p0=p0, bounds=bounds)
             
             amplitude, mean, sigma, bg = popt
             fwhm = 2.355 * sigma
