@@ -7,6 +7,7 @@ from isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
 from spectral_analysis import fit_gaussian, calibrate_energy, subtract_background
 from report_generator import generate_pdf_report
+from ml_analysis import get_ml_identifier
 
 router = APIRouter(tags=["analysis"])
 
@@ -33,6 +34,9 @@ class BackgroundSubtractionRequest(BaseModel):
     source_counts: list
     background_counts: list
     scaling_factor: float = 1.0
+
+class MLIdentifyRequest(BaseModel):
+    counts: list
 
 @router.get("/settings")
 async def get_settings():
@@ -149,4 +153,19 @@ async def analyze_subtract_background(request: BackgroundSubtractionRequest):
         )
         return {"net_counts": net_counts}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/analyze/ml-identify")
+async def ml_identify(request: MLIdentifyRequest):
+    """Machine Learning isotope identification using PyRIID"""
+    try:
+        ml = get_ml_identifier()
+        if ml is None:
+            raise HTTPException(status_code=501, detail="PyRIID not installed")
+        results = ml.identify(request.counts, top_k=5)
+        return {"predictions": results}
+    except ImportError as e:
+        raise HTTPException(status_code=501, detail="PyRIID not installed")
+    except Exception as e:
+        print(f"[ML] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

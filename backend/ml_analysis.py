@@ -7,12 +7,17 @@ from typing import List, Dict, Optional
 
 # Try to import riid with proper error handling
 try:
-    from riid.data.synthetic import SeedMixer, GrossCountPlus Spectrum, get_dummy_seeds
+    from riid.data.synthetic import get_dummy_seeds
+    from riid.data.sampleset import SampleSet
     from riid.models import MLPClassifier
     HAS_RIID = True
-except ImportError:
+    print("[ML] PyRIID successfully imported")
+except ImportError as e:
     HAS_RIID = False
-    print("[WARNING] PyRIID not available. ML identification disabled.")
+    print(f"[WARNING] PyRIID not available. ML identification disabled. Error: {e}")
+except Exception as e:
+    HAS_RIID = False
+    print(f"[ERROR] Unexpected error importing PyRIID: {e}")
 
 class MLIdentifier:
     """Simple ML-based identifier using PyRIID."""
@@ -29,23 +34,21 @@ class MLIdentifier:
         if self.is_trained:
             return
             
-        print("[ML] Training classifier on synthetic data...")
+        print("[ML] Training classifier on dummy seed data...")
         
-        # Use PyRIID's built-in synthetic data generation
-        # This creates realistic spectra with Poisson noise
+        # Use PyRIID's dummy seeds directly - they're already a SampleSet
         seeds = get_dummy_seeds()
-        mixer = SeedMixer(seeds=seeds, bg_cps=300, long_bg_live_time=600)
         
-        # Generate training samples (simplified for speed)
-        n_samples = 100
-        spectra, labels = mixer.generate(n_samples)
-        
-        # Train a simple MLP classifier
-        self.model = MLPClassifier(hidden_layers=(128,))
-        self.model.fit(spectra, labels)
-        self.is_trained = True
-        
-        print(f"[ML] Training complete. Model ready.")
+        # Train a simple MLP classifier with defaults (simpler, more compatible)
+        self.model = MLPClassifier()
+        try:
+            self.model.fit(seeds, epochs=5, verbose=False)
+            self.is_trained = True
+            print(f"[ML] Training complete. Model ready.")
+        except Exception as e:
+            print(f"[ML] Training failed: {e}")
+            self.is_trained = False
+            raise
     
     def identify(self, counts: List[int], top_k: int = 5) -> List[Dict]:
         """
@@ -65,28 +68,55 @@ class MLIdentifier:
         if not self.is_trained:
             self.lazy_train()
         
-        # Prepare input (PyRIID expects specific format)
-        spectrum = np.array(counts, dtype=float).reshape(1, -1)
+        # Prepare input as a SampleSet
+        import pandas as pd
+        spectrum_array = np.array(counts, dtype=float)
+        
+        # Create a minimal SampleSet with the spectrum
+        # SampleSet expects specific columns
+        test_data = pd.DataFrame({
+            'live_time': [300.0],  # Default live time in seconds
+            'total_counts': [np.sum(spectrum_array)]
+        })
+        test_data['counts'] = [spectrum_array]
+        
+        test_ss = SampleSet()
+        test_ss.spectra = test_data
+        test_ss.n_samples = 1
+        test_ss.n_channels = len(spectrum_array)
         
         # Get predictions
-        predictions = self.model.predict_proba(spectrum)[0]
-        
-        # Get top K isotopes
-        top_indices = np.argsort(predictions)[::-1][:top_k]
-        
-        results = []
-        for idx in top_indices:
-            isotope_name = self.model.get_labels()[idx]
-            confidence = float(predictions[idx]) * 100
+        try:
+            predictions_ss = self.model.predict(test_ss)
             
-            if confidence > 1.0:  # Only return meaningful predictions
-                results.append({
-                    'isotope': isotope_name,
-                    'confidence': confidence,
-                    'method': 'ML (PyRIID)'
-                })
-        
-        return results
+            # Extract prediction probabilities
+            # The predictions are in the SampleSet's prediction columns
+            pred_df = predictions_ss.get_predictions()
+            
+            results = []
+            if not pred_df.empty and len(pred_df) > 0:
+                # Get all prediction columns (exclude metadata)
+                pred_cols = [col for col in pred_df.columns if not col.startswith('_')]
+                
+                if pred_cols:
+                    # Get the first row's predictions
+                    probs = pred_df.iloc[0][pred_cols]
+                    # Sort and get top K
+                    top_preds = probs.nlargest(top_k)
+                    
+                    for isotope_name, confidence in top_preds.items():
+                        conf_pct = float(confidence) * 100
+                        if conf_pct > 1.0:  # Only return meaningful predictions
+                            results.append({
+                                'isotope': isotope_name,
+                                'confidence': conf_pct,
+                                'method': 'ML (PyRIID)'
+                            })
+            
+            return results
+        except Exception as e:
+            print(f"[ML] Prediction error: {e}")
+            return []
 
 # Global instance (singleton pattern)
 _ml_identifier = None
