@@ -1,0 +1,12 @@
+# AlphaHound GUI - Core Dependencies
+fastapi
+uvicorn
+python-multipart
+pyserial
+websockets
+matplotlib
+reportlab
+numpy
+scipy
+pillow
+pandas

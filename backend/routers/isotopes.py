@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict
-from ..isotope_database import load_custom_isotopes, save_custom_isotope, delete_custom_isotope
+from isotope_database import load_custom_isotopes, save_custom_isotope, delete_custom_isotope
 
 router = APIRouter()
 

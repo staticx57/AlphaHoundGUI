@@ -1,0 +1,18 @@
+# AlphaHound GUI - Full Dependencies (with ML)
+
+# Core dependencies
+fastapi
+uvicorn
+python-multipart
+pyserial
+websockets
+matplotlib
+reportlab
+numpy
+scipy
+pillow
+pandas
+
+# Machine Learning (Optional - ~377MB)
+# Install with: pip install git+https://github.com/sandialabs/pyriid.git@main
+# Or use install.bat for automatic installation
