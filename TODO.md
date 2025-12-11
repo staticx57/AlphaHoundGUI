@@ -48,6 +48,10 @@
     - ✅ Fix persistent serial disconnection issues (killed zombie processes, simplified serial loop).
     - ✅ Fixed real-time acquisition timer overshoot (300/300 exact)
     - ✅ Fixed PDF export Content-Disposition header for proper downloads
+    - ✅ **Auto-Reconnect**: Automatically recovers WebSocket connection causing dose rate display to resume after network/server interruption.
+    - ✅ **Visibility Optimization**: Pauses chart rendering when tab is hidden to reduce CPU usage.
+    - ✅ **Unload Safeguards**: Prompts user before closing tab if recording is in progress.
+    - ✅ **Memory Protection**: Caps comparison mode to 8 spectra to prevent browser crashes.
 - [x] **Deployment Improvements**:
     - ✅ Remove virtual environment requirement
     - ✅ Create simplified one-click launch process

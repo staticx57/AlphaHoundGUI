@@ -41,6 +41,11 @@
   - **Live Acquisition**: Uses "Gold Standard" checks (30% confidence) to prevent false positives in live data.
   - **File Analysis**: Uses "Robust" checks (1% confidence, 30 keV tolerance) for uploaded CSV/N42 files to handle uncalibrated or noisy community data.
 
+### 🛡️ Stability & Reliability
+- **Auto-Reconnect**: Automatically recovers connection if server restarts.
+- **Resource Efficient**: Pauses heavy rendering when tab is backgrounded.
+- **Data Safeguards**: Prevents accidental tab closure during active recordings.
+
 ### ⚙️ Simple & Advanced Modes
 - **Simple Mode** (Default):
   - Optimized thresholds (40% isotope, 30% chain)
@@ -118,6 +123,8 @@ Then navigate to `http://localhost:8080` and drag & drop an `.n42` or `.csv` fil
 
 ```
 N42 viewer/
+├── archive/             # Archived data and scripts
+│   └── legacy_version/  # Original AlphaHound files
 ├── backend/
 │   ├── main.py              # FastAPI application
 │   ├── n42_parser.py        # Custom N42 XML parser
@@ -130,8 +137,7 @@ N42 viewer/
 │       └── app.js
 ├── AlphaHound-main/        # AlphaHound integration (see Credits)
 ├── install_deps.bat        # One-time dependency installer
-├── run.bat                 # Quick-start script (no venv required)
-└── test.n42                # Sample spectrum file
+└── run.bat                 # Quick-start script (no venv required)
 ```
 
 ## AlphaHound Integration
@@ -144,7 +150,7 @@ The AlphaHound interface provides:
 - N42/CSV export compatibility with this viewer
 - Serial communication with AlphaHound hardware
 
-**See `AlphaHound-main/` folder for the full application.**
+**See `archive/legacy_version/AlphaHound-main/` folder for the original application.**
 
 ## Credits & Attribution
 
