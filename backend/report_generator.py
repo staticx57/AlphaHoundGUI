@@ -100,6 +100,25 @@ def generate_pdf_report(data):
         ]))
         story.append(t_iso)
         story.append(Spacer(1, 12))
+    
+    # Decay Chains Section
+    if "decay_chains" in data and data["decay_chains"]:
+        story.append(Paragraph("<b>Detected Decay Chains</b>", styles['Heading2']))
+        for chain in data["decay_chains"]:
+            chain_title = f"{chain.get('chain_name', 'Unknown')} - {chain.get('confidence_level', 'UNKNOWN')} ({chain.get('confidence', 0):.0f}%)"
+            story.append(Paragraph(f"<b>{chain_title}</b>", styles['Heading3']))
+            
+            # Detected members
+            members_text = f"Detected: {chain.get('num_detected', 0)}/{chain.get('num_key_isotopes', 0)} key indicators"
+            story.append(Paragraph(members_text, styles['Normal']))
+            
+            # Applications
+            if chain.get('applications'):
+                apps_text = "<b>Likely Sources:</b> " + ", ".join(chain['applications'][:3])
+                story.append(Paragraph(apps_text, styles['Normal']))
+            
+            story.append(Spacer(1, 6))
+        story.append(Spacer(1, 12))
 
     # Peaks Section (Top 20)
     if "peaks" in data and data["peaks"]:

@@ -173,6 +173,12 @@ DECAY_CHAINS = {
             "Uranium minerals",
             "Natural background radiation"
         ],
+        "abundance_weight": 0.993,  # U-238 is 99.3% of natural uranium
+        "references": [
+            {"name": "NNDC Nuclear Data", "url": "https://www.nndc.bnl.gov/nudat3/decaysearchdirect.jsp?nuc=238U"},
+            {"name": "IAEA Decay Data", "url": "https://www-nds.iaea.org/relnsd/vcharthtml/VChartHTML.html"},
+            {"name": "Natural Abundance (LBNL)", "url": "https://www2.lbl.gov/abc/wallchart/chapters/03/2.html"}
+        ],
         "notes": "Most common hobby source. Bi-214 at 609 keV is strongest peak."
     },
     
@@ -195,6 +201,12 @@ DECAY_CHAINS = {
             "Welding rods (thoriated tungsten)",
             "Thorium minerals"
         ],
+        "abundance_weight": 1.0,  # Not in natural uranium, but common in mantles/ceramics
+        "references": [
+            {"name": "NNDC Th-232 Data", "url": "https://www.nndc.bnl.gov/nudat3/decaysearchdirect.jsp?nuc=232Th"},
+            {"name": "Thorium Abundance (USGS)", "url": "https://pubs.usgs.gov/fs/2002/fs087-02/"},
+            {"name": "Natural Series (Britannica)", "url": "https://www.britannica.com/science/thorium-series"}
+        ],
         "notes": "Tl-208 at 2614 keV is unique diagnostic peak, used for calibration."
     },
     
@@ -215,6 +227,12 @@ DECAY_CHAINS = {
             "Natural uranium (0.72% abundance)",
             "Enriched uranium materials",
             "Old nuclear equipment"
+        ],
+        "abundance_weight": 0.0072,  # U-235 is only 0.72% of natural uranium  
+        "references": [
+            {"name": "NNDC U-235 Data", "url": "https://www.nndc.bnl.gov/nudat3/decaysearchdirect.jsp?nuc=235U"},
+            {"name": "Isotopic Composition (NRC)", "url": "https://www.nrc.gov/reading-rm/doc-collections/fact-sheets/uranium.html"},
+            {"name": "Actinium Series (Wikipedia)", "url": "https://en.wikipedia.org/wiki/Decay_chain#Actinium_series"}
         ],
         "notes": "Usually overshadowed by U-238 chain in natural samples. 185.7 keV overlaps with Ra-226 at 186.2 keV."
     }
@@ -361,7 +379,9 @@ def identify_decay_chains(peaks, identified_isotopes=None, energy_tolerance=20.0
                 'detected_members': detected_members,
                 'num_detected': num_detected_isotopes,
                 'num_key_isotopes': num_key_isotopes,
+                'abundance_weight': chain_data.get('abundance_weight', 1.0),  # Pass from database
                 'applications': chain_data['applications'],
+                'references': chain_data.get('references', []),  # Pass authoritative sources
                 'notes': chain_data['notes']
             })
     

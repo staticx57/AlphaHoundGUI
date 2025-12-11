@@ -1,4 +1,4 @@
-# N42 Viewer GUI
+# SpecTrek 🚀
 
 > [!CAUTION]
 > **RADIATION SAFETY NOTICE & DISCLAIMER**
@@ -22,35 +22,57 @@
 > 
 > If you are working with radiation sources, ensure compliance with local regulations (NRC, EPA, state, or equivalent authorities).
 
-A modern, web-based GUI for viewing gamma spectroscopy N42 and CSV files with automatic peak detection and isotope identification.
+**SpecTrek** is a modern, web-based gamma spectroscopy analysis platform with intelligent isotope identification, decay chain detection, and real-time device integration.
 
-## Features
+## ✨ Key Features
 
-- **Multi-Format Support**:
-  - **N42/XML**: Custom lightweight parser (numpy/xml.etree)
-  - **CSV**: Integration with `becquerel` library for advanced spectral data
-- **Automated Analysis**:
-  - **Peak Detection**: Uses `scipy.signal.find_peaks`
-  - **Isotope Identification**: Database of 30+ isotopes (medical, industrial, natural background, fission products)
-  - Confidence scoring for identified isotopes
-- **Interactive Visualization**:
-  - Linear/Logarithmic scale toggles
-  - Zoom and pan capabilities (mouse wheel, pinch, drag)
-  - Peak markers and hover tooltips
-- **Themes & History**:
-  - Light/Dark mode toggle with localStorage persistence
-  - File history modal (last 10 files)
-- **Export Options**:
-  - JSON/CSV export of full spectrum data
-  - **PDF Reports**: Generate professional PDF reports with spectrum plot, peaks, and isotopes
-- **AlphaHound Device Control** ⚡NEW:
-  - Direct serial communication with RadView Detection AlphaHound™ hardware
-  - **Live Acquisition**: Watch the spectrum build in real-time (2s updates)
-  - **Non-Blocking Sidebar**: Control device while interacting with the main chart
-  - **Timed Count**: Set specific duration for accumulation
-  - Real-time dose rate monitoring (WebSocket streaming)
-  - Automatic peak detection & isotope ID on acquired data
-- **Lightweight**: Vanilla JS (no heavy frameworks)
+### 📊 Advanced Analysis
+- **Multi-Format Support**: N42/XML and CSV file parsing
+- **Automated Peak Detection**: Using `scipy.signal.find_peaks`
+- **Intelligent Isotope Identification**: 
+  - **Simple Mode**: 30 hobby-focused isotopes (uranium glass, mantles, watches)
+  - **Advanced Mode**: 100+ isotopes including fission products, activation products, rare earths, and transuranics
+- **Decay Chain Detection**: Identifies natural decay series (U-238, U-235, Th-232) with confidence scoring
+- **Natural Abundance Weighting**: Scientifically accurate ranking based on LBNL/NRC isotopic abundance data
+- **Authoritative References**: Direct links to NNDC, IAEA, LBNL, USGS, NRC sources for each detected chain
+
+### ⚙️ Simple & Advanced Modes
+- **Simple Mode** (Default):
+  - Optimized thresholds (40% isotope, 30% chain)
+  - Curated library for hobbyist applications
+  - Minimal false positives
+- **Advanced Mode**:
+  - User-adjustable confidence thresholds
+  - Configurable energy tolerance
+  - Expanded 100+ isotope library
+  - Custom threshold fine-tuning via ⚙️ Settings panel
+  - localStorage persistence across sessions
+  - localStorage persistence across sessions
+
+### 🎨 Interactive Visualization
+- **Dual Scale Support**: Linear/Logarithmic toggles
+- **Advanced Zoom & Pan**: Mouse wheel, pinch, drag interactions
+- **Peak Markers**: Automatic labeling with hover tooltips
+- **4 Theme Options**: Dark (default), Light, Nuclear (radiation warning), Toxic (biohazard)
+- **Multi-File Comparison**: Overlay up to 8 spectra with color coding
+
+### 🔌 AlphaHound Device Integration
+- **Direct Serial Communication**: With RadView Detection AlphaHound™ hardware
+- **Real-Time Acquisition**: Watch spectrum build live with 2-second updates
+- **Timed/Interruptible Counts**: Set duration (e.g., 5 minutes) with early stop capability
+- **Live Dose Rate**: WebSocket streaming of μR/hr measurements
+- **Automatic Analysis**: Peak detection & isotope ID on acquired data
+- **Non-Blocking UI**: Control device while viewing/analyzing spectra
+
+### 📤 Export & Reporting
+- **Data Export**: JSON/CSV formats with full spectrum data
+- **PDF Reports**: Professional reports including:
+  - Spectrum plot visualization
+  - Detected peaks table
+  - Identified isotopes
+  - Decay chains with confidence levels
+  - Metadata and timestamps
+- **History Management**: Save & reload previous analyses (last 10 files)
 
 ## Installation
 

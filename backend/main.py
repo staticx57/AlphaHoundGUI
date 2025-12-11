@@ -25,6 +25,51 @@ DEFAULT_SETTINGS = {
     "max_isotopes": 5  # Limit for simple mode
 }
 
+def apply_abundance_weighting(chains):
+    """
+    Apply natural abundance weighting to decay chain confidence scores.
+    
+    Based on authoritative sources (LBNL, NRC):
+    - U-238: 99.274% of natural uranium (weight ~1.0)
+    - U-235: 0.720% of natural uranium (weight ~0.007)  
+    - Th-232: ~3.5× more abundant than U in Earth's crust
+    
+    This ensures U-238 always ranks higher than U-235 in natural samples,
+    even when U-235 shows 100% of its (fewer) indicators.
+    
+    Args:
+        chains: List of decay chain detections from identify_decay_chains()
+    
+    Returns:
+        List of chains with weighted confidence scores
+    """
+    for chain in chains:
+        # Get abundance weight from database (default 1.0)
+        abundance_weight = chain.get('abundance_weight', 1.0)
+        original_confidence = chain['confidence']
+        
+        # Apply logarithmic weighting to avoid over-correction
+        # For U-238 (0.993): slight boost (~99%)
+        # For U-235 (0.0072): strong penalty (~0.7%)
+        # For Th-232 (1.0): no change
+        import math
+        
+        if abundance_weight < 0.01:  # U-235 and similarly rare
+            # Strong penalty for rare isotopes
+            weighted_confidence = original_confidence * abundance_weight * 10
+        elif abundance_weight > 0.9:  # U-238
+            # Keep high, slight boost
+            weighted_confidence = original_confidence * 1.05
+        else:  # Th-232 and others
+            weighted_confidence = original_confidence
+        
+        # Store both for transparency
+        chain['confidence_unweighted'] = original_confidence
+        chain['confidence'] = weighted_confidence
+        chain['abundance_weight'] = abundance_weight
+    
+    return chains
+
 def apply_confidence_filtering(isotopes, chains, settings):
     """
     Apply threshold filtering based on mode settings.
@@ -58,9 +103,12 @@ def apply_confidence_filtering(isotopes, chains, settings):
         else:
             chain['confidence_level'] = 'LOW'
         
-        # Apply filters
+        # Apply filters (using WEIGHTED confidence)
         if chain['confidence'] >= settings.get('chain_min_confidence', 30.0) and chain['num_detected'] >= min_isotopes:
             filtered_chains.append(chain)
+    
+    # Re-sort by weighted confidence
+    filtered_chains.sort(key=lambda x: x['confidence'], reverse=True)
     
     return filtered_isotopes, filtered_chains
 
@@ -113,8 +161,11 @@ async def upload_file(file: UploadFile = File(...)):
                         )
                         all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
                         
+                        # Apply abundance weighting (intermediate step)
+                        weighted_chains = apply_abundance_weighting(all_chains)
+                        
                         # Apply filtering based on settings (Simple mode by default)
-                        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, all_chains, DEFAULT_SETTINGS)
+                        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
                         
                         result["isotopes"] = isotopes
                         result["decay_chains"] = decay_chains
@@ -276,8 +327,11 @@ async def acquire_spectrum(request: SpectrumRequest):
         )
         all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
         
+        # Apply abundance weighting (intermediate step)
+        weighted_chains = apply_abundance_weighting(all_chains)
+        
         # Apply filtering (Simple mode by default)
-        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, all_chains, DEFAULT_SETTINGS)
+        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
     else:
         isotopes = []
         decay_chains = []
@@ -391,23 +445,36 @@ class ReportRequest(BaseModel):
     counts: list
     peaks: list = []
     isotopes: list = []
+    decay_chains: list = []  # Added for decay chain reporting
 
 @app.post("/export/pdf")
 async def export_pdf(request: ReportRequest):
     """Generate and download PDF report"""
     try:
+        print(f"[PDF] Generating PDF for: {request.filename}")
+        print(f"[PDF] Request data keys: {request.dict().keys()}")
+        
         # Convert Pydantic model to dict for the generator
         data = request.dict()
+        print(f"[PDF] Calling PDF generator...")
         pdf_bytes = generate_pdf_report(data)
+        print(f"[PDF] Generated {len(pdf_bytes)} bytes")
+        
+        filename = f"{request.filename}_report.pdf"
+        print(f"[PDF] Sending file: {filename}")
         
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename={request.filename}_report.pdf"
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(pdf_bytes))
             }
         )
     except Exception as e:
+        print(f"[PDF] Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

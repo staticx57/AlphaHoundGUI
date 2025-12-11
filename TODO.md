@@ -3,57 +3,76 @@
 ## Completed ✅
 - [x] **Advanced Analysis**:
     - ✅ Use `scipy.signal.find_peaks` for automatic peak detection and labeling.
-    - ✅ Isotope identification database with 30+ isotopes
+    - ✅ Isotope identification database with 100+ isotopes (Simple: 30, Advanced: 100+)
+    - ✅ Decay chain detection (U-238, U-235, Th-232 series)
+    - ✅ Confidence scoring with natural abundance weighting
 - [x] **Export Options**:
     - ✅ Allow exporting parsed data to JSON or CSV from the UI.
+    - ✅ Generate PDF reports with spectrum plot, peaks, isotopes, and decay chains
 - [x] **UI Improvements**:
     - ✅ Add zoom/pan capabilities to the chart (using `chartjs-plugin-zoom`).
-    - ✅ Light/Dark mode toggle with localStorage
+    - ✅ Light/Dark mode toggle with localStorage + Nuclear/Toxic bonus themes
     - ✅ Multi-file comparison (overlay multiple spectra)
 - [x] **Data Management**:
     - ✅ Save upload history to local storage
 - [x] **AlphaHound Device Integration**:
     - ✅ Serial communication with RadView Detection AlphaHound™
     - ✅ Live dose rate monitoring via WebSocket
-    - ✅ Real-time spectrum acquisition (Live Building)
+    - ✅ Real-time spectrum acquisition (Live Building) with timed/interruptible counts
     - ✅ Non-blocking Sidebar UI for device control
     - ✅ Integrated device control panel
-
-## Future Enhancements
-- [ ] **Advanced/Simple Mode Toggle**:
-    - **Simple Mode** (default): Current optimized thresholds (40% isotope, 30% chain) with hobby-focused library (uranium glass, lantern mantles, radium watches, etc.)
-    - **Advanced Mode**: User-adjustable confidence thresholds, energy tolerance settings, and expanded isotope library including:
-        - Additional fission products and activation products
-        - Rare earth isotopes
-        - Extended medical isotopes
-        - Nuclear reactor/waste products
-        - Custom isotope definitions
-    - Settings panel for threshold customization (isotope min confidence, chain min confidence, peak matching tolerance)
-- [ ] **Decay Chain Detection**:
-    - Identify typical radioactive decay chains in detected spectra
-    - When daughter products are detected, suggest likely parent isotopes
-    - Example: Uranium glass (U-238 chain) → Pa-234m, Th-234, Ra-226, Pb-214, Bi-214
-    - Help users understand the full decay series present in a sample
-    - Visual display of detected chain members and missing expected peaks
-- [ ] **Advanced ML Integration**:
-    - Integrate `PyRIID` for machine-learning based isotope identification.
-    - *Note: Requires Python < 3.11 (Incompatible with current 3.13 env)*
-- [x] **Additional Export Options**:
-    - ✅ Generate PDF reports of the spectrum.
+- [x] **Advanced/Simple Mode Toggle**:
+    - ✅ **Simple Mode** (default): Optimized thresholds (40% isotope, 30% chain) with hobby-focused library (uranium glass, lantles, radium watches, etc.)
+    - ✅ **Advanced Mode**: User-adjustable confidence thresholds, energy tolerance settings, and expanded isotope library including:
+        - ✅ Additional fission products (Ru-103, Zr-95, Ce-144, Mo-99, etc.)
+        - ✅ Activation products (Sc-46, Cr-51, Ag-110m, Sb-124, etc.)
+        - ✅ Rare earth isotopes (Eu-152/154/155, Gd-153, Tb-160, etc.)
+        - ✅ Extended medical isotopes (Ga-67, In-111, Sm-153, Lu-177, etc.)
+        - ✅ Nuclear reactor/waste products
+        - ✅ Transuranics (Pu-238/239/240, Np-237, Am-243, Cm-244)
+    - ✅ Settings panel (⚙️) for threshold customization (isotope min confidence, chain min confidence, peak matching tolerance)
+    - ✅ localStorage persistence across sessions
+- [x] **Decay Chain Detection**:
+    - ✅ Identify typical radioactive decay chains in detected spectra
+    - ✅ When daughter products are detected, suggest likely parent isotopes
+    - ✅ U-238 chain (Pa-234m, Th-234, Ra-226, Pb-214, Bi-214, etc.)
+    - ✅ U-235 chain (Actinium series with abundance weighting)
+    - ✅ Th-232 chain (Tl-208, Ac-228, Pb-212, etc.)
+    - ✅ Visual display of detected chain members with confidence levels
+    - ✅ Authoritative source links (NNDC, IAEA, LBNL, USGS, NRC)
+- [x] **Natural Abundance Weighting**:
+    - ✅ Research-based isotopic abundance from LBNL/NRC
+    - ✅ U-238 (99.3%) correctly ranks above U-235 (0.72%) in natural samples
+    - ✅ Intermediate filtering layer between detection and thresholding
 - [x] **Stability Fixes**:
     - ✅ Fix persistent serial disconnection issues (killed zombie processes, simplified serial loop).
+    - ✅ Fixed real-time acquisition timer overshoot (300/300 exact)
+    - ✅ Fixed PDF export Content-Disposition header for proper downloads
 - [x] **Deployment Improvements**:
     - ✅ Remove virtual environment requirement
     - ✅ Create simplified one-click launch process
     - ✅ Support running without AlphaHound device connected
+- [x] **Refactor threshold filtering to application layer**:
+    - ✅ Moved confidence threshold filtering from `isotope_database.py` to `main.py`
+    - ✅ `identify_isotopes()` and `identify_decay_chains()` return ALL matches
+    - ✅ Application layer applies filtering based on Simple/Advanced mode
+    - ✅ Runtime threshold adjustment without modifying core detection logic
+
+## Future Enhancements
+- [ ] **Advanced ML Integration**:
+    - Integrate `PyRIID` for machine-learning based isotope identification.
+    - *Note: Requires Python < 3.11 (Incompatible with current 3.13 env)*
+- [ ] **Custom Isotope Definitions**:
+    - Allow users to add custom isotopes to the database via UI
+    - Import/export custom isotope libraries
+- [ ] **Energy Calibration UI**:
+    - Interactive peak marking for calibration
+    - Multi-point linear/quadratic calibration
+- [ ] **Background Subtraction**:
+    - Load background spectrum and subtract from samples
+    - Improves detection of weak sources
 
 ## Technical Debt
-- [ ] **Refactor threshold filtering to application layer**:
-    - Move confidence threshold filtering from `isotope_database.py` functions to `main.py` endpoint handlers
-    - `identify_isotopes()` and `identify_decay_chains()` should return ALL matches
-    - Application layer (`/upload`, `/device/spectrum` endpoints) applies filtering based on mode:
-        - **Simple mode**: Default thresholds (40% isotope, 30% chain)
-        - **Advanced mode**: User-configurable thresholds from settings
-    - Benefits: Allows runtime threshold adjustment without modifying core detection logic
 - [ ] Add unit tests for the frontend javascript.
+- [ ] Add unit tests for backend API endpoints
 - [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.

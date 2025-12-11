@@ -289,6 +289,24 @@ function renderDashboard(data) {
                         ${chain.notes ? `<div style="margin-top: 0.5rem; font-style: italic; color: var(--accent-color);">
                             ℹ️ ${chain.notes}
                         </div>` : ''}
+                        
+                        ${chain.references && chain.references.length > 0 ? `
+                        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                            <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                📚 <strong>Authoritative Sources:</strong>
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                ${chain.references.map(ref => `
+                                    <a href="${ref.url}" target="_blank" rel="noopener noreferrer" 
+                                       style="font-size: 0.875rem; color: var(--accent-color); text-decoration: none; 
+                                              padding: 0.25rem 0.5rem; border: 1px solid var(--accent-color); border-radius: 4px;
+                                              transition: all 0.2s ease;">
+                                        ${ref.name} ↗
+                                    </a>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -460,7 +478,8 @@ document.getElementById('btn-export-pdf').addEventListener('click', async () => 
                 energies: currentData.energies,
                 counts: currentData.counts,
                 peaks: currentData.peaks || [],
-                isotopes: currentData.isotopes || []
+                isotopes: currentData.isotopes || [],
+                decay_chains: currentData.decay_chains || []
             })
         });
 
@@ -469,15 +488,26 @@ document.getElementById('btn-export-pdf').addEventListener('click', async () => 
             throw new Error(errJson.detail || 'PDF generation failed');
         }
 
+        // Extract filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'spectrum_report.pdf';
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (filenameMatch && filenameMatch[1]) {
+                filename = filenameMatch[1].replace(/['"]/g, '');
+            }
+        }
+
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = (currentData.metadata?.filename || 'spectrum') + '_report.pdf';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
+
+        // Open PDF in new tab - browser will show it and offer download
+        window.open(url, '_blank');
+
+        // Clean up after delay
+        setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+        }, 1000);
 
         btn.innerHTML = originalText;
         btn.disabled = false;
