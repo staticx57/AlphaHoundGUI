@@ -93,3 +93,31 @@ def calibrate_energy(channels, known_energies, known_channels):
     
     calibrated_energies = slope * np.array(channels) + intercept
     return calibrated_energies.tolist(), {"slope": slope, "intercept": intercept}
+
+def subtract_background(source_counts, background_counts, scaling_factor=1.0):
+    """
+    Subtract background spectrum from source spectrum.
+    
+    Args:
+        source_counts (list): Counts from the sample source
+        background_counts (list): Counts from the background noise
+        scaling_factor (float): Multiplier for background (e.g. time normalization)
+        
+    Returns:
+        list: Net counts (clamped to 0)
+    """
+    src = np.array(source_counts, dtype=float)
+    bg = np.array(background_counts, dtype=float)
+    
+    # Ensure dimensions match
+    length = min(len(src), len(bg))
+    src = src[:length]
+    bg = bg[:length]
+    
+    # Subtract
+    net_counts = src - (bg * scaling_factor)
+    
+    # Clamp negative values to 0
+    net_counts[net_counts < 0] = 0
+    
+    return net_counts.tolist()

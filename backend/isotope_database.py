@@ -134,9 +134,39 @@ ISOTOPE_DATABASE_ADVANCED = {
 # Default to Simple mode database for backward compatibility
 ISOTOPE_DATABASE = ISOTOPE_DATABASE_SIMPLE
 
+# Custom Isotope Persistence
+CUSTOM_ISOTOPES_FILE = "custom_isotopes.json"
+import json
+import os
+
+def load_custom_isotopes():
+    if not os.path.exists(CUSTOM_ISOTOPES_FILE):
+        return {}
+    try:
+        with open(CUSTOM_ISOTOPES_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_custom_isotope(name, energies):
+    custom = load_custom_isotopes()
+    custom[name] = energies
+    with open(CUSTOM_ISOTOPES_FILE, 'w') as f:
+        json.dump(custom, f, indent=2)
+
+def delete_custom_isotope(name):
+    custom = load_custom_isotopes()
+    if name in custom:
+        del custom[name]
+        with open(CUSTOM_ISOTOPES_FILE, 'w') as f:
+            json.dump(custom, f, indent=2)
+        return True
+    return False
+
 def get_isotope_database(mode='simple'):
     """
     Get the appropriate isotope database based on mode.
+    Merges custom isotopes into the base database.
     
     Args:
         mode: 'simple' for hobby-focused (30 isotopes) or 'advanced' for comprehensive (100+ isotopes)
@@ -144,9 +174,14 @@ def get_isotope_database(mode='simple'):
     Returns:
         Dictionary of isotope names to gamma energies
     """
-    if mode == 'advanced':
-        return ISOTOPE_DATABASE_ADVANCED
-    return ISOTOPE_DATABASE_SIMPLE
+    base_db = ISOTOPE_DATABASE_ADVANCED if mode == 'advanced' else ISOTOPE_DATABASE_SIMPLE
+    
+    # Merge custom isotopes (Custom overrides base if same name, or just adds)
+    # create a copy to not mutate the global constant
+    merged_db = base_db.copy()
+    merged_db.update(load_custom_isotopes())
+    
+    return merged_db
 
 
 # Decay chain definitions with key indicators

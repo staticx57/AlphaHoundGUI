@@ -52,6 +52,17 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
             # Try to infer delimiter (comma, semicolon, tab)
             df = pd.read_csv(tmp_path, sep=None, engine='python')
             
+            # Check if headers are numeric (implying headerless file read as header)
+            try:
+                # Try converting column names to floats
+                [float(c) for c in df.columns]
+                # If valid, reload with header=None
+                df = pd.read_csv(tmp_path, sep=None, engine='python', header=None)
+                # Ensure generic column names for mapping logic below
+                df.columns = [str(c) for c in df.columns]
+            except:
+                pass
+
             # Normalize column names
             df.columns = [str(c).lower().strip() for c in df.columns]
             

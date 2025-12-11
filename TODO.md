@@ -69,12 +69,12 @@
 - [ ] **Custom Isotope Definitions**:
     - Allow users to add custom isotopes to the database via UI
     - Import/export custom isotope libraries
-- [ ] **Energy Calibration UI**:
-    - Interactive peak marking for calibration
-    - Multi-point linear/quadratic calibration
-- [ ] **Background Subtraction**:
-    - Load background spectrum and subtract from samples
-    - Improves detection of weak sources
+- [x] **Energy Calibration UI**:
+    - ✅ Interactive peak marking for calibration
+    - ✅ Linear calibration (Slope/Intercept)
+- [x] **Background Subtraction**:
+    - ✅ Load background spectrum and subtract from samples
+    - ✅ Real-time net counts display
 - [x] **UI Icon Polish**:
     - ✅ Replace all emoji icons with professional SVG/PNG assets
     - ✅ Icons needed: 📜 History, ⚙️ Settings, 🌓 Theme, 🔌 Device, 🔄 Refresh, ▶️ Play, ⏹️ Stop, 📂 Upload, 📄 PDF, 📊 Compare, 🔬 Analysis, 🚀 Rocket

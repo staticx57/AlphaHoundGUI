@@ -137,7 +137,40 @@
                 </div>
                 <div id="analysis-results" style="margin-top: 10px; width: 100%; overflow-x: auto;">
                     <p style="color: #94a3b8; font-size: 0.9rem;">Click "Run Peak Fitting" to calculate FWHM and Net
-                        Area for detected peaks.</p>
+                        Area.</p>
+                </div>
+
+                <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>Calibration</strong>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <button id="btn-calibrate-mode" style="font-size: 0.85rem; padding: 4px 8px;">Open Calibration
+                            Tool</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>Background Subtraction</strong>
+                        <span id="bg-active-indicator"
+                            style="display:none; color: var(--accent-color); font-size: 0.8rem; font-weight: bold;">●
+                            Active</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                        <button id="btn-load-bg" style="font-size: 0.85rem; padding: 4px 8px;">Load Background
+                            File</button>
+                        <button id="btn-set-current-bg" style="font-size: 0.85rem; padding: 4px 8px;">Use Current as
+                            BG</button>
+                        <button id="btn-clear-bg"
+                            style="font-size: 0.85rem; padding: 4px 8px; background: #ef4444; color: white; border: none; display:none;">Clear
+                            BG</button>
+                    </div>
+                    <div id="bg-status"
+                        style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); font-style: italic;">
+                        No background loaded.
+                    </div>
+                    <input type="file" id="bg-file-input" accept=".n42,.xml,.csv" style="display:none;">
                 </div>
             </div>
 
@@ -264,16 +297,82 @@
                 </div>
 
                 <div
-                    style="text-align: right; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                    style="text-align: right; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+                    <button id="btn-manage-isotopes"
+                        style="background:transparent; border:1px solid var(--border-color); color:var(--text-primary);">Manage
+                        Custom Isotopes</button>
                     <button id="btn-apply-settings" class="btn-primary">Apply Settings</button>
                 </div>
             </div>
         </div>
 
 
+        <!-- Calibration Modal -->
+        <div id="calibration-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Energy Calibration</h3>
+                    <button id="close-calibration" class="close-btn">✕</button>
+                </div>
+                <div style="margin: 1rem 0;">
+                    <p>Click on the chart to add points (Channel), then enter the known energy.</p>
+                    <table style="width: 100%; text-align: left; margin-bottom: 1rem;">
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th>Energy (keV)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cal-points-tbody"></tbody>
+                    </table>
+                    <div id="cal-results"
+                        style="display:none; background: #f0fdf4; padding: 0.5rem; border-radius: 6px; margin-bottom: 1rem; border: 1px solid #86efac;">
+                        <strong>Fit Results:</strong><br>
+                        Slope: <span id="cal-slope"></span><br>
+                        Intercept: <span id="cal-intercept"></span>
+                    </div>
+                    <div style="text-align: right;">
+                        <button id="btn-cal-calculate">Calculate Fit</button>
+                        <button id="btn-cal-apply" class="btn-primary" style="display:none;">Apply to View</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Custom Isotopes Modal -->
+        <div id="isotopes-modal" class="modal" style="display: none; z-index: 1001;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Custom Isotopes</h3>
+                    <button id="close-isotopes" class="close-btn">✕</button>
+                </div>
+                <div style="margin: 1rem 0;">
+                    <form id="add-isotope-form"
+                        style="display:flex; gap:10px; margin-bottom:1rem; align-items:flex-end;">
+                        <div style="flex:1;">
+                            <label style="font-size:0.8rem; color:var(--text-secondary);">Name (e.g. MySource)</label>
+                            <input type="text" id="iso-name" placeholder="Name" required style="width:100%;">
+                        </div>
+                        <div style="flex:2;">
+                            <label style="font-size:0.8rem; color:var(--text-secondary);">Energies (keV,
+                                comma-sep)</label>
+                            <input type="text" id="iso-energies" placeholder="e.g. 662, 32" required
+                                style="width:100%;">
+                        </div>
+                        <button type="submit" class="btn-primary" style="padding:6px 12px;">Add</button>
+                    </form>
+
+                    <h4 style="border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px;">
+                        Your Isotopes</h4>
+                    <div id="custom-isotopes-list" style="max-height: 200px; overflow-y: auto;"></div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
-    <script src="/static/app.js?v=4"></script>
+    <!-- Main Application Logic (ES6 Modules) -->
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 
 </html>
