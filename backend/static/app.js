@@ -1,4 +1,3 @@
-const fileInput = document.getElementById('file-input');
 const dropZone = document.getElementById('drop-zone');
 const dashboard = document.getElementById('dashboard');
 const metadataPanel = document.getElementById('metadata-panel');
@@ -8,8 +7,139 @@ const ctx = document.getElementById('spectrumChart').getContext('2d');
 let chart = null;
 let currentData = null;
 
-// File Upload Handling
-fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+// ========== Analysis Settings Management ==========
+let currentSettings = {
+    mode: 'simple',
+    isotope_min_confidence: 40.0,
+    chain_min_confidence: 30.0,
+    energy_tolerance: 20.0,
+    chain_min_isotopes_medium: 3,
+    chain_min_isotopes_high: 4,
+    max_isotopes: 5
+};
+
+// Load settings from localStorage on startup
+function loadSettings() {
+    const saved = localStorage.getItem('analysisSettings');
+    if (saved) {
+        currentSettings = JSON.parse(saved);
+        updateSettingsUI();
+    }
+}
+
+// Save settings to localStorage
+function saveSettings() {
+    localStorage.setItem('analysisSettings', JSON.stringify(currentSettings));
+}
+
+// Update settings UI to reflect current settings
+function updateSettingsUI() {
+    // Set mode radio button
+    const modeRadios = document.getElementsByName('analysis-mode');
+    modeRadios.forEach(radio => {
+        if (radio.value === currentSettings.mode) {
+            radio.checked = true;
+        }
+    });
+
+    // Update slider values
+    const isoSlider = document.getElementById('isotope-confidence');
+    const chainSlider = document.getElementById('chain-confidence');
+    const tolSlider = document.getElementById('energy-tolerance');
+
+    if (isoSlider) {
+        isoSlider.value = currentSettings.isotope_min_confidence;
+        document.getElementById('iso-conf-val').textContent = currentSettings.isotope_min_confidence;
+    }
+    if (chainSlider) {
+        chainSlider.value = currentSettings.chain_min_confidence;
+        document.getElementById('chain-conf-val').textContent = currentSettings.chain_min_confidence;
+    }
+    if (tolSlider) {
+        tolSlider.value = currentSettings.energy_tolerance;
+        document.getElementById('energy-tol-val').textContent = currentSettings.energy_tolerance;
+    }
+
+    // Show/hide advanced settings based on mode
+    toggleAdvancedSettings(currentSettings.mode === 'advanced');
+}
+
+// Toggle advanced settings visibility
+function toggleAdvancedSettings(show) {
+    const advancedDiv = document.getElementById('advanced-settings');
+    if (advancedDiv) {
+        advancedDiv.style.display = show ? 'block' : 'none';
+    }
+}
+
+// Initialize settings on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+
+    // Settings modal controls
+    document.getElementById('btn-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').style.display = 'flex';
+        updateSettingsUI();
+    });
+
+    document.getElementById('close-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').style.display = 'none';
+    });
+
+    // Mode toggle
+    document.getElementsByName('analysis-mode').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            currentSettings.mode = e.target.value;
+            toggleAdvancedSettings(e.target.value === 'advanced');
+        });
+    });
+
+    // Threshold sliders with live updates
+    document.getElementById('isotope-confidence').addEventListener('input', (e) => {
+        document.getElementById('iso-conf-val').textContent = e.target.value;
+        currentSettings.isotope_min_confidence = parseFloat(e.target.value);
+    });
+
+    document.getElementById('chain-confidence').addEventListener('input', (e) => {
+        document.getElementById('chain-conf-val').textContent = e.target.value;
+        currentSettings.chain_min_confidence = parseFloat(e.target.value);
+    });
+
+    document.getElementById('energy-tolerance').addEventListener('input', (e) => {
+        document.getElementById('energy-tol-val').textContent = e.target.value;
+        currentSettings.energy_tolerance = parseFloat(e.target.value);
+    });
+
+    // Reset to defaults button
+    document.getElementById('btn-reset-defaults').addEventListener('click', () => {
+        currentSettings = {
+            mode: 'simple',
+            isotope_min_confidence: 40.0,
+            chain_min_confidence: 30.0,
+            energy_tolerance: 20.0,
+            chain_min_isotopes_medium: 3,
+            chain_min_isotopes_high: 4,
+            max_isotopes: 5
+        };
+        updateSettingsUI();
+        alert('Settings reset to defaults! Click "Apply Settings" to save.');
+    });
+
+    // Apply settings button
+    document.getElementById('btn-apply-settings').addEventListener('click', () => {
+        saveSettings();
+        document.getElementById('settings-modal').style.display = 'none';
+        alert('Settings saved! Re-upload your file or acquire a new spectrum to apply changes.');
+    });
+});
+
+// File Upload Handling - Use event delegation to handle dynamically recreated input
+dropZone.addEventListener('change', (e) => {
+    if (e.target.id === 'file-input') {
+        handleFile(e.target.files[0]);
+    }
+});
+
 
 // Drag and Drop
 dropZone.addEventListener('dragover', (e) => {
@@ -56,13 +186,11 @@ async function handleFile(file) {
         // Reset upload zone text but keep it accessible for new uploads
         setTimeout(() => {
             dropZone.innerHTML = '<div class="upload-icon">📂</div><h2>Drop new file to replace</h2><input type="file" id="file-input" accept=".n42,.xml,.csv">';
-            document.getElementById('file-input').addEventListener('change', (e) => handleFile(e.target.files[0]));
         }, 1000);
 
     } catch (err) {
         alert(err.message);
         dropZone.innerHTML = '<div class="upload-icon">❌</div><h2>Error. Try again.</h2><p>' + err.message + '</p><input type="file" id="file-input" accept=".n42,.xml,.csv">';
-        document.getElementById('file-input').addEventListener('change', (e) => handleFile(e.target.files[0]));
     }
 }
 
@@ -110,6 +238,66 @@ function renderDashboard(data) {
     } else {
         isotopesContainer.style.display = 'none';
     }
+
+
+    // Decay Chains Display
+    const decayChainsContainer = document.getElementById('decay-chains-container');
+    const decayChainsList = document.getElementById('decay-chains-list');
+
+    console.log('Decay chains data:', data.decay_chains);
+    console.log('Decay chains container:', decayChainsContainer);
+
+    if (data.decay_chains && data.decay_chains.length > 0) {
+        console.log('Displaying', data.decay_chains.length, 'decay chains');
+        decayChainsContainer.style.display = 'block';
+
+        decayChainsList.innerHTML = data.decay_chains.map(chain => {
+            const confidenceClass = chain.confidence_level.toLowerCase() + '-confidence';
+            const confidenceBadge = chain.confidence_level === 'HIGH' ? '🟢' :
+                chain.confidence_level === 'MEDIUM' ? '🟡' : '🔴';
+
+            // Format detected members
+            const membersHTML = Object.entries(chain.detected_members).map(([isotope, peaks]) => {
+                const energies = peaks.map(p => p.energy.toFixed(1)).join(', ');
+                return `<div style="margin: 0.3rem 0; padding-left: 1rem;">
+                    ✅ <strong>${isotope}</strong>: ${energies} keV
+                </div>`;
+            }).join('');
+
+            return `
+                <div class="chain-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${chain.confidence_level === 'HIGH' ? '#10b981' : '#f59e0b'};">
+                    <div class="chain-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <h4 style="margin: 0; color: var(--text-color);">${confidenceBadge} ${chain.chain_name}</h4>
+                        <span class="${confidenceClass}" style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                            ${chain.confidence_level} (${chain.confidence.toFixed(0)}%)
+                        </span>
+                    </div>
+                    
+                    <div class="chain-details" style="font-size: 0.9rem; color: var(--text-secondary);">
+                        <div style="margin-bottom: 0.5rem;">
+                            <strong>Detected Members:</strong> ${chain.num_detected}/${chain.num_key_isotopes} key indicators
+                        </div>
+                        ${membersHTML}
+                        
+                        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                            <strong>Likely Sources:</strong>
+                            <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
+                                ${chain.applications.map(app => `<li style="margin: 0.25rem 0;">${app}</li>`).join('')}
+                            </ul>
+                        </div>
+                        
+                        ${chain.notes ? `<div style="margin-top: 0.5rem; font-style: italic; color: var(--accent-color);">
+                            ℹ️ ${chain.notes}
+                        </div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        console.log('No decay chains detected or empty array');
+        decayChainsContainer.style.display = 'none';
+    }
+
 
     // Chart
     renderChart(data.energies, data.counts, data.peaks, 'linear');
@@ -301,15 +489,22 @@ document.getElementById('btn-export-pdf').addEventListener('click', async () => 
     }
 });
 
-// Theme Toggle
+// Theme Toggle (cycles through: dark → light → nuclear → toxic)
 const themeBtn = document.getElementById('btn-theme');
+const themes = ['dark', 'light', 'nuclear', 'toxic'];
 const currentTheme = localStorage.getItem('theme') || 'dark';
 document.documentElement.setAttribute('data-theme', currentTheme);
 
 themeBtn.addEventListener('click', () => {
-    const newTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const currentIndex = themes.indexOf(current);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    const newTheme = themes[nextIndex];
+
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('theme', newTheme);
+
+    console.log(`[Theme] Switched to: ${newTheme}`);
 
     // Update chart colors if chart exists
     if (currentData) {
@@ -565,7 +760,7 @@ originalLogBtn.addEventListener('click', () => {
 }, { once: false });
 
 
-// ========== AlphaHound Device Control (Sidebar) ==========
+// ========== AlphaHound Device Control (Top Panel) ==========
 // Credit: Based on AlphaHound Python Interface by NuclearGeekETH
 // Device: RadView Detection AlphaHound™
 
@@ -574,52 +769,45 @@ let acquisitionInterval = null;
 let acquisitionStartTime = null;
 let isAcquiring = false;
 
-// Sidebar Elements
-const deviceSidebar = document.getElementById('device-sidebar');
-const btnDevice = document.getElementById('btn-device');
-const closeSidebar = document.getElementById('close-device-sidebar');
-
-// Open Sidebar
-btnDevice.addEventListener('click', async () => {
-    deviceSidebar.classList.toggle('open');
-    if (deviceSidebar.classList.contains('open')) {
-        await refreshPorts();
-        await checkDeviceStatus();
-    }
+// Initialize device controls on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    await refreshPorts();
 });
 
-// Close Sidebar
-closeSidebar.addEventListener('click', () => {
-    deviceSidebar.classList.remove('open');
-});
-
-// Show User Success/Error
+// Show User Success/Error (using alert since no alert element in top panel)
 function showDeviceAlert(msg, type = 'error') {
-    const el = document.getElementById('device-alert');
-    if (!el) return; // safety
-    el.textContent = msg;
-    el.className = `ephemeral-message ${type}`;
-    el.style.display = 'block';
-    setTimeout(() => el.style.display = 'none', 3000);
+    if (type === 'error') {
+        alert(msg);
+    } else {
+        console.log('[Device] ' + msg);
+    }
 }
 
 // Refresh serial ports
 document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
 
 async function refreshPorts() {
+    console.log('[Device] Refreshing ports...');
     try {
         const response = await fetch('/device/ports');
         const data = await response.json();
+        console.log('[Device] API response:', data);
         const select = document.getElementById('port-select');
 
         if (data.ports && data.ports.length > 0) {
-            select.innerHTML = data.ports.map(p =>
+            console.log(`[Device] Found ${data.ports.length} ports`);
+            const options = data.ports.map(p =>
                 `<option value="${p.device}">${p.device} - ${p.description}</option>`
             ).join('');
+            select.innerHTML = options;
+            console.log('[Device] Ports populated in dropdown');
         } else {
-            select.innerHTML = '<option value="">No ports found</option>';
+            console.log('[Device] No ports found in API response');
+            const noPorts = '<option value="">No ports found</option>';
+            select.innerHTML = noPorts;
         }
     } catch (err) {
+        console.error('[Device] Error refreshing ports:', err);
         showDeviceAlert('Error loading ports: ' + err.message);
         document.getElementById('port-select').innerHTML = '<option value="">Error loading ports</option>';
     }
@@ -652,6 +840,74 @@ document.getElementById('btn-connect-device').addEventListener('click', async ()
     } catch (err) {
         showDeviceAlert('Connection error: ' + err.message);
     }
+});
+
+// Acquire Spectrum from device with stop capability
+let acquisitionAbortController = null;
+
+document.getElementById('btn-start-acquire').addEventListener('click', async () => {
+    console.log("[Device] Acquire Spectrum button clicked");
+    const btnStart = document.getElementById('btn-start-acquire');
+    const btnStop = document.getElementById('btn-stop-acquire');
+    const originalText = btnStart.innerHTML;
+    const countMinutes = parseFloat(document.getElementById('count-time').value) || 5;
+
+    try {
+        // Create abort controller for stopping acquisition
+        acquisitionAbortController = new AbortController();
+
+        // Show stop button, hide start button
+        btnStart.style.display = 'none';
+        btnStop.style.display = 'inline-block';
+        btnStop.innerHTML = `⏹️ Stop (${countMinutes} min)`;
+
+        // Call the spectrum acquisition endpoint
+        const response = await fetch('/device/spectrum', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ count_minutes: countMinutes }),
+            signal: acquisitionAbortController.signal
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Spectrum acquisition failed');
+        }
+
+        const data = await response.json();
+        console.log("[Device] Spectrum acquired:", data);
+
+        // Display the spectrum in the dashboard
+        currentData = data;
+        renderDashboard(data);
+
+        // Show success message
+        alert(`Spectrum acquired successfully! ${data.peaks.length} peaks detected after ${countMinutes} minute(s).`);
+
+        // Reset buttons
+        btnStart.innerHTML = originalText;
+        btnStart.style.display = 'inline-block';
+        btnStop.style.display = 'none';
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            console.log("[Device] Acquisition stopped by user");
+            // Note: Backend should return partial spectrum on abort
+            alert('Acquisition stopped. Attempting to retrieve partial spectrum...');
+        } else {
+            console.error("[Device] Spectrum acquisition error:", err);
+            alert('Error acquiring spectrum: ' + err.message);
+        }
+        // Reset buttons
+        btnStart.innerHTML = originalText;
+        btnStart.style.display = 'inline-block';
+        btnStop.style.display = 'none';
+    }
+});
+
+// Stop acquisition button
+document.getElementById('btn-stop-acquire').addEventListener('click', () => {
+    console.log("[Device] Stop button clicked");
+    stopAcquisition();
 });
 
 // ========== Advanced Analysis ==========
@@ -768,15 +1024,23 @@ document.getElementById('btn-start-acquire').addEventListener('click', async () 
     // 3. Polling Loop
     acquisitionInterval = setInterval(async () => {
         const elapsed = (Date.now() - acquisitionStartTime) / 1000;
+
+        // Check if time is up BEFORE polling again
+        if (elapsed >= countSeconds) {
+            stopAcquisition();
+            showDeviceAlert("Acquisition Complete", 'success');
+            console.log("[Device] Acquisition Complete");
+            return;
+        }
+
         const remaining = Math.max(0, countSeconds - elapsed);
 
         document.getElementById('acquisition-timer').textContent =
-            `${elapsed.toFixed(0)}s / ${countSeconds.toFixed(0)}s`;
+            `${Math.round(elapsed)}s / ${countSeconds.toFixed(0)}s`;
 
         // Fetch spectrum (snapshot)
         try {
             // Using count_minutes=0 tells backend "just give me what you have now"
-            // Note: Our backend fix requires count_minutes to be in JSON body
             const res = await fetch('/device/spectrum', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -787,15 +1051,11 @@ document.getElementById('btn-start-acquire').addEventListener('click', async () 
                 const data = await res.json();
                 currentData = data;
                 renderDashboard(data); // "Building the graph"
+            } else {
+                console.error(`[Device] Poll failed: ${res.status} ${res.statusText}`);
             }
         } catch (e) {
-            console.error("Poll error:", e);
-        }
-
-        // Auto-stop when time is up
-        if (elapsed >= countSeconds) {
-            stopAcquisition();
-            showDeviceAlert("Acquisition Complete", 'success');
+            console.error("[Device] Poll error:", e);
         }
     }, 2000); // Poll every 2 seconds
 });
@@ -804,40 +1064,44 @@ document.getElementById('btn-start-acquire').addEventListener('click', async () 
 const stopAcquisition = () => {
     isAcquiring = false;
     clearInterval(acquisitionInterval);
+    acquisitionInterval = null;
+    acquisitionStartTime = null;
 
     document.getElementById('btn-start-acquire').style.display = 'block';
     document.getElementById('btn-stop-acquire').style.display = 'none';
-    // keep status visible for a moment? or hide.
     document.getElementById('acquisition-status').style.display = 'none';
+
+    // Reset timer display
+    document.getElementById('acquisition-timer').textContent = '0s';
 };
-
-document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
-
-// Clear device spectrum button
-document.getElementById('btn-clear-device').addEventListener('click', async () => {
-    if (!confirm('Clear spectrum on device?')) return;
-    try {
-        await fetch('/device/clear', { method: 'POST' });
-        showDeviceAlert('Device spectrum cleared', 'success');
-
-        // Also clear chart?
-        if (chart) {
-            // Maybe not, user might want to keep looking
-        }
-    } catch (err) {
-        showDeviceAlert('Clear error: ' + err.message);
-    }
-});
 
 // UI state management
 function showDeviceConnected() {
-    document.getElementById('device-disconnected').style.display = 'none';
-    document.getElementById('device-connected').style.display = 'block';
+    const connectedDiv = document.getElementById('device-connected');
+    const portSelect = document.getElementById('port-select');
+    const refreshBtn = document.getElementById('btn-refresh-ports');
+    const connectBtn = document.getElementById('btn-connect-device');
+    const advancedBtn = document.getElementById('btn-advanced');
+
+    if (connectedDiv) connectedDiv.style.display = 'block';
+    if (portSelect) portSelect.parentElement.style.display = 'none';
+    if (refreshBtn) refreshBtn.style.display = 'none';
+    if (connectBtn) connectBtn.style.display = 'none';
+    if (advancedBtn) advancedBtn.style.display = 'none';
 }
 
 function showDeviceDisconnected() {
-    document.getElementById('device-disconnected').style.display = 'block';
-    document.getElementById('device-connected').style.display = 'none';
+    const connectedDiv = document.getElementById('device-connected');
+    const portSelect = document.getElementById('port-select');
+    const refreshBtn = document.getElementById('btn-refresh-ports');
+    const connectBtn = document.getElementById('btn-connect-device');
+    const advancedBtn = document.getElementById('btn-advanced');
+
+    if (connectedDiv) connectedDiv.style.display = 'none';
+    if (portSelect) portSelect.parentElement.style.display = 'flex';
+    if (refreshBtn) refreshBtn.style.display = 'block';
+    if (connectBtn) connectBtn.style.display = 'block';
+    if (advancedBtn) advancedBtn.style.display = 'block';
 }
 
 // WebSocket dose monitoring
@@ -850,10 +1114,13 @@ function startDoseMonitoring() {
     doseWebSocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.dose_rate !== null) {
-            document.getElementById('dose-display').textContent =
-                `${data.dose_rate.toFixed(2)} µRem/hr`;
+            const doseText = `${data.dose_rate.toFixed(2)} µRem/hr`;
+            const doseDisplay = document.getElementById('dose-display');
+            if (doseDisplay) doseDisplay.textContent = doseText;
         } else {
-            document.getElementById('dose-display').textContent = '-- µRem/hr';
+            const emptyText = '-- µRem/hr';
+            const doseDisplay = document.getElementById('dose-display');
+            if (doseDisplay) doseDisplay.textContent = emptyText;
         }
     };
 
@@ -889,6 +1156,56 @@ async function checkDeviceStatus() {
     } catch (err) {
         console.error('Status check error:', err);
     }
+}
+
+// New Top Panel Event Listeners
+if (document.getElementById('btn-refresh-ports-top')) {
+    document.getElementById('btn-refresh-ports-top').addEventListener('click', refreshPorts);
+}
+
+if (document.getElementById('btn-connect-top')) {
+    document.getElementById('btn-connect-top').addEventListener('click', async () => {
+        const port = document.getElementById('port-select-top').value;
+        if (!port) { alert('Please select a port'); return; }
+        // Reuse connect logic - simulate click on main button or copy logic
+        // Copying logic for simplicity and reliability
+        try {
+            const response = await fetch('/device/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ port })
+            });
+            if (response.ok) {
+                showDeviceConnected();
+                startDoseMonitoring();
+            } else {
+                const error = await response.json();
+                alert('Connection failed: ' + error.detail);
+            }
+        } catch (err) {
+            alert('Connection error: ' + err.message);
+        }
+    });
+}
+
+if (document.getElementById('btn-disconnect-top')) {
+    document.getElementById('btn-disconnect-top').addEventListener('click', () => {
+        document.getElementById('btn-disconnect-device').click();
+    });
+}
+
+if (document.getElementById('btn-acquire-top')) {
+    document.getElementById('btn-acquire-top').addEventListener('click', () => {
+        // Scroll to dashboard if hidden
+        document.getElementById('dashboard').style.display = 'block';
+        document.getElementById('btn-start-acquire').click();
+    });
+}
+
+if (document.getElementById('btn-device-more')) {
+    document.getElementById('btn-device-more').addEventListener('click', () => {
+        document.getElementById('device-sidebar').classList.add('open');
+    });
 }
 
 // Initialize on load

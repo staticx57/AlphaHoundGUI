@@ -5,13 +5,64 @@ from fastapi.staticfiles import StaticFiles
 from n42_parser import parse_n42
 from csv_parser import parse_csv_spectrum
 from peak_detection import detect_peaks
-from isotope_database import identify_isotopes
+from isotope_database import identify_isotopes, identify_decay_chains
 from alphahound_serial import device as alphahound_device
 import numpy as np
 import os
 import asyncio
 
 app = FastAPI()
+
+# ========== Settings for Simple/Advanced Mode ==========
+# Default settings for Simple mode
+DEFAULT_SETTINGS = {
+    "mode": "simple",
+    "isotope_min_confidence": 40.0,
+    "chain_min_confidence": 30.0,
+    "energy_tolerance": 20.0,
+    "chain_min_isotopes_medium": 3,
+    "chain_min_isotopes_high": 4,
+    "max_isotopes": 5  # Limit for simple mode
+}
+
+def apply_confidence_filtering(isotopes, chains, settings):
+    """
+    Apply threshold filtering based on mode settings.
+    isotope_database functions return ALL matches - this filters them.
+    """
+    # Filter isotopes by minimum confidence
+    filtered_isotopes = [
+        iso for iso in isotopes
+        if iso['confidence'] >= settings.get('isotope_min_confidence', 40.0)
+    ]
+    
+    # Limit number of isotopes in simple mode
+    if settings.get('mode') == 'simple':
+        filtered_isotopes = filtered_isotopes[:settings.get('max_isotopes', 5)]
+    
+    # Filter chains by minimum confidence and isotope count
+    min_isotopes = settings.get('chain_min_isotopes_medium', 3)
+    filtered_chains = []
+    
+    for chain in chains:
+        # Calculate percentage of indicators found
+        percentage = (chain['num_detected'] / chain['num_key_isotopes'] * 100) if chain['num_key_isotopes'] > 0 else 0
+        
+        # Improved confidence level logic
+        # HIGH: ≥4 isotopes OR ≥80% of indicators found
+        # MEDIUM: ≥3 isotopes OR ≥60% of indicators found
+        if chain['num_detected'] >= 4 or percentage >= 80:
+            chain['confidence_level'] = 'HIGH'
+        elif chain['num_detected'] >= 3 or percentage >= 60:
+            chain['confidence_level'] = 'MEDIUM'
+        else:
+            chain['confidence_level'] = 'LOW'
+        
+        # Apply filters
+        if chain['confidence'] >= settings.get('chain_min_confidence', 30.0) and chain['num_detected'] >= min_isotopes:
+            filtered_chains.append(chain)
+    
+    return filtered_isotopes, filtered_chains
 
 # CORS
 app.add_middleware(
@@ -46,11 +97,44 @@ async def upload_file(file: UploadFile = File(...)):
             if result.get("counts") and result.get("energies"):
                 peaks = detect_peaks(result["energies"], result["counts"])
                 result["peaks"] = peaks
+                print(f"[DEBUG] Detected {len(peaks)} peaks")
+                if peaks:
+                    peak_energies = [p['energy'] for p in peaks]
+                    print(f"[DEBUG] Peak energies: {peak_energies}")
                 
                 # Add isotope identification
                 if peaks:
-                    isotopes = identify_isotopes(peaks)
-                    result["isotopes"] = isotopes
+                    try:
+                        # Get ALL isotopes and chains (no filtering at detection level)
+                        all_isotopes = identify_isotopes(
+                            peaks, 
+                            energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'],
+                            mode=DEFAULT_SETTINGS.get('mode', 'simple')
+                        )
+                        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+                        
+                        # Apply filtering based on settings (Simple mode by default)
+                        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, all_chains, DEFAULT_SETTINGS)
+                        
+                        result["isotopes"] = isotopes
+                        result["decay_chains"] = decay_chains
+                        
+                        print(f"[DEBUG] Detected {len(all_isotopes)} total isotopes, filtered to {len(isotopes)}")
+                        if isotopes:
+                            for iso in isotopes[:3]:  # Show first 3
+                                print(f"[DEBUG]   - {iso['isotope']}: {iso['confidence']:.0f}% confidence")
+                        
+                        print(f"[DEBUG] Detected {len(all_chains)} total chains, filtered to {len(decay_chains)}")
+                        if decay_chains:
+                            for chain in decay_chains:
+                                print(f"[DEBUG]   - {chain['chain_name']}: {chain['confidence_level']} confidence")
+                    except Exception as decay_error:
+                        print(f"[ERROR] Decay chain detection failed: {str(decay_error)}")
+                        import traceback
+                        traceback.print_exc()
+                        # Still return results without decay chains
+                        result["isotopes"] = []
+                        result["decay_chains"] = []
             
             return result
         except Exception as e:
@@ -154,22 +238,26 @@ async def acquire_spectrum(request: SpectrumRequest):
             if i % 10 == 0:
                 print(f"[API] Counting... {i}/{int(wait_seconds)}s")
     
-    print("[API] Requesting spectrum from device...")
+    # Request spectrum from device
+    print(f"[API] Requesting spectrum... (instant: {count_minutes == 0})")
     alphahound_device.request_spectrum()
     
-    # Wait for spectrum (with longer timeout for device response)
-    max_wait = 30  # seconds
+    # For instant snapshot (count_minutes=0), use shorter timeout
+    max_wait = 5 if count_minutes == 0 else 30
     waited = 0
     while waited < max_wait:
         await asyncio.sleep(0.5)
         waited += 0.5
         spectrum = alphahound_device.get_spectrum()
-        print(f"[API] Waiting... {waited}s, spectrum length: {len(spectrum)}")
         if len(spectrum) >= 1024:
             break
     
     spectrum = alphahound_device.get_spectrum()
-    if len(spectrum) < 1024:
+    
+    # For instant snapshots, return partial data even if not full
+    if count_minutes == 0 and len(spectrum) < 1024:
+        print(f"[API] Snapshot: {len(spectrum)} channels (partial)")
+    elif len(spectrum) < 1024:
         raise HTTPException(status_code=408, detail=f"Spectrum acquisition timeout ({len(spectrum)} channels received)")
     
     # Convert to counts and energies arrays
@@ -178,13 +266,28 @@ async def acquire_spectrum(request: SpectrumRequest):
     
     # Perform analysis
     peaks = detect_peaks(energies, counts)
-    isotopes = identify_isotopes(peaks) if peaks else []
+    
+    if peaks:
+        # Get ALL isotopes and chains
+        all_isotopes = identify_isotopes(
+            peaks, 
+            energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'],
+            mode=DEFAULT_SETTINGS.get('mode', 'simple')
+        )
+        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        
+        # Apply filtering (Simple mode by default)
+        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, all_chains, DEFAULT_SETTINGS)
+    else:
+        isotopes = []
+        decay_chains = []
     
     return {
         "counts": counts,
         "energies": energies,
         "peaks": peaks,
         "isotopes": isotopes,
+        "decay_chains": decay_chains,
         "metadata": {
             "source": "AlphaHound Device",
             "device": "RadView Detection AlphaHound",
@@ -203,6 +306,12 @@ async def clear_device_spectrum():
     
     alphahound_device.clear_spectrum()
     return {"status": "cleared"}
+
+
+@app.get("/settings")
+async def get_settings():
+    """Get current default settings for Simple/Advanced mode"""
+    return DEFAULT_SETTINGS
 
 
 @app.websocket("/ws/dose")

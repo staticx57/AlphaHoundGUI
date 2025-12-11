@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/button-fixes.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 
@@ -18,13 +18,75 @@
     <header>
         <h1>N42 Spectrum Viewer</h1>
         <div class="header-controls">
-            <button id="btn-theme" title="Toggle Light/Dark Mode">🌓</button>
             <button id="btn-history" title="File History">📜 History</button>
-            <button id="btn-device" title="Device Control">🔌 Device</button>
+            <button id="btn-settings" title="Analysis Settings">⚙️ Settings</button>
+            <button id="btn-theme" title="Toggle Light/Dark Mode">🌓</button>
         </div>
     </header>
 
+
+
     <main>
+        <!-- AlphaHound Device Quick Connect -->
+        <div id="device-quick-panel"
+            style="background: var(--card-bg); border: 2px solid var(--accent-color); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.5rem;">🔌</span>
+                    <h3 style="margin: 0; color: var(--accent-color);">AlphaHound Device</h3>
+                </div>
+
+                <div style="flex: 1; display: flex; gap: 0.5rem; align-items: center; min-width: 300px;">
+                    <select id="port-select"
+                        style="flex: 1; padding: 0.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                        <option value="">Select Serial Port...</option>
+                    </select>
+                    <button id="btn-refresh-ports"
+                        style="padding: 0.5rem 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;">🔄</button>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="btn-connect-device" class="btn-primary"
+                        style="padding: 0.5rem 1.5rem; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Connect</button>
+                </div>
+            </div>
+
+            <div id="device-connected"
+                style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: none;">
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="color: #10b981; font-size: 1.2rem;">●</span>
+                        <span style="color: var(--text-secondary);">Connected</span>
+                    </div>
+                    <div style="background: var(--card-bg); padding: 0.5rem 1rem; border-radius: 6px;">
+                        <span style="color: var(--text-secondary); font-size: 0.875rem;">Dose Rate:</span>
+                        <span id="dose-display"
+                            style="color: var(--accent-color); font-weight: 600; margin-left: 0.5rem;">-- µRem/hr</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="count-time" style="color: var(--text-secondary); font-size: 0.875rem;">Count
+                            Duration:</label>
+                        <input type="number" id="count-time" value="5" min="0.1" max="1440" step="0.5"
+                            style="width: 60px; padding: 0.25rem 0.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color);">
+                        <span style="color: var(--text-secondary); font-size: 0.875rem;">min</span>
+                    </div>
+                    <button id="btn-start-acquire" class="btn-primary"
+                        style="padding: 0.5rem 1rem; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer;">▶️
+                        Acquire Spectrum</button>
+                    <button id="btn-stop-acquire" class="btn-stop"
+                        style="padding: 0.5rem 1rem; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; display: none;">⏹️
+                        Stop Acquisition</button>
+                    <div id="acquisition-status"
+                        style="display: none; padding: 0.5rem 1rem; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <span style="color: var(--accent-color); font-weight: 600;">Acquiring: <span
+                                id="acquisition-timer">0s</span></span>
+                    </div>
+                    <button id="btn-disconnect-device"
+                        style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;">Disconnect</button>
+                </div>
+            </div>
+        </div>
+
         <div class="upload-container" id="drop-zone">
             <div class="upload-icon">📂</div>
             <h2>Drop your N42 or CSV file here</h2>
@@ -100,22 +162,11 @@
                 </table>
             </div>
 
-            <div id="analysis-panel" style="display: none; margin-top: 2rem;">
-                <div class="modal-header">
-                    <h3>🔍 Advanced Analysis (Gaussian Fit)</h3>
-                    <button id="btn-run-analysis" class="btn-primary" style="font-size: 0.8rem;">Run Fit</button>
+            <div id="decay-chains-container" style="display: none; margin-top: 2rem;">
+                <h3>🔬 Decay Chains Detected</h3>
+                <div id="decay-chains-list">
+                    <!-- Populated by JS -->
                 </div>
-                <table id="analysis-table" style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
-                    <thead>
-                        <tr style="text-align: left; border-bottom: 1px solid var(--border-color);">
-                            <th style="padding: 0.5rem;">Energy</th>
-                            <th style="padding: 0.5rem;">FWHM</th>
-                            <th style="padding: 0.5rem;">Net Area</th>
-                            <th style="padding: 0.5rem;">Res (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="analysis-tbody"></tbody>
-                </table>
             </div>
         </div>
 
@@ -130,67 +181,89 @@
             </div>
         </div>
 
-        <!-- Device Control Panel -->
-        <!-- Device Sidebar (Non-blocking) -->
-        <div id="device-sidebar" class="device-sidebar">
-            <div class="modal-header">
-                <h3>🔌 AlphaHound</h3>
-                <button id="close-device-sidebar" class="close-btn">✕</button>
-            </div>
-
-            <div id="device-alert" class="ephemeral-message"></div>
-
-            <div id="device-disconnected" style="display: block;">
-                <label for="port-select">Serial Port:</label>
-                <select id="port-select" style="margin: 0.5rem 0; width: 100%; padding: 0.5rem;">
-                    <option value="">Loading ports...</option>
-                </select>
-                <div style="display:flex; gap:0.5rem;">
-                    <button id="btn-refresh-ports" style="flex:1;">🔄 Refresh</button>
-                    <button id="btn-connect-device" class="btn-primary" style="flex:1;">Connect</button>
-                </div>
-            </div>
-
-            <div id="device-connected" style="display: none;">
-                <div class="device-stats">
-                    <div class="stat-card">
-                        <div class="stat-label">DOSE RATE</div>
-                        <div class="stat-value" id="dose-display">-- µRem/hr</div>
-                    </div>
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>⚙️ Analysis Settings</h3>
+                    <button id="close-settings" class="close-btn">✕</button>
                 </div>
 
-                <div class="device-controls">
-                    <label for="count-time">Count Duration:</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <input type="number" id="count-time" value="5" min="0.1" max="1440" step="1"
-                            style="flex: 1; padding: 0.5rem;">
-                        <span>min</span>
+                <div style="margin: 1.5rem 0;">
+                    <h4 style="margin-bottom: 1rem;">Detection Mode</h4>
+                    <div style="display: flex; gap: 1rem;">
+                        <label
+                            style="cursor: pointer; padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: 6px; transition: all 0.3s;">
+                            <input type="radio" name="analysis-mode" value="simple" checked
+                                style="margin-right: 0.5rem;">
+                            <strong>Simple Mode</strong> (Recommended)
+                        </label>
+                        <label
+                            style="cursor: pointer; padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: 6px; transition: all 0.3s;">
+                            <input type="radio" name="analysis-mode" value="advanced" style="margin-right: 0.5rem;">
+                            <strong>Advanced Mode</strong> (Customizable)
+                        </label>
+                    </div>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">Simple mode uses
+                        optimized defaults for hobby-level sources.</p>
+                </div>
+
+                <div id="advanced-settings"
+                    style="display: none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                    <h4 style="margin-bottom: 1rem;">Detection Thresholds</h4>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <label
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span>Isotope Min Confidence:</span>
+                            <strong><span id="iso-conf-val">40</span>%</strong>
+                        </label>
+                        <input type="range" id="isotope-confidence" min="10" max="90" value="40" step="5"
+                            style="width: 100%;">
+                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Minimum % of
+                            characteristic peaks required to report an isotope</p>
                     </div>
 
-                    <div style="height: 1rem;"></div>
-
-                    <button id="btn-start-acquire" class="btn-primary" style="padding: 0.75rem;">▶️ Start Live
-                        Count</button>
-                    <button id="btn-stop-acquire" class="btn-stop" style="display:none; padding: 0.75rem;">⏹️ Stop
-                        Acquisition</button>
-
-                    <div id="acquisition-status"
-                        style="text-align: center; font-size: 0.9rem; color: var(--accent-color); display:none; margin: 0.5rem 0;">
-                        Running: <span id="acquisition-timer" style="font-weight:bold;">0s</span>
+                    <div style="margin-bottom: 1.5rem;">
+                        <label
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span>Chain Min Confidence:</span>
+                            <strong><span id="chain-conf-val">30</span>%</strong>
+                        </label>
+                        <input type="range" id="chain-confidence" min="10" max="90" value="30" step="5"
+                            style="width: 100%;">
+                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Minimum
+                            confidence to report a decay chain</p>
                     </div>
 
-                    <div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>
-
-                    <div style="display:flex; gap:0.5rem;">
-                        <button id="btn-clear-device" style="flex:1;">🗑️ Clear</button>
-                        <button id="btn-disconnect-device" style="flex:1;">Disconnect</button>
+                    <div style="margin-bottom: 1.5rem;">
+                        <label
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span>Energy Tolerance:</span>
+                            <strong><span id="energy-tol-val">20</span> keV</strong>
+                        </label>
+                        <input type="range" id="energy-tolerance" min="5" max="50" value="20" step="1"
+                            style="width: 100%;">
+                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Maximum energy
+                            difference for peak matching</p>
                     </div>
+
+                    <button id="btn-reset-defaults"
+                        style="padding: 0.5rem 1rem; border-radius: 6px; margin-right: 0.5rem;">Reset to
+                        Defaults</button>
+                </div>
+
+                <div
+                    style="text-align: right; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                    <button id="btn-apply-settings" class="btn-primary">Apply Settings</button>
                 </div>
             </div>
         </div>
+
+
     </main>
 
-    <script src="/static/app.js?v=3"></script>
+    <script src="/static/app.js?v=4"></script>
 </body>
 
 </html>
