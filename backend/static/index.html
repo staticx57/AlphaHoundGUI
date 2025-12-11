@@ -132,8 +132,13 @@
             <div id="analysis-panel" style="display: none;" class="compare-panel">
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                     <strong>Spectral Analysis</strong>
-                    <button id="btn-run-fit" class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem;">Run Peak
-                        Fitting</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="btn-ml-identify" class="btn-primary"
+                            style="padding: 4px 12px; font-size: 0.8rem;">🤖 AI Identify</button>
+                        <button id="btn-run-fit" class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem;">Run
+                            Peak
+                            Fitting</button>
+                    </div>
                 </div>
                 <div id="analysis-results" style="margin-top: 10px; width: 100%; overflow-x: auto;">
                     <p style="color: #94a3b8; font-size: 0.9rem;">Click "Run Peak Fitting" to calculate FWHM and Net

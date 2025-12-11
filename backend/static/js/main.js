@@ -72,6 +72,108 @@ function setupEventListeners() {
         if (e.target.id === 'file-input') handleFile(e.target.files[0]);
     });
 
+    document.getElementById('btn-export-json').addEventListener('click', () => {
+        if (!currentData) return;
+        const blob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'spectrum_data.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btn-export-csv').addEventListener('click', () => {
+        if (!currentData) return;
+        let csv = 'Energy (keV),Counts\n';
+        for (let i = 0; i < currentData.energies.length; i++) {
+            csv += `${currentData.energies[i]},${currentData.counts[i]}\n`;
+        }
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'spectrum_data.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    // PDF Export
+    document.getElementById('btn-export-pdf').addEventListener('click', async () => {
+        if (!currentData) return;
+        const btn = document.getElementById('btn-export-pdf');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '⏳ Generating...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/export/pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: currentData.metadata?.filename || 'spectrum',
+                    metadata: currentData.metadata || {},
+                    energies: currentData.energies,
+                    counts: currentData.counts,
+                    peaks: currentData.peaks || [],
+                    isotopes: currentData.isotopes || [],
+                    decay_chains: currentData.decay_chains || []
+                })
+            });
+
+            if (!response.ok) throw new Error('PDF generation failed');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        } catch (err) {
+            alert('Error generating PDF: ' + err.message);
+        } finally {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }
+    });
+
+    // Settings Modal
+    document.getElementById('btn-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').style.display = 'flex';
+    });
+
+    document.getElementById('close-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').style.display = 'none';
+    });
+
+    // History Modal  
+    document.getElementById('btn-history').addEventListener('click', () => {
+        const modal = document.getElementById('history-modal');
+        const historyList = document.getElementById('history-list');
+        const history = JSON.parse(localStorage.getItem('fileHistory') || '[]');
+
+        if (history.length === 0) {
+            historyList.innerHTML = '<p style="text-align: center; color: #94a3b8;">No file history yet</p>';
+        } else {
+            historyList.innerHTML = history.map(item => `
+                <div class="history-item">
+                    <div class="history-item-name">${item.filename}</div>
+                    <div class="history-item-date">${new Date(item.timestamp).toLocaleString()}</div>
+                    <div style="font-size: 0.875rem; margin-top: 0.5rem;">
+                        ${item.preview.peakCount} peaks | ${item.preview.isotopes.join(', ') || 'No isotopes'}
+                    </div>
+                </div>
+            `).join('');
+        }
+        modal.style.display = 'flex';
+    });
+
+    document.getElementById('close-history').addEventListener('click', () => {
+        document.getElementById('history-modal').style.display = 'none';
+    });
+
+    // Background Subtraction
+    document.getElementById('bg-file-input').addEventListener('change', handleBackgroundFile);
+    document.getElementById('btn-clear-bg').addEventListener('click', clearBackground);
+
     // Theme Toggle
     document.getElementById('btn-theme').addEventListener('click', () => {
         const themes = ['dark', 'light', 'nuclear', 'toxic'];
@@ -128,11 +230,6 @@ function setupEventListeners() {
     });
 
     // Background Subtraction
-    document.getElementById('btn-analysis').addEventListener('click', () => {
-        const panel = document.getElementById('analysis-panel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    });
-
     document.getElementById('btn-load-bg').addEventListener('click', () => document.getElementById('bg-file-input').click());
     document.getElementById('bg-file-input').addEventListener('change', handleBackgroundFile);
 
@@ -151,6 +248,186 @@ function setupEventListeners() {
     document.addEventListener('calibrationApplied', (e) => {
         applyCalibration(e.detail.slope, e.detail.intercept);
     });
+
+    // Scale Toggle (Linear/Log)
+    document.getElementById('btn-lin').addEventListener('click', () => {
+        document.getElementById('btn-lin').classList.add('active');
+        document.getElementById('btn-log').classList.remove('active');
+        updateChartScale('linear');
+    });
+
+    document.getElementById('btn-log').addEventListener('click', () => {
+        document.getElementById('btn-lin').classList.remove('active');
+        document.getElementById('btn-log').classList.add('active');
+        updateChartScale('logarithmic');
+    });
+
+    // Reset Zoom
+    document.getElementById('btn-reset-zoom').addEventListener('click', () => {
+        if (chartManager.chart) chartManager.chart.resetZoom();
+    });
+
+    // Compare Mode Toggle
+    document.getElementById('btn-compare').addEventListener('click', toggleCompareMode);
+    document.getElementById('btn-add-file').addEventListener('click', () => {
+        document.getElementById('compare-file-input').click();
+    });
+    document.getElementById('compare-file-input').addEventListener('change', handleCompareFile);
+    document.getElementById('btn-clear-overlays').addEventListener('click', () => {
+        overlaySpectra = [];
+        updateOverlayCount();
+        if (chartManager.chart) chartManager.chart.destroy();
+    });
+
+    // Analysis Panel Toggle
+    document.getElementById('btn-analysis').addEventListener('click', () => {
+        const panel = document.getElementById('analysis-panel');
+        const btn = document.getElementById('btn-analysis');
+        const isOpen = panel.style.display !== 'none';
+
+        panel.style.display = isOpen ? 'none' : 'flex';
+        if (isOpen) {
+            btn.classList.remove('active');
+        } else {
+            btn.classList.add('active');
+            // Close compare if open
+            if (compareMode) document.getElementById('btn-compare').click();
+        }
+    });
+
+    // Peak Fitting
+    document.getElementById('btn-run-fit').addEventListener('click', async () => {
+        if (!currentData || !currentData.peaks) return;
+        const resultsContainer = document.getElementById('analysis-results');
+        resultsContainer.innerHTML = '<p>Fitting peaks...</p>';
+
+        try {
+            const response = await fetch('/analyze/fit-peaks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    energies: currentData.energies,
+                    counts: currentData.counts,
+                    peaks: currentData.peaks
+                })
+            });
+
+            if (!response.ok) throw new Error('Analysis failed');
+            const data = await response.json();
+
+            if (data.fits && data.fits.length > 0) {
+                resultsContainer.innerHTML = `
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                                <th style="padding: 4px;">Energy</th>
+                                <th style="padding: 4px;">FWHM</th>
+                                <th style="padding: 4px;">Net Area</th>
+                                <th style="padding: 4px;">Resolution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.fits.map(fit => {
+                    const res = (fit.fwhm / fit.energy) * 100;
+                    return `
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                        <td style="padding: 4px;">${fit.energy.toFixed(2)} keV</td>
+                                        <td style="padding: 4px;">${fit.fwhm.toFixed(2)} keV</td>
+                                        <td style="padding: 4px;">${fit.net_area.toFixed(0)}</td>
+                                        <td style="padding: 4px;">${res.toFixed(1)}%</td>
+                                    </tr>
+                                `;
+                }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                resultsContainer.innerHTML = '<p>No peaks fitted successfully.</p>';
+            }
+        } catch (err) {
+            resultsContainer.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+        }
+    });
+
+    // ML Identification
+    document.getElementById('btn-ml-identify').addEventListener('click', async () => {
+        if (!currentData || !currentData.counts) return alert('No data loaded');
+
+        const resultsContainer = document.getElementById('analysis-results');
+        resultsContainer.innerHTML = '<p>🤖 Running AI identification...</p>';
+
+        try {
+            const response = await fetch('/analyze/ml-identify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ counts: currentData.counts })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'ML identification failed');
+            }
+
+            const data = await response.json();
+
+            if (data.predictions && data.predictions.length > 0) {
+                resultsContainer.innerHTML = `
+                    <h4 style="margin-top: 0;">ML Predictions (PyRIID)</h4>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                                <th style="padding: 4px;">Isotope</th>
+                                <th style="padding: 4px;">Confidence</th>
+                                <th style="padding: 4px;">Method</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.predictions.map(pred => `
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding: 4px;"><strong>${pred.isotope}</strong></td>
+                                    <td style="padding: 4px;">${pred.confidence.toFixed(1)}%</td>
+                                    <td style="padding: 4px;">${pred.method}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem;">
+                        Note: First run trains the model (~10-30s). Subsequent runs are instant.
+                    </p>
+                `;
+            } else {
+                resultsContainer.innerHTML = '<p>No ML predictions available.</p>';
+            }
+        } catch (err) {
+            resultsContainer.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+        }
+    });
+
+    // Calibration Tool
+    const calBtn = document.getElementById('btn-calibrate');
+    if (calBtn) {
+        calBtn.addEventListener('click', () => {
+            document.getElementById('calibration-modal').style.display = 'block';
+        });
+    }
+
+    // Device Controls
+    document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
+    document.getElementById('btn-connect-device').addEventListener('click', connectDevice);
+    document.getElementById('btn-disconnect-device').addEventListener('click', disconnectDevice);
+    document.getElementById('btn-start-acquire').addEventListener('click', startAcquisition);
+    document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
+
+    // Top panel device controls (if they exist)
+    const refreshTop = document.getElementById('btn-refresh-ports-top');
+    const connectTop = document.getElementById('btn-connect-top');
+    const disconnectTop = document.getElementById('btn-disconnect-top');
+    const acquireTop = document.getElementById('btn-acquire-top');
+
+    if (refreshTop) refreshTop.addEventListener('click', refreshPorts);
+    if (connectTop) connectTop.addEventListener('click', connectDeviceTop);
+    if (disconnectTop) disconnectTop.addEventListener('click', disconnectDevice);
+    if (acquireTop) acquireTop.addEventListener('click', startAcquisition);
 
     // Chart Click for Calibration
     const chartCanvas = document.getElementById('spectrumChart');

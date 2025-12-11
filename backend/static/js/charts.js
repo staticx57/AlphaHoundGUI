@@ -52,7 +52,8 @@ export class AlphaHoundChart {
                     },
                     y: {
                         type: scaleType,
-                        min: scaleType === 'logarithmic' ? 0.5 : undefined,
+                        min: scaleType === 'logarithmic' ? 1 : 0,
+                        beginAtZero: scaleType === 'linear',
                         title: { display: true, text: 'Counts', color: '#94a3b8' },
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
                         ticks: { color: '#94a3b8' }
@@ -109,7 +110,8 @@ export class AlphaHoundChart {
                     },
                     y: {
                         type: scaleType,
-                        min: scaleType === 'logarithmic' ? 0.5 : undefined,
+                        min: scaleType === 'logarithmic' ? 1 : 0,
+                        beginAtZero: scaleType === 'linear',
                         title: { display: true, text: 'Counts', color: '#94a3b8' },
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
                         ticks: { color: '#94a3b8' }
