@@ -41,9 +41,13 @@ def parse_n42(file_content: str):
         live_time = find_text(spectrum, 'n42:LiveTime')
         real_time = find_text(spectrum, 'n42:RealTime')
 
+        # Determine calibration status
+        is_calibrated = len(energies) > 0 and len(energies) == len(counts)
+        
         return {
             "counts": counts.tolist(),
             "energies": energies.tolist() if len(energies) > 0 else [],
+            "is_calibrated": is_calibrated,
             "metadata": {
                 "live_time": live_time,
                 "real_time": real_time

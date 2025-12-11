@@ -37,6 +37,9 @@
 - **Decay Chain Detection**: Identifies natural decay series (U-238, U-235, Th-232) with confidence scoring
 - **Natural Abundance Weighting**: Scientifically accurate ranking based on LBNL/NRC isotopic abundance data
 - **Authoritative References**: Direct links to NNDC, IAEA, LBNL, USGS, NRC sources for each detected chain
+- **Dual-Mode Analysis Engine**:
+  - **Live Acquisition**: Uses "Gold Standard" checks (30% confidence) to prevent false positives in live data.
+  - **File Analysis**: Uses "Robust" checks (1% confidence, 30 keV tolerance) for uploaded CSV/N42 files to handle uncalibrated or noisy community data.
 
 ### ⚙️ Simple & Advanced Modes
 - **Simple Mode** (Default):

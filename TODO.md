@@ -81,3 +81,9 @@
 - [ ] Add unit tests for the frontend javascript.
 - [ ] Add unit tests for backend API endpoints
 - [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.
+
+- [x] **v2.0 Analysis Robustness (Completed)**:
+    - ✅ **Robust Upload Support**: Implemented `UPLOAD_SETTINGS` (1% confidence, 30keV tolerance) for CSV/N42 uploads.
+    - ✅ **Dual-Mode Engine**: Live Acquisition uses Strict settings (30%) to filter U-235; Uploads use Robust settings.
+    - ✅ **UI Fixes**: Resolved metadata text overlap with CSS `word-break`.
+    - ✅ **Verified**: Confirmed correct filtering of U-235 (7% weighted) vs U-238 (53% weighted) in live data.

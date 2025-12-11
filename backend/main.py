@@ -17,13 +17,21 @@ app = FastAPI()
 # Default settings for Simple mode
 DEFAULT_SETTINGS = {
     "mode": "simple",
-    "isotope_min_confidence": 40.0,
-    "chain_min_confidence": 30.0,
-    "energy_tolerance": 20.0,
-    "chain_min_isotopes_medium": 3,
+    "isotope_min_confidence": 30.0,
+    "chain_min_confidence": 30.0,    # Reverted to 30% per user request (calibrated file)
+    "energy_tolerance": 20.0,        # Reverted to 20.0 keV
+    "chain_min_isotopes_medium": 3,  # Reverted to 3 to effectively filter random noise chains like U-235
     "chain_min_isotopes_high": 4,
     "max_isotopes": 5  # Limit for simple mode
 }
+
+# Settings for generic File Uploads (often uncalibrated/noisy)
+UPLOAD_SETTINGS = DEFAULT_SETTINGS.copy()
+UPLOAD_SETTINGS.update({
+    "chain_min_confidence": 1.0,     # Loose 1% threshold for uploads
+    "energy_tolerance": 30.0,        # Higher tolerance for uncalibrated drift
+    "chain_min_isotopes_medium": 1   # Allow single-isotope structure (necessary for poor keys)
+})
 
 def apply_abundance_weighting(chains):
     """
@@ -93,15 +101,25 @@ def apply_confidence_filtering(isotopes, chains, settings):
         # Calculate percentage of indicators found
         percentage = (chain['num_detected'] / chain['num_key_isotopes'] * 100) if chain['num_key_isotopes'] > 0 else 0
         
-        # Improved confidence level logic
-        # HIGH: ≥4 isotopes OR ≥80% of indicators found
-        # MEDIUM: ≥3 isotopes OR ≥60% of indicators found
-        if chain['num_detected'] >= 4 or percentage >= 80:
+        # Improved confidence level logic using Settings
+        high_threshold = settings.get('chain_min_isotopes_high', 4)
+        med_threshold = settings.get('chain_min_isotopes_medium', 3)
+        
+        # HIGH: Meets high threshold OR ≥80% of indicators found
+        # MEDIUM: Meets medium threshold OR ≥60% of indicators found
+        if chain['num_detected'] >= high_threshold or percentage >= 80:
             chain['confidence_level'] = 'HIGH'
-        elif chain['num_detected'] >= 3 or percentage >= 60:
+        elif chain['num_detected'] >= med_threshold or percentage >= 60:
             chain['confidence_level'] = 'MEDIUM'
         else:
             chain['confidence_level'] = 'LOW'
+            
+        # FORCE DOWNGRADE based on Weighted Confidence
+        # This fixes the issue where U-235 (100% match but 0.72% abundance -> 7% score) shows as "HIGH"
+        if chain['confidence'] < 15.0:
+            chain['confidence_level'] = 'LOW'
+        elif chain['confidence'] < 40.0 and chain['confidence_level'] == 'HIGH':
+            chain['confidence_level'] = 'MEDIUM'
         
         # Apply filters (using WEIGHTED confidence)
         if chain['confidence'] >= settings.get('chain_min_confidence', 30.0) and chain['num_detected'] >= min_isotopes:
@@ -153,19 +171,31 @@ async def upload_file(file: UploadFile = File(...)):
                 # Add isotope identification
                 if peaks:
                     try:
-                        # Get ALL isotopes and chains (no filtering at detection level)
+                        # DYNAMIC SETTINGS SELECTION
+                        # If file is calibrated (keV energies), use Strict settings (Default) to avoid false positives.
+                        # If uncalibrated (Channels), use Robust settings (Upload) to find structure.
+                        is_calibrated = result.get("is_calibrated", True) # Default to True (Strict) if unknown
+                        
+                        if is_calibrated:
+                            current_settings = DEFAULT_SETTINGS
+                            print(f"[DEBUG] File is CALIBRATED. Using STRICT settings.")
+                        else:
+                            current_settings = UPLOAD_SETTINGS
+                            print(f"[DEBUG] File is UNCALIBRATED. Using ROBUST settings.")
+
+                        # Get ALL isotopes and chains (no filtering at detection level) using selected settings
                         all_isotopes = identify_isotopes(
                             peaks, 
-                            energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'],
-                            mode=DEFAULT_SETTINGS.get('mode', 'simple')
+                            energy_tolerance=current_settings['energy_tolerance'],
+                            mode=current_settings.get('mode', 'simple')
                         )
-                        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+                        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=current_settings['energy_tolerance'])
                         
                         # Apply abundance weighting (intermediate step)
                         weighted_chains = apply_abundance_weighting(all_chains)
                         
-                        # Apply filtering based on settings (Simple mode by default)
-                        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
+                        # Apply filtering based on selected settings
+                        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
                         
                         result["isotopes"] = isotopes
                         result["decay_chains"] = decay_chains
@@ -195,6 +225,48 @@ async def upload_file(file: UploadFile = File(...)):
         # Use Becquerel for CSV if available
         try:
              result = parse_csv_spectrum(content, filename)
+             
+             # Perform full analysis (CSV parser only does basic isotope ID)
+             if result.get("counts") and result.get("energies"):
+                 # Re-detect peaks to be sure (or use parser's)
+                 peaks = detect_peaks(result["energies"], result["counts"])
+                 result["peaks"] = peaks
+                 
+                 if peaks:
+                     try:
+                         # DYNAMIC SETTINGS SELECTION
+                         is_calibrated = result.get("is_calibrated", False) # Default to False for CSV if unknown
+                         
+                         if is_calibrated:
+                             current_settings = DEFAULT_SETTINGS
+                             print(f"[DEBUG] CSV is CALIBRATED. Using STRICT settings.")
+                         else:
+                             current_settings = UPLOAD_SETTINGS
+                             print(f"[DEBUG] CSV is UNCALIBRATED. Using ROBUST settings.")
+
+                         # Use selected settings
+                         all_isotopes = identify_isotopes(
+                             peaks, 
+                             energy_tolerance=current_settings['energy_tolerance'],
+                             mode=current_settings.get('mode', 'simple')
+                         )
+                         all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=current_settings['energy_tolerance'])
+                         
+                         # Apply weighting
+                         weighted_chains = apply_abundance_weighting(all_chains)
+                         
+                         # Apply filtering with selected settings
+                         isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
+                         
+                         result["isotopes"] = isotopes
+                         result["decay_chains"] = decay_chains
+                         
+                         print(f"[DEBUG] CSV Analysis: {len(isotopes)} isotopes, {len(decay_chains)} chains found with UPLOAD_SETTINGS")
+                     except Exception as e:
+                         print(f"[ERROR] CSV Analysis failed: {e}")
+                         result["isotopes"] = []
+                         result["decay_chains"] = []
+                         
              return result
         except ImportError as e:
              raise HTTPException(status_code=501, detail=str(e))

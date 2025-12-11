@@ -144,4 +144,16 @@ All notable changes to this project will be documented in this file.
 - **Critical Stability Fixes**:
   - **Serial Connection**: Completely rewrote `alphahound_serial.py` to use a simplified, robust read loop.
   - **Zombie Killer**: Eliminated 10+ persistent background Python processes that were causing port conflicts (Moved server to Port 8081).
-  - Resolved "stale data" issue where UI would connect to dead/zombie processes.
+### Added - v2.0 (Analysis Robustness)
+- **Robust Uncalibrated Support**:
+  - Implemented smart detection for uploaded CSV/N42 files that lack energy calibration (channel-based).
+  - Automatically applies relaxed thresholds (1% confidence, 30 keV tolerance) for uploads.
+  - Ensures robust detection of Uranium Glass and other sources from community files.
+- **Settings Separation**:
+  - Live Acquisition now uses strict "Gold Standard" settings (30% confidence) to prevent false positives (like U-235).
+  - File Uploads use permissive "Robust" settings to handle data quality variance.
+- **UI Fixes**: 
+  - Resolved text overlap in metadata panel for long filenames using CSS `word-break`.
+- **Backend Refactoring**:
+  - Updated `main.py` to route logic based on data source (Upload vs Live).
+  - Simplified CSV parser pipeline to use full analysis stack.
