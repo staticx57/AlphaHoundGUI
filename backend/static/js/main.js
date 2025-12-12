@@ -403,6 +403,72 @@ function setupEventListeners() {
         }
     });
 
+    // ML Identification Button in Isotopes Container (new enhanced button)
+    const btnRunML = document.getElementById('btn-run-ml');
+    if (btnRunML) {
+        btnRunML.addEventListener('click', async () => {
+            if (!currentData || !currentData.counts) return alert('No spectrum data loaded');
+
+            const mlList = document.getElementById('ml-isotopes-list');
+            const btn = document.getElementById('btn-run-ml');
+            const originalHTML = btn.innerHTML;
+
+            btn.innerHTML = '<span style="font-size: 1.2rem;">⏳</span> Running...';
+            btn.disabled = true;
+            mlList.innerHTML = '<p style="color: var(--text-secondary);">🤖 Running AI identification (first run trains model ~10-30s)...</p>';
+
+            try {
+                const response = await fetch('/analyze/ml-identify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ counts: currentData.counts })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'ML identification failed');
+                }
+
+                const data = await response.json();
+
+                if (data.predictions && data.predictions.length > 0) {
+                    mlList.innerHTML = data.predictions.map(pred => {
+                        const confidence = pred.confidence;
+                        const barColor = confidence > 70 ? '#10b981' :
+                            confidence > 40 ? '#f59e0b' : '#8b5cf6';
+                        const confidenceLabel = confidence > 70 ? 'HIGH' :
+                            confidence > 40 ? 'MEDIUM' : 'LOW';
+
+                        return `
+                            <div style="margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(139, 92, 246, 0.1); border-radius: 6px; border-left: 3px solid ${barColor};">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+                                    <strong style="color: var(--accent-color);">${pred.isotope}</strong>
+                                    <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600;">${confidenceLabel}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                        <div style="width: ${Math.min(confidence, 100)}%; height: 100%; background: linear-gradient(90deg, #8b5cf6, ${barColor}); border-radius: 3px; transition: width 0.3s ease;"></div>
+                                    </div>
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 50px;">${confidence.toFixed(1)}%</span>
+                                </div>
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    ${pred.method}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    mlList.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No ML predictions available for this spectrum</p>';
+                }
+            } catch (err) {
+                mlList.innerHTML = `<p style="color: #ef4444;">❌ Error: ${err.message}</p>`;
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        });
+    }
+
     // Calibration Tool
     const calBtn = document.getElementById('btn-calibrate');
     if (calBtn) {
@@ -547,7 +613,7 @@ async function checkDeviceStatus() {
 
 async function startAcquisition() {
     if (isAcquiring) return;
-    const minutes = parseFloat(document.getElementById('count-time').value) || 5;
+    const minutes = parseFloat(document.getElementById('input-count-duration').value) || 5;
     const seconds = minutes * 60;
 
     try {
@@ -565,7 +631,7 @@ async function startAcquisition() {
                 stopAcquisition();
                 alert('Acquisition Complete');
                 // Final fetch
-                const data = await api.getSpectrum(0);
+                const data = await api.getSpectrum(minutes);
                 currentData = data;
                 ui.renderDashboard(data);
                 if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
@@ -575,7 +641,7 @@ async function startAcquisition() {
 
             // Poll spectrum
             try {
-                const data = await api.getSpectrum(0);
+                const data = await api.getSpectrum(minutes);
                 currentData = data;
                 ui.renderDashboard(data);
                 if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());

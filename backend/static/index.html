@@ -197,17 +197,58 @@
             </div>
 
             <div id="isotopes-container" style="display: none;">
-                <h3>Identified Isotopes</h3>
-                <table id="isotopes-table">
-                    <thead>
-                        <tr>
-                            <th>Isotope</th>
-                            <th>Confidence</th>
-                            <th>Matched Lines</th>
-                        </tr>
-                    </thead>
-                    <tbody id="isotopes-tbody"></tbody>
-                </table>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0;"><img src="/static/icons/analysis.svg" class="icon"> Isotope Identification
+                    </h3>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button id="btn-run-ml" class="btn-primary"
+                            style="padding: 6px 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                            <span style="font-size: 1.2rem;">🤖</span> AI Identify
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dual Detection Results -->
+                <div id="identification-results" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+                    <!-- Legacy Peak-Based Results -->
+                    <div class="detection-panel"
+                        style="background: var(--card-bg); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color);">
+                        <div
+                            style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                            <span style="font-size: 1.2rem;">📊</span>
+                            <strong style="color: var(--text-primary);">Peak Matching</strong>
+                            <span
+                                style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">Legacy</span>
+                        </div>
+                        <div id="legacy-isotopes-list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- ML-Based Results -->
+                    <div class="detection-panel"
+                        style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(139, 92, 246, 0.1)); border-radius: 10px; padding: 1rem; border: 1px solid var(--accent-color);">
+                        <div
+                            style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--accent-color);">
+                            <span style="font-size: 1.2rem;">🤖</span>
+                            <strong style="color: var(--accent-color);">AI Identification</strong>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">PyRIID
+                                ML</span>
+                        </div>
+                        <div id="ml-isotopes-list">
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; font-style: italic;">Click "AI
+                                Identify" to run ML classification</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info Bar -->
+                <div
+                    style="margin-top: 1rem; padding: 0.75rem; background: rgba(56, 189, 248, 0.1); border-radius: 8px; font-size: 0.8rem; color: var(--text-secondary);">
+                    <strong>ℹ️ Tip:</strong> Peak Matching uses known gamma energies from IAEA/NNDC databases. AI
+                    Identification uses a neural network trained on 90+ isotopes for pattern recognition.
+                </div>
             </div>
 
             <div id="decay-chains-container" style="display: none; margin-top: 2rem;">

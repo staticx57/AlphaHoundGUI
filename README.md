@@ -35,8 +35,17 @@
   - **Simple Mode**: 30 hobby-focused isotopes (uranium glass, mantles, watches)
   - **Advanced Mode**: 100+ isotopes including fission products, activation products, rare earths, and transuranics
 - **Decay Chain Detection**: Identifies natural decay series (U-238, U-235, Th-232) with confidence scoring
+  - **Graphical Flow Diagrams**: Visual parent→daughter→stable sequences with color-coded detection status
+  - **Detected members highlighted** with green glow effects
+  - **Stable end products** marked with purple dashed borders
 - **Natural Abundance Weighting**: Scientifically accurate ranking based on LBNL/NRC isotopic abundance data
 - **Authoritative References**: Direct links to NNDC, IAEA, LBNL, USGS, NRC sources for each detected chain
+- **ML Integration (PyRIID)**:
+  - Neural network trained on 90+ isotopes from IAEA/NNDC databases
+  - Multi-isotope mixture recognition (UraniumGlass, ThoriumMantle, MedicalWaste, IndustrialGauge, etc.)
+  - ~1500 training samples with realistic Poisson statistics
+  - Best suited for real detector data
+- **Dual Detection Panel**: Side-by-side comparison of Peak Matching (legacy) vs AI Identification (ML)
 - **Dual-Mode Analysis Engine**:
   - **Live Acquisition**: Uses "Gold Standard" checks (30% confidence) to prevent false positives in live data.
   - **File Analysis**: Uses "Robust" checks (1% confidence, 30 keV tolerance) for uploaded CSV/N42 files to handle uncalibrated or noisy community data.
@@ -57,14 +66,15 @@
   - Expanded 100+ isotope library
   - Custom threshold fine-tuning via ⚙️ Settings panel
   - localStorage persistence across sessions
-  - localStorage persistence across sessions
 
 ### 🎨 Interactive Visualization
 - **Dual Scale Support**: Linear/Logarithmic toggles
 - **Advanced Zoom & Pan**: Mouse wheel, pinch, drag interactions
 - **Peak Markers**: Automatic labeling with hover tooltips
+- **Graphical Confidence Bars**: Animated progress bars with color-coded confidence levels (green=HIGH, yellow=MEDIUM, red=LOW)
 - **4 Theme Options**: Dark (default), Light, Nuclear (radiation warning), Toxic (biohazard)
 - **Multi-File Comparison**: Overlay up to 8 spectra with color coding
+- **Professional Icon System**: Custom SVG icons with consistent styling
 
 ### 🔌 AlphaHound Device Integration
 - **Direct Serial Communication**: With RadView Detection AlphaHound™ hardware
@@ -154,9 +164,27 @@ The AlphaHound interface provides:
 
 ## Credits & Attribution
 
-### This N42 Viewer
-- Developed with FastAPI, Chart.js, scipy, and becquerel
-- Custom N42 parser and isotope identification system
+### This Project (SpecTrek)
+- **Core Development**: FastAPI, Chart.js, scipy, matplotlib, reportlab
+- **Custom Components**: 
+  - N42/CSV parsers with fallback processing
+  - Isotope identification system with 100+ isotopes from IAEA/NNDC databases
+  - Decay chain detection algorithm with natural abundance weighting
+  - Graphical visualization system (decay chains, confidence bars, dual detection panels)
+- **AI/ML Integration**: PyRIID 2.2.0 (Sandia National Laboratories)
+- **Development Assistance**: Built with AI assistance from Google Gemini (Claude 4.5 Sonnet)
+
+### Machine Learning Framework
+- **PyRIID** (Python Radioisotope Identification Dataset):
+  - **Author**: Sandia National Laboratories
+  - **License**: Apache 2.0
+  - **Repository**: [https://github.com/sandialabs/PyRIID](https://github.com/sandialabs/PyRIID)
+  - **Citation**: If you use PyRIID features in academic work, please cite:
+    ```
+    Darren Holland et al. (2024). PyRIID: Machine Learning-based 
+    Radioisotope Identification. Sandia National Laboratories.
+    ```
+  - **Integration**: Neural network trained on 90+ isotopes with multi-isotope mixture support
 
 ### AlphaHound Interface
 - **Author**: [NuclearGeekETH](https://github.com/NuclearGeekETH)
@@ -164,7 +192,11 @@ The AlphaHound interface provides:
 - **License**: MIT License
 - **Trademark Notice**: AlphaHound™ and RadView Detection are trademarks of their respective holders. The AlphaHound interface is an independent, third-party project not affiliated with or endorsed by RadView Detection.
 
-Special thanks to Nick Conner at RadView Detection for creating the AlphaHound device.
+### Special Thanks
+- **Nick Conner** (RadView Detection) - For creating the AlphaHound device
+- **Sandia National Laboratories** - For developing and open-sourcing PyRIID
+- **IAEA, NNDC, LBNL, USGS** - For maintaining authoritative gamma-ray databases
+- **Open Source Community** - FastAPI, numpy, scipy, Chart.js, TensorFlow contributors
 
 ## System Requirements
 
@@ -185,6 +217,11 @@ Special thanks to Nick Conner at RadView Detection for creating the AlphaHound d
 - `numpy` - Numerical arrays and mathematical operations
 - `scipy` - Peak detection algorithms
 - `matplotlib` - Spectrum plotting for PDF reports
+
+**Machine Learning (Optional - for AI Identification):**
+- `riid` (PyRIID 2.2.0) - Machine learning isotope identification
+- `tensorflow` - Neural network backend for ML classifier
+- `pandas` - Data structures for ML training
 
 **Specialized:**
 - `becquerel` - Advanced gamma spectroscopy analysis (optional for CSV support)

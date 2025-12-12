@@ -6,6 +6,7 @@
     - ✅ Isotope identification database with 100+ isotopes (Simple: 30, Advanced: 100+)
     - ✅ Decay chain detection (U-238, U-235, Th-232 series)
     - ✅ Confidence scoring with natural abundance weighting
+    - ✅ **Graphical Decay Chain Visualization**: Visual flow diagrams showing parent→daughter→stable sequences with detected members highlighted
 - [x] **Export Options**:
     - ✅ Allow exporting parsed data to JSON or CSV from the UI.
     - ✅ Generate PDF reports with spectrum plot, peaks, isotopes, and decay chains
@@ -13,6 +14,9 @@
     - ✅ Add zoom/pan capabilities to the chart (using `chartjs-plugin-zoom`).
     - ✅ Light/Dark mode toggle with localStorage + Nuclear/Toxic bonus themes
     - ✅ Multi-file comparison (overlay multiple spectra)
+    - ✅ **Dual Isotope Detection Panel**: Side-by-side Peak Matching (Legacy) vs AI Identification (ML)
+    - ✅ **Graphical Confidence Bars**: Animated progress bars with color-coded confidence levels
+    - ✅ **Professional Icon System**: SVG icons replacing all emojis with consistent styling
 - [x] **Data Management**:
     - ✅ Save upload history to local storage
 - [x] **AlphaHound Device Integration**:
@@ -22,7 +26,7 @@
     - ✅ Non-blocking Sidebar UI for device control
     - ✅ Integrated device control panel
 - [x] **Advanced/Simple Mode Toggle**:
-    - ✅ **Simple Mode** (default): Optimized thresholds (40% isotope, 30% chain) with hobby-focused library (uranium glass, lantles, radium watches, etc.)
+    - ✅ **Simple Mode** (default): Optimized thresholds (40% isotope, 30% chain) with hobby-focused library (uranium glass, mantles, radium watches, etc.)
     - ✅ **Advanced Mode**: User-adjustable confidence thresholds, energy tolerance settings, and expanded isotope library including:
         - ✅ Additional fission products (Ru-103, Zr-95, Ce-144, Mo-99, etc.)
         - ✅ Activation products (Sc-46, Cr-51, Ag-110m, Sb-124, etc.)
@@ -40,6 +44,7 @@
     - ✅ Th-232 chain (Tl-208, Ac-228, Pb-212, etc.)
     - ✅ Visual display of detected chain members with confidence levels
     - ✅ Authoritative source links (NNDC, IAEA, LBNL, USGS, NRC)
+    - ✅ **Graphical flow diagrams** with color-coded detection status
 - [x] **Natural Abundance Weighting**:
     - ✅ Research-based isotopic abundance from LBNL/NRC
     - ✅ U-238 (99.3%) correctly ranks above U-235 (0.72%) in natural samples
@@ -61,14 +66,25 @@
     - ✅ `identify_isotopes()` and `identify_decay_chains()` return ALL matches
     - ✅ Application layer applies filtering based on Simple/Advanced mode
     - ✅ Runtime threshold adjustment without modifying core detection logic
+- [x] **ML Integration (PyRIID)**:
+    - ✅ PyRIID 2.2.0 integration with MLPClassifier
+    - ✅ Training on 90+ isotopes from IAEA/NNDC authoritative database
+    - ✅ Multi-isotope mixture support (7 realistic sources):
+        - ✅ UraniumGlass, ThoriumMantle, MedicalWaste, IndustrialGauge, CalibrationSource, NaturalBackground
+    - ✅ `/analyze/ml-identify` API endpoint
+    - ✅ Frontend "AI Identify" button with loading states
+    - ✅ ~1500 training samples (1350 single + 150 mixtures)
+    - ⚠️ **Note**: Works best with real detector data (Poisson statistics); synthetic demo files may not match training patterns
 
 ## Future Enhancements
-- [ ] **Advanced ML Integration**:
-    - Integrate `PyRIID` for machine-learning based isotope identification.
-    - *Note: Requires Python < 3.11 (Incompatible with current 3.13 env)*
+- [ ] **ML Improvements**:
+    - [ ] Collect real detector data for ML fine-tuning
+    - [ ] Implement confidence thresholding (>90% only)
+    - [ ] Add hybrid filtering (suppress ML conflicts with Peak Matching HIGH confidence)
+    - [ ] Update synthetic demo files to use realistic Poisson noise
 - [ ] **Custom Isotope Definitions**:
-    - Allow users to add custom isotopes to the database via UI
-    - Import/export custom isotope libraries
+    - [ ] Allow users to add custom isotopes to the database via UI
+    - [ ] Import/export custom isotope libraries
 - [x] **Energy Calibration UI**:
     - ✅ Interactive peak marking for calibration
     - ✅ Linear calibration (Slope/Intercept)

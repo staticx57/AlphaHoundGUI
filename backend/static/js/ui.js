@@ -49,12 +49,23 @@ export class AlphaHoundUI {
     }
 
     renderMetadata(metadata) {
-        const metaHtml = Object.entries(metadata || {}).map(([key, value]) => `
-            <div class="stat-card">
-                <div class="stat-label">${key.toUpperCase().replace('_', ' ')}</div>
-                <div class="stat-value">${value || '-'}</div>
-            </div>
-        `).join('');
+        const metaHtml = Object.entries(metadata || {}).map(([key, value]) => {
+            // Format the key: replace underscores with spaces and convert to uppercase
+            let displayKey = key.toUpperCase().replaceAll('_', ' ');
+
+            // Format the value based on the key
+            let displayValue = value || '-';
+            if (key === 'count_time_minutes' && value > 0) {
+                displayValue = `${value} min`;
+            }
+
+            return `
+                <div class="stat-card">
+                    <div class="stat-label">${displayKey}</div>
+                    <div class="stat-value">${displayValue}</div>
+                </div>
+            `;
+        }).join('');
         this.elements.metadataPanel.innerHTML = metaHtml;
     }
 
@@ -73,21 +84,40 @@ export class AlphaHoundUI {
     }
 
     renderIsotopes(isotopes) {
+        const legacyList = document.getElementById('legacy-isotopes-list');
+
         if (isotopes && isotopes.length > 0) {
             this.elements.isotopesContainer.style.display = 'block';
-            this.elements.isotopesTbody.innerHTML = isotopes.map(iso => {
-                const confidenceClass = iso.confidence > 70 ? 'high-confidence' :
-                    iso.confidence > 40 ? 'medium-confidence' : 'low-confidence';
+
+            // Render legacy peak-matching results with confidence bars
+            legacyList.innerHTML = isotopes.map(iso => {
+                const confidence = iso.confidence;
+                const barColor = confidence > 70 ? '#10b981' :
+                    confidence > 40 ? '#f59e0b' : '#ef4444';
+                const confidenceLabel = confidence > 70 ? 'HIGH' :
+                    confidence > 40 ? 'MEDIUM' : 'LOW';
+
                 return `
-                    <tr class="${confidenceClass}">
-                        <td><strong>${iso.isotope}</strong></td>
-                        <td>${iso.confidence.toFixed(0)}%</td>
-                        <td>${iso.matches}/${iso.total_lines}</td>
-                    </tr>
+                    <div style="margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+                            <strong style="color: var(--text-primary);">${iso.isotope}</strong>
+                            <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600;">${confidenceLabel}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                <div style="width: ${Math.min(confidence, 100)}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.3s ease;"></div>
+                            </div>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 45px;">${confidence.toFixed(0)}%</span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                            ${iso.matches}/${iso.total_lines} peaks matched
+                        </div>
+                    </div>
                 `;
             }).join('');
         } else {
             this.elements.isotopesContainer.style.display = 'none';
+            legacyList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem; font-style: italic;">No isotopes identified</p>';
         }
     }
 
@@ -106,6 +136,44 @@ export class AlphaHoundUI {
                     </div>`;
                 }).join('');
 
+                // Create graphical decay chain visualization
+                const chainMembers = this.getChainMembers(chain.chain_name);
+                const detectedSet = new Set(Object.keys(chain.detected_members));
+
+                const chainGraphic = chainMembers.map((member, idx) => {
+                    const isDetected = detectedSet.has(member);
+                    const isParent = idx === 0;
+                    const isStable = idx === chainMembers.length - 1;
+
+                    const boxColor = isDetected ? '#10b981' :
+                        isStable ? '#8b5cf6' :
+                            'rgba(255,255,255,0.2)';
+                    const textColor = isDetected ? '#10b981' :
+                        isStable ? '#8b5cf6' :
+                            'var(--text-secondary)';
+                    const boxStyle = isDetected ?
+                        'background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);' :
+                        isStable ?
+                            'background: rgba(139, 92, 246, 0.2); border: 2px dashed #8b5cf6;' :
+                            'background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);';
+
+                    const arrow = idx < chainMembers.length - 1 ?
+                        `<div style="color: var(--text-secondary); font-size: 1.2rem; padding: 0 0.25rem;">→</div>` : '';
+
+                    return `
+                        <div style="display: flex; align-items: center;">
+                            <div style="padding: 0.4rem 0.75rem; border-radius: 6px; ${boxStyle} min-width: 70px; text-align: center; transition: all 0.3s;">
+                                <div style="font-weight: ${isDetected ? '700' : '500'}; color: ${textColor}; font-size: 0.85rem;">
+                                    ${member}
+                                </div>
+                                ${isDetected ? '<div style="font-size: 0.65rem; color: #10b981; margin-top: 2px;">✓ DETECTED</div>' : ''}
+                                ${isStable ? '<div style="font-size: 0.65rem; color: #8b5cf6; margin-top: 2px;">STABLE</div>' : ''}
+                            </div>
+                            ${arrow}
+                        </div>
+                    `;
+                }).join('');
+
                 return `
                     <div class="chain-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${chain.confidence_level === 'HIGH' ? '#10b981' : '#f59e0b'};">
                         <div class="chain-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
@@ -114,6 +182,22 @@ export class AlphaHoundUI {
                                 ${chain.confidence_level} (${chain.confidence.toFixed(0)}%)
                             </span>
                         </div>
+                        
+                        <!-- Graphical Decay Chain -->
+                        <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; overflow-x: auto;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">
+                                ⚛️ DECAY SEQUENCE
+                            </div>
+                            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
+                                ${chainGraphic}
+                            </div>
+                            <div style="margin-top: 0.75rem; font-size: 0.7rem; color: var(--text-secondary); display: flex; gap: 1rem;">
+                                <span><span style="color: #10b981;">●</span> Detected</span>
+                                <span><span style="color: #8b5cf6;">●</span> Stable End Product</span>
+                                <span><span style="color: rgba(255,255,255,0.3);">●</span> Not Detected</span>
+                            </div>
+                        </div>
+                        
                         <div class="chain-details" style="font-size: 0.9rem; color: var(--text-secondary);">
                             <div style="margin-bottom: 0.5rem;">
                                 <strong>Detected Members:</strong> ${chain.num_detected}/${chain.num_key_isotopes} key indicators
@@ -132,6 +216,28 @@ export class AlphaHoundUI {
         } else {
             this.elements.decayChainsContainer.style.display = 'none';
         }
+    }
+
+    // Helper to get decay chain members based on chain name
+    getChainMembers(chainName) {
+        const chains = {
+            "U-238 Chain": [
+                "U-238", "Th-234", "Pa-234m", "U-234", "Th-230",
+                "Ra-226", "Rn-222", "Po-218", "Pb-214", "Bi-214",
+                "Po-214", "Pb-210", "Bi-210", "Po-210", "Pb-206"
+            ],
+            "Th-232 Chain": [
+                "Th-232", "Ra-228", "Ac-228", "Th-228", "Ra-224",
+                "Rn-220", "Po-216", "Pb-212", "Bi-212", "Tl-208",
+                "Po-212", "Pb-208"
+            ],
+            "U-235 Chain": [
+                "U-235", "Th-231", "Pa-231", "Ac-227", "Th-227",
+                "Ra-223", "Rn-219", "Po-215", "Pb-211", "Bi-211",
+                "Tl-207", "Pb-207"
+            ]
+        };
+        return chains[chainName] || [];
     }
 
     updateDoseDisplay(doseRate) {
