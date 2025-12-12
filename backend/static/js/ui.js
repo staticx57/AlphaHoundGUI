@@ -126,13 +126,13 @@ export class AlphaHoundUI {
             this.elements.decayChainsContainer.style.display = 'block';
             this.elements.decayChainsList.innerHTML = chains.map(chain => {
                 const confidenceClass = chain.confidence_level.toLowerCase() + '-confidence';
-                const confidenceBadge = chain.confidence_level === 'HIGH' ? '🟢' :
-                    chain.confidence_level === 'MEDIUM' ? '🟡' : '🔴';
+                const confidenceBadge = chain.confidence_level === 'HIGH' ? '<span style="color: #10b981;">●</span>' :
+                    chain.confidence_level === 'MEDIUM' ? '<span style="color: #f59e0b;">●</span>' : '<span style="color: #ef4444;">●</span>';
 
                 const membersHTML = Object.entries(chain.detected_members).map(([isotope, peaks]) => {
                     const energies = peaks.map(p => p.energy.toFixed(1)).join(', ');
                     return `<div style="margin: 0.3rem 0; padding-left: 1rem;">
-                        ✅ <strong>${isotope}</strong>: ${energies} keV
+                        <img src="/static/icons/check.svg" class="icon" style="width: 14px; height: 14px; margin-right: 0.25rem; filter: invert(1);"><strong>${isotope}</strong>: ${energies} keV
                     </div>`;
                 }).join('');
 
@@ -166,7 +166,7 @@ export class AlphaHoundUI {
                                 <div style="font-weight: ${isDetected ? '700' : '500'}; color: ${textColor}; font-size: 0.85rem;">
                                     ${member}
                                 </div>
-                                ${isDetected ? '<div style="font-size: 0.65rem; color: #10b981; margin-top: 2px;">✓ DETECTED</div>' : ''}
+                                ${isDetected ? '<div style="font-size: 0.65rem; color: #10b981; margin-top: 2px;"><span style="font-size: 10px;">✓</span> DETECTED</div>' : ''}
                                 ${isStable ? '<div style="font-size: 0.65rem; color: #8b5cf6; margin-top: 2px;">STABLE</div>' : ''}
                             </div>
                             ${arrow}
@@ -186,7 +186,7 @@ export class AlphaHoundUI {
                         <!-- Graphical Decay Chain -->
                         <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; overflow-x: auto;">
                             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">
-                                ⚛️ DECAY SEQUENCE
+                                <img src="/static/icons/atom.svg" class="icon" style="width: 14px; height: 14px; margin-right: 0.25rem; filter: invert(1);">DECAY SEQUENCE
                             </div>
                             <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 ${chainGraphic}

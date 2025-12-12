@@ -1,14 +1,33 @@
+/**
+ * API client for AlphaHound device and analysis endpoints.
+ * Handles file uploads, device communication, and spectrum analysis.
+ * @class
+ */
 export class AlphaHoundAPI {
+    /**
+     * Creates an AlphaHoundAPI instance.
+     * Initializes WebSocket state and event listeners.
+     */
     constructor() {
+        /** @type {WebSocket|null} */
         this.doseWebSocket = null;
+        /** @type {number} */
         this.reconnectAttempts = 0;
+        /** @type {number|null} */
         this.reconnectTimer = null;
+        /** @type {{onDoseRate: Function|null, onConnectionStatus: Function|null}} */
         this.listeners = {
             onDoseRate: null,
             onConnectionStatus: null
         };
     }
 
+    /**
+     * Uploads a spectrum file (N42/CSV) for analysis.
+     * @param {File} file - The file to upload
+     * @returns {Promise<Object>} Parsed spectrum data with energies, counts, peaks, isotopes
+     * @throws {Error} If upload fails
+     */
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -23,11 +42,21 @@ export class AlphaHoundAPI {
         return await response.json();
     }
 
+    /**
+     * Gets list of available serial ports.
+     * @returns {Promise<{ports: string[]}>} Object containing array of port names
+     */
     async getPorts() {
         const response = await fetch('/device/ports');
         return await response.json();
     }
 
+    /**
+     * Connects to AlphaHound device on specified port.
+     * @param {string} port - Serial port name (e.g., 'COM3')
+     * @returns {Promise<boolean>} True if connection successful
+     * @throws {Error} If connection fails
+     */
     async connectDevice(port) {
         const response = await fetch('/device/connect', {
             method: 'POST',
@@ -41,20 +70,39 @@ export class AlphaHoundAPI {
         return true;
     }
 
+    /**
+     * Disconnects from AlphaHound device.
+     * Stops WebSocket monitoring.
+     * @returns {Promise<void>}
+     */
     async disconnectDevice() {
         await fetch('/device/disconnect', { method: 'POST' });
         this.stopDoseMonitoring();
     }
 
+    /**
+     * Gets current device connection status.
+     * @returns {Promise<{connected: boolean, port: string|null}>} Connection status
+     */
     async getDeviceStatus() {
         const response = await fetch('/device/status');
         return await response.json();
     }
 
+    /**
+     * Clears device spectrum buffer.
+     * @returns {Promise<void>}
+     */
     async clearDevice() {
         await fetch('/device/clear', { method: 'POST' });
     }
 
+    /**
+     * Gets current spectrum from device.
+     * @param {number} countMinutes - Acquisition time in minutes
+     * @returns {Promise<Object>} Spectrum data with energies, counts, peaks
+     * @throws {Error} If poll fails
+     */
     async getSpectrum(countMinutes) {
         const response = await fetch('/device/spectrum', {
             method: 'POST',
@@ -67,6 +115,12 @@ export class AlphaHoundAPI {
         throw new Error(`Poll failed: ${response.status} ${response.statusText}`);
     }
 
+    /**
+     * Performs Gaussian peak fitting on spectrum data.
+     * @param {Object} data - Spectrum data with energies, counts, peaks
+     * @returns {Promise<Object>} Fitted peak parameters
+     * @throws {Error} If analysis fails
+     */
     async fitPeaks(data) {
         const response = await fetch('/analyze/fit-peaks', {
             method: 'POST',
@@ -77,6 +131,14 @@ export class AlphaHoundAPI {
         return await response.json();
     }
 
+    /**
+     * Subtracts background spectrum from source spectrum.
+     * @param {number[]} sourceCounts - Source spectrum counts
+     * @param {number[]} bgCounts - Background spectrum counts
+     * @param {number} [scalingFactor=1.0] - Background scaling factor
+     * @returns {Promise<{net_counts: number[]}>} Net counts after subtraction
+     * @throws {Error} If subtraction fails
+     */
     async subtractBackground(sourceCounts, bgCounts, scalingFactor = 1.0) {
         const response = await fetch('/analyze/subtract-background', {
             method: 'POST',
@@ -91,6 +153,12 @@ export class AlphaHoundAPI {
         return await response.json();
     }
 
+    /**
+     * Exports analysis report as PDF.
+     * @param {Object} data - Report data including spectrum, peaks, isotopes
+     * @returns {Promise<Response>} PDF file response
+     * @throws {Error} If PDF generation fails
+     */
     async exportPDF(data) {
         const response = await fetch('/export/pdf', {
             method: 'POST',

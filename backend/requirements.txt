@@ -8,4 +8,6 @@ matplotlib
 pyserial
 websockets
 reportlab
-
+riid
+tensorflow
+pandas

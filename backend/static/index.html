@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpecTrek - Gamma Spectroscopy Analysis</title>
+    <title>RadTrace - Gamma Spectroscopy Analysis</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -13,11 +13,13 @@
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 
 <body>
     <header>
-        <h1><img src="/static/icons/rocket.svg" class="icon icon-xl" style="margin-right:0.5rem;">SpecTrek</h1>
+        <h1><img src="/static/icons/rocket.svg" class="icon icon-xl" style="margin-right:0.5rem;">RadTrace</h1>
         <div class="header-controls">
             <button id="btn-history" title="File History"><img src="/static/icons/history.svg" class="icon">
                 History</button>
@@ -110,6 +112,8 @@
                 <button id="btn-lin" class="active">Linear</button>
                 <button id="btn-log">Logarithmic</button>
                 <button id="btn-reset-zoom">Reset Zoom</button>
+                <button id="btn-auto-scale" class="active"
+                    title="Toggle between Auto-Scale (zoom to data) and Full Spectrum view">Auto-Scale</button>
                 <button id="btn-export-json">Export JSON</button>
                 <button id="btn-export-csv">Export CSV</button>
                 <button id="btn-export-pdf" style="background-color: var(--accent-color); color: white;"><img
@@ -134,7 +138,8 @@
                     <strong>Spectral Analysis</strong>
                     <div style="display: flex; gap: 8px;">
                         <button id="btn-ml-identify" class="btn-primary"
-                            style="padding: 4px 12px; font-size: 0.8rem;">🤖 AI Identify</button>
+                            style="padding: 4px 12px; font-size: 0.8rem;"><img src="/static/icons/robot.svg"
+                                class="icon" style="margin-right: 0.25rem;">AI Identify</button>
                         <button id="btn-run-fit" class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem;">Run
                             Peak
                             Fitting</button>
@@ -203,7 +208,8 @@
                     <div style="display: flex; gap: 0.5rem;">
                         <button id="btn-run-ml" class="btn-primary"
                             style="padding: 6px 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
-                            <span style="font-size: 1.2rem;">🤖</span> AI Identify
+                            <img src="/static/icons/robot.svg" class="icon" style="margin-right: 0.25rem;">AI
+                            Identify
                         </button>
                     </div>
                 </div>
@@ -216,7 +222,7 @@
                         style="background: var(--card-bg); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color);">
                         <div
                             style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                            <span style="font-size: 1.2rem;">📊</span>
+                            <img src="/static/icons/chart.svg" class="icon" style="margin-right: 0.25rem;">
                             <strong style="color: var(--text-primary);">Peak Matching</strong>
                             <span
                                 style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">Legacy</span>
@@ -231,7 +237,7 @@
                         style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(139, 92, 246, 0.1)); border-radius: 10px; padding: 1rem; border: 1px solid var(--accent-color);">
                         <div
                             style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--accent-color);">
-                            <span style="font-size: 1.2rem;">🤖</span>
+                            <img src="/static/icons/robot.svg" class="icon" style="margin-right: 0.25rem;">
                             <strong style="color: var(--accent-color);">AI Identification</strong>
                             <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">PyRIID
                                 ML</span>
@@ -246,7 +252,10 @@
                 <!-- Info Bar -->
                 <div
                     style="margin-top: 1rem; padding: 0.75rem; background: rgba(56, 189, 248, 0.1); border-radius: 8px; font-size: 0.8rem; color: var(--text-secondary);">
-                    <strong>ℹ️ Tip:</strong> Peak Matching uses known gamma energies from IAEA/NNDC databases. AI
+                    <strong><img src="/static/icons/lightbulb.svg" class="icon"
+                            style="margin-right: 0.25rem; vertical-align: middle;">Tip:</strong> Peak Matching uses
+                    known gamma energies
+                    from IAEA/NNDC databases. AI
                     Identification uses a neural network trained on 90+ isotopes for pattern recognition.
                 </div>
             </div>
@@ -255,6 +264,55 @@
                 <h3><img src="/static/icons/analysis.svg" class="icon"> Decay Chains Detected</h3>
                 <div id="decay-chains-list">
                     <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- ROI Analysis Panel (Advanced Mode Only) -->
+            <div id="roi-analysis-panel" style="display: none;">
+                <h3><img src="/static/icons/analysis.svg" class="icon"> Region-of-Interest (ROI) Analysis</h3>
+
+                <!-- Configuration Row -->
+                <div class="roi-config-row"
+                    style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 1rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                        Detector:
+                        <select id="roi-detector">
+                            <option value="AlphaHound CsI(Tl)">CsI(Tl) 1.1cm³ (48 cps/μSv/h)</option>
+                            <option value="AlphaHound BGO">BGO 0.6cm³ (42 cps/μSv/h)</option>
+                        </select>
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                        Acq. Time (s):
+                        <input type="number" id="roi-acq-time" value="600" min="1" max="86400" style="width: 80px;">
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+                        Isotope:
+                        <select id="roi-isotope">
+                            <option value="U-235 (186 keV)">U-235 (186 keV)</option>
+                            <option value="Th-234 (93 keV)">Th-234 (93 keV)</option>
+                            <option value="Cs-137 (662 keV)">Cs-137 (662 keV)</option>
+                            <option value="Co-60 (1173 keV)">Co-60 (1173 keV)</option>
+                            <option value="Co-60 (1332 keV)">Co-60 (1332 keV)</option>
+                            <option value="K-40 (1461 keV)">K-40 (1461 keV)</option>
+                            <option value="Bi-214 (609 keV)">Bi-214 (609 keV)</option>
+                            <option value="Tl-208 (2614 keV)">Tl-208 (2614 keV)</option>
+                            <option value="Am-241 (60 keV)">Am-241 (60 keV)</option>
+                        </select>
+                    </label>
+
+                    <button id="btn-analyze-roi" class="btn-primary" style="padding: 0.5rem 1rem;">Analyze ROI</button>
+                    <button id="btn-highlight-roi" class="btn-secondary"
+                        style="padding: 0.5rem 1rem;">Highlight</button>
+                    <button id="btn-clear-highlight" class="btn-secondary" style="padding: 0.5rem 1rem;">Clear</button>
+                </div>
+
+                <!-- Results Section -->
+                <div id="roi-results"
+                    style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-family: 'Roboto Mono', monospace; font-size: 0.85rem; line-height: 1.8; min-height: 100px;">
+                    <p style="color: var(--text-secondary); font-style: italic;">Select an isotope and click "Analyze
+                        ROI" to calculate activity.</p>
                 </div>
             </div>
         </div>
@@ -418,7 +476,7 @@
     </main>
 
     <!-- Main Application Logic (ES6 Modules) -->
-    <script type="module" src="/static/js/main.js"></script>
+    <script type="module" src="/static/js/main.js?v=2.1"></script>
 </body>
 
 </html>

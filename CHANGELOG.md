@@ -50,6 +50,14 @@
   - Loading states during ML training/prediction (~10-30s first run)
   - Informative messages about ML data requirements
   - Professional card-based layouts for isotope results
+  - **Toast Notification System**: Non-blocking slide-in notifications with auto-dismiss
+
+- **Auto-Save CSV Feature**
+  - Automatically saves acquired spectra to CSV after completion
+  - Saves to `backend/data/acquisitions/` directory
+  - Timestamped filenames: `spectrum_YYYY-MM-DD_HH-MM-SS.csv`
+  - Toast notification confirms save with filename
+  - `/export/csv-auto` API endpoint
 
 ### Changed
 - **Updated `ml_analysis.py`**:

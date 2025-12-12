@@ -4,7 +4,7 @@ ECHO ========================================
 ECHO AlphaHound GUI - N42 Viewer
 ECHO ========================================
 ECHO.
-ECHO Starting server at http://localhost:8080
+ECHO Starting server at http://localhost:3200
 ECHO.
 ECHO NOTE: AlphaHound device is OPTIONAL
 ECHO The GUI will work without a connected device
@@ -16,7 +16,7 @@ ECHO.
 cd backend
 
 :: Start the FastAPI server
-START "" "http://localhost:8080"
-python -m uvicorn main:app --reload --port 8080
+START "" "http://localhost:3200"
+python -m uvicorn main:app --reload --port 3200
 
 PAUSE

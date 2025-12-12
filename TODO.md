@@ -77,29 +77,52 @@
     - ✅ Frontend "AI Identify" button with loading states
     - ✅ ~1500 training samples (1350 single + 150 mixtures)
     - ⚠️ **Note**: Works best with real detector data (Poisson statistics); synthetic demo files may not match training patterns
+- [x] **Auto-Save CSV on Acquisition**:
+    - ✅ Automatically saves spectrum to CSV upon acquisition completion
+   - ✅ Saves to `data/acquisitions/` directory
+    - ✅ Filename format: `spectrum_YYYY-MM-DD_HH-MM-SS.csv`
+    - ✅ Toast notification shows saved filename
 
 ## Future Enhancements
 
+### Bugs\n- [x] ✅ **Missing Advanced Controls**: Settings modal now has working Simple/Advanced toggle, slider handlers, Apply/Reset buttons
+
 ### High Priority
+- [x] ✅ **Application Rebranding (SpecTrek → RadTrace)**:
+    - [x] ✅ Bulk find/replace "SpecTrek" with "RadTrace" across all files
+    - [x] ✅ Find and replace remaining emoji in UI with CSS/SVG
+    - [x] ✅ Update README.md with new name
+    - [x] ✅ Update page title and meta tags
+- [ ] **Premium Branding Assets**:
+    - [ ] Create and integrate transparent PNG logo to replace rocket.svg
+    - [ ] Create and integrate transparent PNG favicon
+    - [ ] Create and integrate transparent PNG upload icon
+    - [ ] Create and integrate transparent PNG banner
 - [ ] **COUNT TIME Fix (Complete)**:
     - [ ] Backend: Capture actual acquisition duration from timer
     - [ ] Backend: Pass duration to `count_time_minutes` in metadata
     - [x] ✅ Frontend: Display formatting fixed (`replaceAll()`)
-- [ ] **Mobile/Responsive UI**:
-    - [ ] Rework layout for phone screen widths (responsive breakpoints)
-    - [ ] Collapsible panels for small screens
-    - [ ] Touch-optimized controls for device acquisition
-    - [ ] Simplified navigation for mobile browsers
-- [ ] **Premium Icon System v2**:
-    - [ ] Generate premium, custom-designed icons for all UI elements
-    - [ ] Replace remaining icon placeholders with SVG files
-    - [ ] Implement SVG as fallback for any raster icons
-    - [ ] Ensure consistent visual language across all icons
-- [ ] **Blue/Purple Sci-Fi Theme**:
-    - [ ] Design and implement additional theme option
-    - [ ] Futuristic color palette with blue/purple gradients
-    - [ ] Glowing effects and tech-inspired UI elements
-    - [ ] Update theme selector to include new option
+- [x] ✅ **Mobile/Responsive UI**:
+    - [x] ✅ Rework layout for phone screen widths (responsive breakpoints)
+    - [x] ✅ Collapsible panels for small screens
+    - [x] ✅ Touch-optimized controls for device acquisition
+    - [x] ✅ Simplified navigation for mobile browsers
+- [x] ✅ **Premium Icon System v2**:
+    - [x] ✅ Professional SVG icons already implemented
+- [x] ✅ **Blue/Purple Sci-Fi Theme**:
+    - [x] ✅ Design and implement additional theme option
+    - [x] ✅ Futuristic color palette with blue/purple gradients
+    - [x] ✅ Glowing effects and tech-inspired UI elements
+    - [x] ✅ Update theme selector to include new option
+- [x] ✅ **Cyberpunk 2077 Theme**:
+    - [x] ✅ Neon yellow/cyan color palette with dark backgrounds
+    - [x] ✅ Glitch effects and holographic UI elements
+    - [x] ✅ Pink/magenta accent colors
+    - [x] ✅ Retro-futuristic typography and styling
+- [x] ✅ **Theme-Aware Toast Notifications**:
+    - [x] ✅ Update toast colors to match current theme (Dark/Light/Nuclear/Toxic/Sci-Fi/Cyberpunk)
+    - [x] ✅ Add theme-specific styling for success/warning/info toasts
+    - [x] ✅ Ensure proper contrast in all theme modes
 
 ### ML & Analysis
 - [ ] **ML Improvements**:
@@ -125,14 +148,25 @@
     - ✅ Icons needed: 📜 History, ⚙️ Settings, 🌓 Theme, 🔌 Device, 🔄 Refresh, ▶️ Play, ⏹️ Stop, 📂 Upload, 📄 PDF, 📊 Compare, 🔬 Analysis, 🚀 Rocket
     - ✅ Add favicon to browser tab
     - ✅ Consistent icon styling across all buttons
+- [x] **ROI Analysis (Advanced Mode)**:
+    - ✅ Region-of-Interest analysis with activity calculation (Bq/μCi)
+    - ✅ AlphaHound AB+G detector efficiency database (CsI 48 cps/μSv/h, BGO 42 cps/μSv/h)
+    - ✅ Uranium enrichment ratio analysis (Natural/Depleted/Enriched)
+    - ✅ Chart ROI highlighting with orange overlay
+    - ✅ Isotope ROI database with NNDC/IAEA branching ratios
 
 ## Technical Debt
-- [ ] **Code Quality**:
+- [x] **Code Quality**:
+    - [x] Add JSDoc comments for main.js and api.js functions
+    - [x] Refactor `main.js` to use ES6 modules
     - [ ] Add unit tests for frontend JavaScript modules
     - [ ] Add unit tests for backend API endpoints
-    - [ ] Refactor `main.js` to use ES6 modules
     - [ ] Implement TypeScript for type safety
-    - [ ] Add JSDoc comments for all functions
+- [x] **Input Validation**:
+    - [x] Add Pydantic Field validators with type hints
+    - [x] Add file size and extension validation
+    - [x] Add port sanitization for device connection
+    - [x] Add range checks for acquisition duration
 - [ ] **Performance Optimization**:
     - [ ] Lazy load Chart.js and other heavy libraries
     - [ ] Implement WebWorkers for ML training
@@ -141,7 +175,6 @@
 - [ ] **Security**:
     - [ ] Add CSRF protection
     - [ ] Implement rate limiting for API endpoints
-    - [ ] Sanitize all user inputs
     - [ ] Add authentication for LAN access (optional)
 - [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.
 

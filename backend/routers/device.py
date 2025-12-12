@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, WebSocket
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 import asyncio
+import re
 from alphahound_serial import device as alphahound_device
 from peak_detection import detect_peaks
 from isotope_database import identify_isotopes, identify_decay_chains
@@ -8,8 +9,25 @@ from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_f
 
 router = APIRouter(prefix="/device", tags=["device"])
 
+# Validation constants
+MAX_ACQUISITION_MINUTES = 60  # 1 hour max
+PORT_PATTERN = re.compile(r'^(COM\d+|/dev/tty[A-Za-z0-9]+)$')
+
+class ConnectRequest(BaseModel):
+    """Request model for device connection."""
+    port: str = Field(..., min_length=3, max_length=50)
+    
+    @field_validator('port')
+    @classmethod
+    def validate_port(cls, v):
+        # Allow common port patterns: COM1-COM99, /dev/ttyUSB0, /dev/ttyACM0, etc.
+        if not PORT_PATTERN.match(v):
+            raise ValueError('Invalid port format. Expected COM# or /dev/tty*')
+        return v
+
 class SpectrumRequest(BaseModel):
-    count_minutes: float = 0
+    """Request model for spectrum acquisition."""
+    count_minutes: float = Field(default=0, ge=0, le=MAX_ACQUISITION_MINUTES)
 
 @router.get("/ports")
 async def list_serial_ports():
@@ -20,10 +38,9 @@ async def list_serial_ports():
         raise HTTPException(status_code=500, detail=f"Error listing ports: {str(e)}")
 
 @router.post("/connect")
-async def connect_device(request: dict):
-    port = request.get("port")
-    if not port:
-        raise HTTPException(status_code=400, detail="Port required")
+async def connect_device(request: ConnectRequest):
+    """Connect to AlphaHound device on specified port."""
+    port = request.port
     
     if alphahound_device.is_connected():
         return {"status": "already_connected", "port": port}

@@ -1,6 +1,6 @@
-# SpecTrek 🚀
+# RadTrace 🚀
 
-![SpecTrek Banner](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_github_banner_1765461262612.png)
+![RadTrace Banner](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_github_banner_1765461262612.png)
 
 > [!CAUTION]
 > **RADIATION SAFETY NOTICE & DISCLAIMER**
@@ -24,20 +24,24 @@
 > 
 > If you are working with radiation sources, ensure compliance with local regulations (NRC, EPA, state, or equivalent authorities).
 
-**SpecTrek** is a modern, web-based gamma spectroscopy analysis platform with intelligent isotope identification, decay chain detection, and real-time device integration.
+**RadTrace** is a modern, web-based gamma spectroscopy analysis platform with intelligent isotope identification, decay chain detection, and real-time device integration.
 
 ## ✨ Key Features
 
 ### 📊 Advanced Analysis
-- **Multi-Format Support**: N42/XML and CSV file parsing
-- **Automated Peak Detection**: Using `scipy.signal.find_peaks`
-- **Intelligent Isotope Identification**: 
-  - **Simple Mode**: 30 hobby-focused isotopes (uranium glass, mantles, watches)
-  - **Advanced Mode**: 100+ isotopes including fission products, activation products, rare earths, and transuranics
-- **Decay Chain Detection**: Identifies natural decay series (U-238, U-235, Th-232) with confidence scoring
+- **Multi-Format Support**: N42/XML and CSV
+### Core Analysis
+- **Automatic Peak Detection**: Uses `scipy.signal.find_peaks` for automatic peak detection and labeling
+- **Multi-Algorithm Isotope Identification**:
+  - **Peak Matching (Legacy)**: Traditional energy-based identification using IAEA/NNDC authoritative databases
+  - **AI Identification (ML)**: PyRIID neural network trained on 90+ isotopes with ~1500 samples for pattern recognition
+  - **Dual Detection Panel**: Side-by-side comparison of both methods with graphical confidence bars
+- **Decay Chain Detection**: Identifies natural decay series (U-238, U-235, Th-232) with:
   - **Graphical Flow Diagrams**: Visual parent→daughter→stable sequences with color-coded detection status
-  - **Detected members highlighted** with green glow effects
-  - **Stable end products** marked with purple dashed borders
+  - Confidence scoring with natural abundance weighting
+  - Authoritative source links (NNDC, IAEA, LBNL, USGS, NRC)
+- **Advanced/Simple Mode Toggle**: Adjustable confidence thresholds and isotope library size
+- **Auto-Save CSV**: Automatically saves acquired spectra to timestamped CSV files (`data/acquisitions/spectrum_YYYY-MM-DD_HH-MM-SS.csv`) with toast notificationsrs
 - **Natural Abundance Weighting**: Scientifically accurate ranking based on LBNL/NRC isotopic abundance data
 - **Authoritative References**: Direct links to NNDC, IAEA, LBNL, USGS, NRC sources for each detected chain
 - **ML Integration (PyRIID)**:
@@ -96,9 +100,9 @@
 
 ## 📸 Screenshot
 
-![SpecTrek User Interface](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_ui_mockup_1765461305029.png)
+![RadTrace User Interface](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_ui_mockup_1765461305029.png)
 
-*SpecTrek's intuitive interface showing real-time spectrum analysis, decay chain detection, and isotope identification with confidence scoring.*
+*RadTrace's intuitive interface showing real-time spectrum analysis, decay chain detection, and isotope identification with confidence scoring.*
 
 ## Installation
 
@@ -181,7 +185,7 @@ The AlphaHound interface provides:
 
 ## Credits & Attribution
 
-### This Project (SpecTrek)
+### This Project (RadTrace)
 - **Core Development**: FastAPI, Chart.js, scipy, matplotlib, reportlab
 - **Custom Components**: 
   - N42/CSV parsers with fallback processing
