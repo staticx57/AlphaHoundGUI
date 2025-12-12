@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { ui } from './ui.js';
-import { chartManager } from './charts.js?v=2.1';
+import { chartManager, DoseRateChart } from './charts.js?v=2.1';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
 
@@ -12,6 +12,7 @@ let acquisitionStartTime = null;
 let overlaySpectra = [];
 let compareMode = false;
 let backgroundData = null; // New background state
+let doseChart = null; // Live dose rate chart instance
 const colors = ['#38bdf8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 // Settings
@@ -51,9 +52,12 @@ window.addEventListener('beforeunload', (e) => {
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
+    // Initialize Dose Rate Chart (if element exists)
+    doseChart = new DoseRateChart();
+
     await refreshPorts();
     await checkDeviceStatus();
-    await checkDeviceStatus();
+    // Duplicate check removed
     setupEventListeners();
     isotopeUI.init();
 });
@@ -962,7 +966,10 @@ async function connectDevice() {
         await api.connectDevice(port);
         ui.setDeviceConnected(true);
         api.setupDoseWebSocket(
-            (rate) => ui.updateDoseDisplay(rate),
+            (rate) => {
+                ui.updateDoseDisplay(rate);
+                if (doseChart) doseChart.update(rate);
+            },
             (status) => ui.updateConnectionStatus(status)
         );
     } catch (err) {
@@ -978,7 +985,10 @@ async function connectDeviceTop() {
         await api.connectDevice(port);
         ui.setDeviceConnected(true);
         api.setupDoseWebSocket(
-            (rate) => ui.updateDoseDisplay(rate),
+            (rate) => {
+                ui.updateDoseDisplay(rate);
+                if (doseChart) doseChart.update(rate);
+            },
             (status) => ui.updateConnectionStatus(status)
         );
     } catch (err) {
@@ -1012,7 +1022,10 @@ async function checkDeviceStatus() {
         if (status.connected) {
             ui.setDeviceConnected(true);
             api.setupDoseWebSocket(
-                (rate) => ui.updateDoseDisplay(rate),
+                (rate) => {
+                    ui.updateDoseDisplay(rate);
+                    if (doseChart) doseChart.update(rate);
+                },
                 (status) => ui.updateConnectionStatus(status)
             );
         } else {

@@ -153,7 +153,8 @@
     - ✅ AlphaHound AB+G detector efficiency database (CsI 48 cps/μSv/h, BGO 42 cps/μSv/h)
     - ✅ Uranium enrichment ratio analysis (Natural/Depleted/Enriched)
     - ✅ Chart ROI highlighting with orange overlay
-    - ✅ Isotope ROI database with NNDC/IAEA branching ratios
+    - [x] Isotope ROI database with NNDC/IAEA branching ratios
+    - [ ] Enhancement: Device Panel Layout - Split controls (left) and live dose rate chart (right) with 5-minute history
 
 ## Technical Debt
 - [x] **Code Quality**:

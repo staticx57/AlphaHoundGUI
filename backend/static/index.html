@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=2">
+    <link rel="stylesheet" href="/static/style.css?v=4">
     <link rel="stylesheet" href="/static/button-fixes.css?v=2">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -58,40 +58,68 @@
                 </div>
             </div>
 
-            <div id="device-connected"
-                style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: none;">
-                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div id="device-connected" class="device-panel-grid"
+                style="display: none; border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
+                <!-- Left: Controls -->
+                <div class="device-controls" style="padding-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
                         <span style="color: #10b981; font-size: 1.2rem;">●</span>
-                        <span style="color: var(--text-secondary);">Connected</span>
+                        <span style="color: var(--text-secondary); font-weight: 500;">Connected</span>
                     </div>
-                    <div style="background: var(--card-bg); padding: 0.5rem 1rem; border-radius: 6px;">
-                        <span style="color: var(--text-secondary); font-size: 0.875rem;">Dose Rate:</span>
-                        <span id="dose-display"
-                            style="color: var(--accent-color); font-weight: 600; margin-left: 0.5rem;">-- µRem/hr</span>
+
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <!-- Duration Input Group -->
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label for="count-time"
+                                style="color: var(--text-secondary); font-size: 0.875rem;">Duration:</label>
+                            <input type="number" id="count-time" value="5" min="0.1" max="1440" step="0.5"
+                                style="width: 60px; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color);">
+                            <span style="color: var(--text-secondary); font-size: 0.875rem;">min</span>
+                        </div>
+
+                        <!-- Acquire/Stop Actions -->
+                        <button id="btn-start-acquire" class="btn-primary"
+                            style="padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+                            <img src="/static/icons/play.svg" class="icon"> Acquire
+                        </button>
+                        <button id="btn-stop-acquire" class="btn-stop"
+                            style="display: none; padding: 0.4rem 0.8rem; font-size: 0.9rem; background: #f59e0b; color: white; border: none; border-radius: 6px;">
+                            <img src="/static/icons/stop.svg" class="icon"> Stop
+                        </button>
+
+                        <!-- Timer Box -->
+                        <div id="acquisition-status"
+                            style="display: none; padding: 0.4rem 0.8rem; background: var(--bg-secondary); border: 1px solid var(--accent-color); border-radius: 6px; font-size: 0.9rem; white-space: nowrap;">
+                            <span
+                                style="color: var(--accent-color); font-weight: 600; font-variant-numeric: tabular-nums;">
+                                <span id="acquisition-timer">0s</span>
+                            </span>
+                        </div>
+
+                        <!-- Disconnect Action -->
+                        <button id="btn-disconnect-device"
+                            style="padding: 0.4rem 0.8rem; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 0.9rem; margin-left: auto;">
+                            Disconnect
+                        </button>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <label for="count-time" style="color: var(--text-secondary); font-size: 0.875rem;">Count
-                            Duration:</label>
-                        <input type="number" id="count-time" value="5" min="0.1" max="1440" step="0.5"
-                            style="width: 60px; padding: 0.25rem 0.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color);">
-                        <span style="color: var(--text-secondary); font-size: 0.875rem;">min</span>
+                </div>
+
+                <!-- Right: Chart & Data -->
+                <div class="device-live-data"
+                    style="background: var(--bg-secondary); border-radius: 8px; padding: 0.5rem 1rem; display: flex; flex-direction: column; justify-content: center; position: relative; min-height: 80px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0px;">
+                        <span
+                            style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">LATEST
+                            DOSE RATE</span>
+                        <div>
+                            <span id="dose-display"
+                                style="font-size: 1.25rem; font-weight: 700; color: var(--accent-color);">--</span>
+                        </div>
                     </div>
-                    <button id="btn-start-acquire" class="btn-primary"
-                        style="padding: 0.5rem 1rem; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer;"><img
-                            src="/static/icons/play.svg" class="icon">
-                        Acquire Spectrum</button>
-                    <button id="btn-stop-acquire" class="btn-stop"
-                        style="padding: 0.5rem 1rem; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; display: none;"><img
-                            src="/static/icons/stop.svg" class="icon">
-                        Stop Acquisition</button>
-                    <div id="acquisition-status"
-                        style="display: none; padding: 0.5rem 1rem; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
-                        <span style="color: var(--accent-color); font-weight: 600;">Acquiring: <span
-                                id="acquisition-timer">0s</span></span>
+                    <div class="sparkline-container" style="flex: 1; min-height: 50px; position: relative;">
+                        <canvas id="doseRateChart"></canvas>
                     </div>
-                    <button id="btn-disconnect-device"
-                        style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer;">Disconnect</button>
                 </div>
             </div>
         </div>
@@ -155,7 +183,8 @@
                         <strong>Calibration</strong>
                     </div>
                     <div style="margin-top: 0.5rem;">
-                        <button id="btn-calibrate-mode" style="font-size: 0.85rem; padding: 4px 8px;">Open Calibration
+                        <button id="btn-calibrate-mode" style="font-size: 0.85rem; padding: 4px 8px;">Open
+                            Calibration
                             Tool</button>
                     </div>
                 </div>
@@ -203,7 +232,8 @@
 
             <div id="isotopes-container" style="display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="margin: 0;"><img src="/static/icons/analysis.svg" class="icon"> Isotope Identification
+                    <h3 style="margin: 0;"><img src="/static/icons/analysis.svg" class="icon"> Isotope
+                        Identification
                     </h3>
                     <div style="display: flex; gap: 0.5rem;">
                         <button id="btn-run-ml" class="btn-primary"
@@ -243,7 +273,8 @@
                                 ML</span>
                         </div>
                         <div id="ml-isotopes-list">
-                            <p style="color: var(--text-secondary); font-size: 0.875rem; font-style: italic;">Click "AI
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; font-style: italic;">Click
+                                "AI
                                 Identify" to run ML classification</p>
                         </div>
                     </div>
@@ -302,7 +333,8 @@
                         </select>
                     </label>
 
-                    <button id="btn-analyze-roi" class="btn-primary" style="padding: 0.5rem 1rem;">Analyze ROI</button>
+                    <button id="btn-analyze-roi" class="btn-primary" style="padding: 0.5rem 1rem;">Analyze
+                        ROI</button>
                     <button id="btn-highlight-roi" class="btn-secondary"
                         style="padding: 0.5rem 1rem;">Highlight</button>
                     <button id="btn-clear-highlight" class="btn-secondary" style="padding: 0.5rem 1rem;">Clear</button>
@@ -311,7 +343,8 @@
                 <!-- Results Section -->
                 <div id="roi-results"
                     style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-family: 'Roboto Mono', monospace; font-size: 0.85rem; line-height: 1.8; min-height: 100px;">
-                    <p style="color: var(--text-secondary); font-style: italic;">Select an isotope and click "Analyze
+                    <p style="color: var(--text-secondary); font-style: italic;">Select an isotope and click
+                        "Analyze
                         ROI" to calculate activity.</p>
                 </div>
             </div>
@@ -351,7 +384,8 @@
                             <strong>Advanced Mode</strong> (Customizable)
                         </label>
                     </div>
-                    <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">Simple mode uses
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">Simple mode
+                        uses
                         optimized defaults for hobby-level sources.</p>
                 </div>
 
@@ -367,7 +401,8 @@
                         </label>
                         <input type="range" id="isotope-confidence" min="10" max="90" value="40" step="5"
                             style="width: 100%;">
-                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Minimum % of
+                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Minimum %
+                            of
                             characteristic peaks required to report an isotope</p>
                     </div>
 
@@ -391,7 +426,8 @@
                         </label>
                         <input type="range" id="energy-tolerance" min="5" max="50" value="20" step="1"
                             style="width: 100%;">
-                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Maximum energy
+                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Maximum
+                            energy
                             difference for peak matching</p>
                     </div>
 
@@ -454,7 +490,8 @@
                     <form id="add-isotope-form"
                         style="display:flex; gap:10px; margin-bottom:1rem; align-items:flex-end;">
                         <div style="flex:1;">
-                            <label style="font-size:0.8rem; color:var(--text-secondary);">Name (e.g. MySource)</label>
+                            <label style="font-size:0.8rem; color:var(--text-secondary);">Name (e.g.
+                                MySource)</label>
                             <input type="text" id="iso-name" placeholder="Name" required style="width:100%;">
                         </div>
                         <div style="flex:2;">

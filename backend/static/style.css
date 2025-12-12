@@ -817,3 +817,145 @@ input[type="text"]:focus {
         /* Prevents zoom on iOS */
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* Dynamic Component Styles (Moved from JS to CSS for Theming) */
+/* ------------------------------------------------------------------ */
+
+/* Isotope Result Item (Legacy Peak Matching) */
+.isotope-result-item {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    border: 1px solid transparent;
+}
+
+[data-theme="light"] .isotope-result-item {
+    background: rgba(0, 0, 0, 0.05);
+    /* Lighter gray for light theme */
+    border: 1px solid var(--border-color);
+}
+
+.confidence-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+[data-theme="light"] .confidence-track {
+    background: rgba(0, 0, 0, 0.1);
+    /* Darker track for light theme */
+}
+
+/* Decay Chain Styles */
+.chain-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+[data-theme="light"] .chain-card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.decay-sequence-box {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+}
+
+[data-theme="light"] .decay-sequence-box {
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color);
+}
+
+/* Decay Step Boxes */
+.decay-step-box {
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    min-width: 70px;
+    text-align: center;
+    transition: all 0.3s;
+    /* Default: Undetected (Dark Theme) */
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-secondary);
+}
+
+/* Undetected - Light Theme */
+[data-theme="light"] .decay-step-box {
+    background: white;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Detected State - Common but theme adjustable */
+.decay-step-box.detected {
+    background: rgba(16, 185, 129, 0.2);
+    border: 2px solid #10b981;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    color: #10b981;
+    font-weight: 700;
+}
+
+[data-theme="light"] .decay-step-box.detected {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: #059669;
+    color: #059669;
+    /* Darker green for light theme */
+}
+
+/* Detected State - Toxic Theme override */
+[data-theme="toxic"] .decay-step-box.detected {
+    color: #d1fae5;
+    background: rgba(34, 197, 94, 0.3);
+}
+
+/* Stable State */
+.decay-step-box.stable {
+    background: rgba(139, 92, 246, 0.2);
+    border: 2px dashed #8b5cf6;
+    color: #8b5cf6;
+}
+
+[data-theme="light"] .decay-step-box.stable {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: #7c3aed;
+    color: #7c3aed;
+    /* Darker purple */
+}
+
+/* Device Panel Split Layout */
+.device-panel-grid {
+    display: grid;
+    grid-template-columns: minmax(320px, 40%) 1fr;
+    /* Flexible controls width */
+    gap: 1.5rem;
+    align-items: stretch;
+}
+
+.sparkline-container {
+    height: 100%;
+    min-height: 60px;
+    width: 100%;
+    position: relative;
+}
+
+@media (max-width: 900px) {
+    .device-panel-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* On mobile, ensure chart has height since it won't stretch */
+    .sparkline-container {
+        min-height: 120px;
+    }
+}

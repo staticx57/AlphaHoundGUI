@@ -98,13 +98,13 @@ export class AlphaHoundUI {
                     confidence > 40 ? 'MEDIUM' : 'LOW';
 
                 return `
-                    <div style="margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                    <div class="isotope-result-item">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
                             <strong style="color: var(--text-primary);">${iso.isotope}</strong>
                             <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600;">${confidenceLabel}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                            <div class="confidence-track">
                                 <div style="width: ${Math.min(confidence, 100)}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.3s ease;"></div>
                             </div>
                             <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 45px;">${confidence.toFixed(0)}%</span>
@@ -145,29 +145,19 @@ export class AlphaHoundUI {
                     const isParent = idx === 0;
                     const isStable = idx === chainMembers.length - 1;
 
-                    const boxColor = isDetected ? '#10b981' :
-                        isStable ? '#8b5cf6' :
-                            'rgba(255,255,255,0.2)';
-                    const textColor = isDetected ? '#10b981' :
-                        isStable ? '#8b5cf6' :
-                            'var(--text-secondary)';
-                    const boxStyle = isDetected ?
-                        'background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);' :
-                        isStable ?
-                            'background: rgba(139, 92, 246, 0.2); border: 2px dashed #8b5cf6;' :
-                            'background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);';
+                    const statusClass = isDetected ? 'detected' : (isStable ? 'stable' : '');
 
                     const arrow = idx < chainMembers.length - 1 ?
                         `<div style="color: var(--text-secondary); font-size: 1.2rem; padding: 0 0.25rem;">→</div>` : '';
 
                     return `
                         <div style="display: flex; align-items: center;">
-                            <div style="padding: 0.4rem 0.75rem; border-radius: 6px; ${boxStyle} min-width: 70px; text-align: center; transition: all 0.3s;">
-                                <div style="font-weight: ${isDetected ? '700' : '500'}; color: ${textColor}; font-size: 0.85rem;">
+                            <div class="decay-step-box ${statusClass}">
+                                <div style="font-weight: ${isDetected ? '700' : '500'}; font-size: 0.85rem;">
                                     ${member}
                                 </div>
-                                ${isDetected ? '<div style="font-size: 0.65rem; color: #10b981; margin-top: 2px;"><span style="font-size: 10px;">✓</span> DETECTED</div>' : ''}
-                                ${isStable ? '<div style="font-size: 0.65rem; color: #8b5cf6; margin-top: 2px;">STABLE</div>' : ''}
+                                ${isDetected ? '<div style="font-size: 0.65rem; margin-top: 2px;"><span style="font-size: 10px;">✓</span> DETECTED</div>' : ''}
+                                ${isStable ? '<div style="font-size: 0.65rem; margin-top: 2px;">STABLE</div>' : ''}
                             </div>
                             ${arrow}
                         </div>
@@ -175,7 +165,7 @@ export class AlphaHoundUI {
                 }).join('');
 
                 return `
-                    <div class="chain-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid ${chain.confidence_level === 'HIGH' ? '#10b981' : '#f59e0b'};">
+                    <div class="chain-card" style="border-left: 4px solid ${chain.confidence_level === 'HIGH' ? '#10b981' : '#f59e0b'};">
                         <div class="chain-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                             <h4 style="margin: 0; color: var(--text-color);">${confidenceBadge} ${chain.chain_name}</h4>
                             <span class="${confidenceClass}" style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
@@ -184,7 +174,7 @@ export class AlphaHoundUI {
                         </div>
                         
                         <!-- Graphical Decay Chain -->
-                        <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; overflow-x: auto;">
+                        <div class="decay-sequence-box">
                             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">
                                 <img src="/static/icons/atom.svg" class="icon" style="width: 14px; height: 14px; margin-right: 0.25rem; filter: invert(1);">DECAY SEQUENCE
                             </div>

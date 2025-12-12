@@ -313,4 +313,86 @@ export class AlphaHoundChart {
     }
 }
 
+export class DoseRateChart {
+    constructor() {
+        this.ctx = document.getElementById('doseRateChart')?.getContext('2d');
+        this.chart = null;
+        this.data = new Array(300).fill(null); // 5 minutes history (assuming ~1Hz)
+        this.labels = new Array(300).fill('');
+        this.init();
+    }
+
+    init() {
+        if (!this.ctx) return;
+
+        // Get theme colors
+        const styles = getComputedStyle(document.documentElement);
+        // Default to accent color or fallbacks
+        const lineColor = styles.getPropertyValue('--accent-color').trim() || '#10b981';
+
+        this.chart = new Chart(this.ctx, {
+            type: 'line',
+            data: {
+                labels: this.labels,
+                datasets: [{
+                    data: this.data,
+                    borderColor: lineColor,
+                    borderWidth: 2,
+                    backgroundColor: lineColor + '20', // Transparent fill
+                    fill: 'start',
+                    pointRadius: 0,
+                    tension: 0.4,
+                    spanGaps: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false, // Performance optimization
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false },
+                    annotation: { display: false }
+                },
+                scales: {
+                    x: { display: false }, // Tiny chart, no X axis
+                    y: {
+                        display: true,
+                        position: 'right',
+                        ticks: {
+                            color: '#64748b',
+                            font: { size: 10 },
+                            maxTicksLimit: 3
+                        },
+                        grid: { display: false },
+                        border: { display: false },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    update(doseRate) {
+        if (!this.chart) return;
+
+        // Push new value, shift old
+        this.data.push(doseRate);
+        this.data.shift();
+
+        // Update chart data reference (Chart.js optimizes this)
+        this.chart.data.datasets[0].data = this.data;
+
+        // Update color dynamically if theme changes
+        // (Optional optimization: only do this if theme changed)
+        const styles = getComputedStyle(document.documentElement);
+        const lineColor = styles.getPropertyValue('--accent-color').trim() || '#10b981';
+        this.chart.data.datasets[0].borderColor = lineColor;
+        this.chart.data.datasets[0].backgroundColor = lineColor + '20';
+
+        this.chart.update('none'); // Update without animation
+    }
+}
+
 export const chartManager = new AlphaHoundChart();
+
