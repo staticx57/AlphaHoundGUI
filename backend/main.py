@@ -51,4 +51,7 @@ async def websocket_dose_stream(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8080)
+    # For localhost only: uvicorn.run(app, host="127.0.0.1", port=3200)
+    # For LAN access, use: uvicorn.run(app, host="0.0.0.0", port=3200)
+    # Then access from other devices at: http://<your-ip>:3200
+    uvicorn.run(app, host="0.0.0.0", port=3200)

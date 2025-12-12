@@ -57,10 +57,12 @@
     - ✅ **Visibility Optimization**: Pauses chart rendering when tab is hidden to reduce CPU usage.
     - ✅ **Unload Safeguards**: Prompts user before closing tab if recording is in progress.
     - ✅ **Memory Protection**: Caps comparison mode to 8 spectra to prevent browser crashes.
+    - ⚠️ **COUNT TIME (Partial)**: Fixed metadata display formatting (`replaceAll()` for proper key formatting) - **Still needs**: Backend must capture/store actual acquisition duration
 - [x] **Deployment Improvements**:
     - ✅ Remove virtual environment requirement
     - ✅ Create simplified one-click launch process
     - ✅ Support running without AlphaHound device connected
+    - ✅ **LAN Access**: Configured server for network access (host="0.0.0.0", port 3200)
 - [x] **Refactor threshold filtering to application layer**:
     - ✅ Moved confidence threshold filtering from `isotope_database.py` to `main.py`
     - ✅ `identify_isotopes()` and `identify_decay_chains()` return ALL matches
@@ -77,11 +79,38 @@
     - ⚠️ **Note**: Works best with real detector data (Poisson statistics); synthetic demo files may not match training patterns
 
 ## Future Enhancements
+
+### High Priority
+- [ ] **COUNT TIME Fix (Complete)**:
+    - [ ] Backend: Capture actual acquisition duration from timer
+    - [ ] Backend: Pass duration to `count_time_minutes` in metadata
+    - [x] ✅ Frontend: Display formatting fixed (`replaceAll()`)
+- [ ] **Mobile/Responsive UI**:
+    - [ ] Rework layout for phone screen widths (responsive breakpoints)
+    - [ ] Collapsible panels for small screens
+    - [ ] Touch-optimized controls for device acquisition
+    - [ ] Simplified navigation for mobile browsers
+- [ ] **Premium Icon System v2**:
+    - [ ] Generate premium, custom-designed icons for all UI elements
+    - [ ] Replace remaining icon placeholders with SVG files
+    - [ ] Implement SVG as fallback for any raster icons
+    - [ ] Ensure consistent visual language across all icons
+- [ ] **Blue/Purple Sci-Fi Theme**:
+    - [ ] Design and implement additional theme option
+    - [ ] Futuristic color palette with blue/purple gradients
+    - [ ] Glowing effects and tech-inspired UI elements
+    - [ ] Update theme selector to include new option
+
+### ML & Analysis
 - [ ] **ML Improvements**:
     - [ ] Collect real detector data for ML fine-tuning
     - [ ] Implement confidence thresholding (>90% only)
     - [ ] Add hybrid filtering (suppress ML conflicts with Peak Matching HIGH confidence)
     - [ ] Update synthetic demo files to use realistic Poisson noise
+    - [ ] Train on weak source scenarios (low count rates)
+    - [ ] Add background-dominated mixture training
+
+### Features
 - [ ] **Custom Isotope Definitions**:
     - [ ] Allow users to add custom isotopes to the database via UI
     - [ ] Import/export custom isotope libraries
@@ -98,8 +127,22 @@
     - ✅ Consistent icon styling across all buttons
 
 ## Technical Debt
-- [ ] Add unit tests for the frontend javascript.
-- [ ] Add unit tests for backend API endpoints
+- [ ] **Code Quality**:
+    - [ ] Add unit tests for frontend JavaScript modules
+    - [ ] Add unit tests for backend API endpoints
+    - [ ] Refactor `main.js` to use ES6 modules
+    - [ ] Implement TypeScript for type safety
+    - [ ] Add JSDoc comments for all functions
+- [ ] **Performance Optimization**:
+    - [ ] Lazy load Chart.js and other heavy libraries
+    - [ ] Implement WebWorkers for ML training
+    - [ ] Optimize large spectrum rendering
+    - [ ] Add service worker for offline capability
+- [ ] **Security**:
+    - [ ] Add CSRF protection
+    - [ ] Implement rate limiting for API endpoints
+    - [ ] Sanitize all user inputs
+    - [ ] Add authentication for LAN access (optional)
 - [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.
 
 - [x] **v2.0 Analysis Robustness (Completed)**:

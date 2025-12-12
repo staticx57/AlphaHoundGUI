@@ -79,6 +79,7 @@
   - Proper 3-level MultiIndex for sources DataFrame: `('Radionuclide', 'Isotope', '')`
   - In-place prediction modification handling
   - Extraction of results from `prediction_probas` attribute
+- **COUNT TIME Metadata Display**: Fixed `renderMetadata()` in `ui.js` to use `replaceAll()` instead of `replace()` for formatting keys, and added proper value formatting ("5 min" instead of "-")
 
 ### Known Issues & Limitations
 - **ML Pattern Mismatch**: Synthetic demo files (constant background, sharp peaks) don't match ML training (Poisson noise, Gaussian peaks)

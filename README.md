@@ -117,17 +117,34 @@
 ## Usage
 
 ### Quick Start
-Double-click **`run.bat`** in the root directory - the application will automatically start and open in your browser at `http://localhost:8080`.
+Double-click **`run.bat`** in the root directory - the application will automatically start and open in your browser at `http://localhost:3200`.
 
 > **Note**: AlphaHound device is **optional** - the application works without hardware connected for N42/CSV file analysis.
 
 ### Manual Start
 ```bash
 cd backend
-python -m uvicorn main:app --reload --port 8080
+python -m uvicorn main:app --reload --port 3200
 ```
 
-Then navigate to `http://localhost:8080` and drag & drop an `.n42` or `.csv` file.
+Then navigate to `http://localhost:3200` and drag & drop an `.n42` or `.csv` file.
+
+### LAN Access (Access from Other Devices)
+
+To access the application from other devices on your network:
+
+1. **Server is configured for LAN** by default (`host="0.0.0.0"` in `main.py`)
+2. **Find your computer's IP address**:
+   - Windows: `ipconfig` (look for IPv4 Address)
+   - Mac/Linux: `ifconfig` or `ip addr`
+3. **Access from other devices**: `http://<your-ip>:3200`
+   - Example: `http://192.168.1.100:3200`
+4. **Firewall**: Ensure port 3200 is open in your firewall
+
+**Use Cases**:
+- Control AlphaHound device remotely from tablet/phone
+- View spectrum analysis from multiple screens
+- Collaborative spectrum analysis with team members
 
 ## Project Structure
 
