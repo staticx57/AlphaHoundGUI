@@ -25,6 +25,10 @@
     - ✅ Real-time spectrum acquisition (Live Building) with timed/interruptible counts
     - ✅ Non-blocking Sidebar UI for device control
     - ✅ Integrated device control panel
+    - ✅ **Device Panel Enhancement**:
+        - ✅ Split layout (Controls Left / Data Right)
+        - ✅ Consolidated inline controls for cleaner UI
+        - ✅ Live 5-minute sparkline chart for dose rate history
 - [x] **Advanced/Simple Mode Toggle**:
     - ✅ **Simple Mode** (default): Optimized thresholds (40% isotope, 30% chain) with hobby-focused library (uranium glass, mantles, radium watches, etc.)
     - ✅ **Advanced Mode**: User-adjustable confidence thresholds, energy tolerance settings, and expanded isotope library including:
@@ -154,7 +158,7 @@
     - ✅ Uranium enrichment ratio analysis (Natural/Depleted/Enriched)
     - ✅ Chart ROI highlighting with orange overlay
     - [x] Isotope ROI database with NNDC/IAEA branching ratios
-    - [ ] Enhancement: Device Panel Layout - Split controls (left) and live dose rate chart (right) with 5-minute history
+    
 
 ## Technical Debt
 - [x] **Code Quality**:

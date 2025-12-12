@@ -84,9 +84,16 @@
 - **Direct Serial Communication**: With RadView Detection AlphaHound™ hardware
 - **Real-Time Acquisition**: Watch spectrum build live with 2-second updates
 - **Timed/Interruptible Counts**: Set duration (e.g., 5 minutes) with early stop capability
-- **Live Dose Rate**: WebSocket streaming of μR/hr measurements
+- **Live Dose Rate**: WebSocket streaming of μR/hr measurements with 5-minute history sparkline
 - **Automatic Analysis**: Peak detection & isotope ID on acquired data
 - **Non-Blocking UI**: Control device while viewing/analyzing spectra
+- **Split Panel Layout**: Optimized control grouping with dedicated live data visualization
+
+### 🔬 Region-of-Interest (ROI) Analysis
+- **Advanced Mode Feature**: Precise quantitative analysis of specific spectral regions
+- **Activity Calculation**: Automatic estimation in Bq and μCi based on detector efficiency
+- **Background Subtraction**: Net counts calculation with uncertainty estimation
+- **Uranium Enrichment**: Automatic 186 keV / 93 keV ratio analysis to classify Natural/Depleted/Enriched Uranium
 
 ### 📤 Export & Reporting
 - **Data Export**: JSON/CSV formats with full spectrum data
