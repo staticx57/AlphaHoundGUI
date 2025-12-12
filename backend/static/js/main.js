@@ -613,7 +613,7 @@ async function checkDeviceStatus() {
 
 async function startAcquisition() {
     if (isAcquiring) return;
-    const minutes = parseFloat(document.getElementById('input-count-duration').value) || 5;
+    const minutes = parseFloat(document.getElementById('count-time').value) || 5;
     const seconds = minutes * 60;
 
     try {
@@ -631,7 +631,7 @@ async function startAcquisition() {
                 stopAcquisition();
                 alert('Acquisition Complete');
                 // Final fetch
-                const data = await api.getSpectrum(minutes);
+                const data = await api.getSpectrum(0);
                 currentData = data;
                 ui.renderDashboard(data);
                 if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
@@ -641,7 +641,7 @@ async function startAcquisition() {
 
             // Poll spectrum
             try {
-                const data = await api.getSpectrum(minutes);
+                const data = await api.getSpectrum(0);
                 currentData = data;
                 ui.renderDashboard(data);
                 if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
