@@ -11,6 +11,8 @@
     --input-bg: rgba(15, 23, 42, 0.6);
     --font-family: 'Inter', system-ui, -apple-system, sans-serif;
     --accent-color: #38bdf8;
+    --chart-annotation-color: #f59e0b;
+    /* Orange for visibility */
 }
 
 /* Light theme */
@@ -26,6 +28,8 @@
     --border-color: rgba(100, 116, 139, 0.3);
     --input-bg: #ffffff;
     --accent-color: #0ea5e9;
+    --chart-annotation-color: #b91c1c;
+    /* Darker Red for better visibility on light */
 }
 
 [data-theme="light"] body {
@@ -47,6 +51,8 @@
     --border-color: rgba(251, 191, 36, 0.3);
     --input-bg: rgba(51, 41, 0, 0.6);
     --accent-color: #fbbf24;
+    --chart-annotation-color: #ef4444;
+    /* Bright Red for high contrast with gold/green */
 }
 
 [data-theme="nuclear"] body {
@@ -70,6 +76,8 @@
     --border-color: rgba(34, 197, 94, 0.3);
     --input-bg: rgba(20, 51, 20, 0.6);
     --accent-color: #10b981;
+    --chart-annotation-color: #d946ef;
+    /* Magenta for max contrast against toxic green */
 }
 
 [data-theme="toxic"] body {
@@ -93,6 +101,8 @@
     --border-color: rgba(0, 240, 255, 0.5);
     --input-bg: rgba(26, 31, 58, 0.8);
     --accent-color: #5b9eff;
+    --chart-annotation-color: #fbbf24;
+    /* Yellow for visibility */
 }
 
 [data-theme="scifi"] body {
@@ -116,6 +126,8 @@
     --border-color: rgba(252, 238, 9, 0.4);
     --input-bg: rgba(13, 2, 8, 0.8);
     --accent-color: #00f5ff;
+    --chart-annotation-color: #ff006e;
+    /* Magenta/pink for visibility */
 }
 
 [data-theme="cyberpunk"] body {
