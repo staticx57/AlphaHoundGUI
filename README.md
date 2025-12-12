@@ -1,6 +1,6 @@
 # RadTrace 🚀
 
-![RadTrace Banner](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_github_banner_1765461262612.png)
+![RadTrace Banner](backend/static/docs/banner.png)
 
 > [!CAUTION]
 > **RADIATION SAFETY NOTICE & DISCLAIMER**
@@ -107,7 +107,7 @@
 
 ## 📸 Screenshot
 
-![RadTrace User Interface](file:///C:/Users/stati/.gemini/antigravity/brain/1bddce66-cb9a-4249-84cf-189c29a90f07/spectrek_ui_mockup_1765461305029.png)
+![RadTrace User Interface](backend/static/docs/ui_mockup.png)
 
 *RadTrace's intuitive interface showing real-time spectrum analysis, decay chain detection, and isotope identification with confidence scoring.*
 
@@ -274,7 +274,7 @@ pip install -r backend/requirements.txt
 
 ## License
 
-This viewer is provided under MIT License. See individual components for their respective licenses.
+This viewer is provided under **Apache License 2.0**. See `LICENSE` for details.
 
 ## Contributing
 
