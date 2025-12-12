@@ -23,16 +23,20 @@ export class AlphaHoundChart {
         if (this.autoScale) {
             // Auto-scale: trim to last significant data point
             const maxCount = Math.max(...dataPoints);
-            const threshold = maxCount * 0.005; // 0.5% of max count
+            const threshold = Math.max(maxCount * 0.02, 10); // 2% of max or 10 counts minimum
 
             for (let i = dataPoints.length - 1; i >= 0; i--) {
                 if (dataPoints[i] > threshold) {
-                    maxEnergy = Math.min(parseFloat(labels[i]) * 1.1, fullMaxEnergy);
+                    maxEnergy = Math.min(parseFloat(labels[i]) * 1.15, fullMaxEnergy); // 15% margin
                     break;
                 }
             }
         }
 
+
+        // Get theme colors from CSS variables
+        const styles = getComputedStyle(document.documentElement);
+        const accentColor = styles.getPropertyValue('--accent-color').trim() || '#f59e0b';
 
         // Annotations
         const annotations = {};
@@ -42,9 +46,9 @@ export class AlphaHoundChart {
                     type: 'point',
                     xValue: peak.energy,
                     yValue: peak.counts,
-                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    backgroundColor: accentColor + '80', // Add transparency
                     radius: 6,
-                    borderColor: '#ff6384',
+                    borderColor: accentColor,
                     borderWidth: 2
                 };
             });
@@ -198,6 +202,10 @@ export class AlphaHoundChart {
                 this.chart.options.plugins.annotation.annotations = {};
             }
 
+            // Get theme color
+            const styles = getComputedStyle(document.documentElement);
+            const accentColor = styles.getPropertyValue('--accent-color').trim() || '#f59e0b';
+
             // Clear any existing ROI highlights
             delete this.chart.options.plugins.annotation.annotations.roiHighlight;
             delete this.chart.options.plugins.annotation.annotations.roiLineStart;
@@ -208,14 +216,14 @@ export class AlphaHoundChart {
                 type: 'box',
                 xMin: startEnergy,
                 xMax: endEnergy,
-                backgroundColor: 'rgba(249, 115, 22, 0.08)',  // Very subtle orange
+                backgroundColor: accentColor + '14',  // Very subtle (8% opacity)
                 borderColor: 'transparent',
                 drawTime: 'beforeDatasetsDraw',
                 label: {
                     display: true,
                     content: label,
                     position: { x: 'center', y: 'end' },  // Bottom center
-                    backgroundColor: 'rgba(249, 115, 22, 0.9)',
+                    backgroundColor: accentColor + 'E6',  // 90% opacity
                     color: '#fff',
                     font: { size: 10, weight: 'bold' },
                     padding: { top: 2, bottom: 2, left: 6, right: 6 },
@@ -228,7 +236,7 @@ export class AlphaHoundChart {
                 type: 'line',
                 xMin: startEnergy,
                 xMax: startEnergy,
-                borderColor: 'rgba(249, 115, 22, 0.8)',
+                borderColor: accentColor + 'CC',  // 80% opacity
                 borderWidth: 2,
                 borderDash: [4, 4],
                 drawTime: 'afterDatasetsDraw'
@@ -239,7 +247,7 @@ export class AlphaHoundChart {
                 type: 'line',
                 xMin: endEnergy,
                 xMax: endEnergy,
-                borderColor: 'rgba(249, 115, 22, 0.8)',
+                borderColor: accentColor + 'CC',  // 80% opacity
                 borderWidth: 2,
                 borderDash: [4, 4],
                 drawTime: 'afterDatasetsDraw'

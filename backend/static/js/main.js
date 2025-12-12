@@ -304,6 +304,18 @@ function setupEventListeners() {
     });
     document.getElementById('btn-reset-zoom').addEventListener('click', () => chartManager.resetZoom());
 
+    // Auto-Scale Toggle
+    document.getElementById('btn-auto-scale').addEventListener('click', (e) => {
+        const isAutoScale = chartManager.toggleAutoScale();
+        e.target.classList.toggle('active', isAutoScale);
+        e.target.textContent = isAutoScale ? 'Auto-Scale' : 'Full Spectrum';
+        // Re-render chart with new scale
+        if (currentData) {
+            chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
+        }
+        showToast(isAutoScale ? 'Auto-scale enabled (zoom to data)' : 'Full spectrum view enabled', 'info');
+    });
+
     // Device Controls
     document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
     document.getElementById('btn-connect-device').addEventListener('click', connectDevice);
