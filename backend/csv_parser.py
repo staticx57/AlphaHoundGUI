@@ -42,7 +42,7 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
         # Metadata
         live_time = spec.live_time
         real_time = spec.real_time
-        tool = "Becquerel"
+        source = "CSV File (Becquerel)"
 
     except Exception as bq_error:
         print(f"[WARNING] Becquerel parsing failed: {str(bq_error)}. Attempting manual fallback.")
@@ -115,7 +115,7 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
 
             live_time = None
             real_time = None
-            tool = "Manual/Pandas"
+            source = "CSV File"
             
             if not counts:
                  raise ValueError("Could not identify 'counts' column in CSV")
@@ -169,7 +169,7 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
             "live_time": live_time,
             "real_time": real_time,
             "filename": filename,
-            "tool": tool
+            "source": source
         }
     }
 

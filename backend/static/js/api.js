@@ -100,14 +100,19 @@ export class AlphaHoundAPI {
     /**
      * Gets current spectrum from device.
      * @param {number} countMinutes - Acquisition time in minutes
+     * @param {number} [actualDurationSeconds] - Actual elapsed time in seconds (optional)
      * @returns {Promise<Object>} Spectrum data with energies, counts, peaks
      * @throws {Error} If poll fails
      */
-    async getSpectrum(countMinutes) {
+    async getSpectrum(countMinutes, actualDurationSeconds = null) {
+        const body = { count_minutes: countMinutes };
+        if (actualDurationSeconds !== null) {
+            body.actual_duration_s = actualDurationSeconds;
+        }
         const response = await fetch('/device/spectrum', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ count_minutes: countMinutes })
+            body: JSON.stringify(body)
         });
         if (response.ok) {
             return await response.json();

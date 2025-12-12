@@ -49,7 +49,7 @@ The app automatically detects PyRIID and enables ML features if installed.
 ## 🌐 Usage
 
 1. Run the application: `run.bat` or `run_lightweight.bat`
-2. Open browser: `http://localhost:8080`
+2. Open browser: `http://localhost:3200`
 3. Upload N42 or CSV files, or connect AlphaHound device
 
 ## 📋 Features by Mode
@@ -60,9 +60,12 @@ The app automatically detects PyRIID and enables ML features if installed.
 | Peak Detection | ✅ | ✅ |
 | Isotope Identification (Rule-based) | ✅ | ✅ |
 | Decay Chain Detection | ✅ | ✅ |
-| Custom Isotopes | ✅ | ✅ |
+| Custom Isotopes (Add/Import/Export) | ✅ | ✅ |
 | Background Subtraction | ✅ | ✅ |
 | Energy Calibration | ✅ | ✅ |
+| ROI Analysis (Advanced Mode) | ✅ | ✅ |
+| Uranium Enrichment Analysis | ✅ | ✅ |
 | PDF Export | ✅ | ✅ |
 | Device Control (AlphaHound) | ✅ | ✅ |
+| Rate Limiting (API Security) | ✅ | ✅ |
 | ML Identification (PyRIID) | ❌ | ✅ |

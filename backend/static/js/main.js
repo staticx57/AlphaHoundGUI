@@ -1060,8 +1060,8 @@ async function startAcquisition() {
             if (elapsed >= seconds) {
                 stopAcquisition();
                 alert('Acquisition Complete');
-                // Final fetch
-                const data = await api.getSpectrum(0);
+                // Final fetch - pass actual elapsed time for accurate metadata
+                const data = await api.getSpectrum(0, elapsed);
                 currentData = data;
                 ui.renderDashboard(data);
                 if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());

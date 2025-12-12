@@ -80,6 +80,8 @@
     - ✅ `/analyze/ml-identify` API endpoint
     - ✅ Frontend "AI Identify" button with loading states
     - ✅ ~1500 training samples (1350 single + 150 mixtures)
+    - ✅ **AlphaHound Detector Tuning**: Energy-dependent FWHM (10% at 662 keV) matching CsI(Tl) resolution
+    - ✅ **Comprehensive Documentation**: See [PYRIID_GUIDE.md](PYRIID_GUIDE.md) for usage and extension guide
     - ⚠️ **Note**: Works best with real detector data (Poisson statistics); synthetic demo files may not match training patterns
 - [x] **Auto-Save CSV on Acquisition**:
     - ✅ Automatically saves spectrum to CSV upon acquisition completion
@@ -102,9 +104,9 @@
     - [ ] Create and integrate transparent PNG favicon
     - [ ] Create and integrate transparent PNG upload icon
     - [ ] Create and integrate transparent PNG banner
-- [ ] **COUNT TIME Fix (Complete)**:
-    - [ ] Backend: Capture actual acquisition duration from timer
-    - [ ] Backend: Pass duration to `count_time_minutes` in metadata
+- [x] ✅ **COUNT TIME Fix (Complete)**:
+    - [x] Backend: Capture actual acquisition duration from frontend
+    - [x] Backend: Pass duration to `count_time_minutes` in metadata
     - [x] ✅ Frontend: Display formatting fixed (`replaceAll()`)
 - [x] ✅ **Mobile/Responsive UI**:
     - [x] ✅ Rework layout for phone screen widths (responsive breakpoints)
@@ -138,9 +140,9 @@
     - [ ] Add background-dominated mixture training
 
 ### Features
-- [ ] **Custom Isotope Definitions**:
-    - [ ] Allow users to add custom isotopes to the database via UI
-    - [ ] Import/export custom isotope libraries
+- [x] **Custom Isotope Definitions**:
+    - [x] Allow users to add custom isotopes to the database via UI
+    - [x] Import/export custom isotope libraries (bulk JSON)
 - [x] **Energy Calibration UI**:
     - ✅ Interactive peak marking for calibration
     - ✅ Linear calibration (Slope/Intercept)
@@ -177,9 +179,9 @@
     - [ ] Implement WebWorkers for ML training
     - [ ] Optimize large spectrum rendering
     - [ ] Add service worker for offline capability
-- [ ] **Security**:
+- [x] **Security**:
     - [ ] Add CSRF protection
-    - [ ] Implement rate limiting for API endpoints
+    - [x] Implement rate limiting for API endpoints (slowapi)
     - [ ] Add authentication for LAN access (optional)
 - [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.
 

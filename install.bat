@@ -8,7 +8,7 @@ echo PyRIID + TensorFlow = ~377MB download
 echo.
 echo Installing core packages...
 python -m pip install --upgrade pip
-python -m pip install fastapi uvicorn python-multipart pyserial websockets matplotlib reportlab numpy scipy pillow pandas
+python -m pip install fastapi uvicorn python-multipart pyserial websockets matplotlib reportlab numpy scipy pillow pandas becquerel slowapi
 
 echo.
 echo Installing PyRIID (Machine Learning)...

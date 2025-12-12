@@ -22,6 +22,12 @@ export const isotopeUI = {
         if (this.btnClose) this.btnClose.addEventListener('click', () => this.close());
         this.form.addEventListener('submit', (e) => this.handleAdd(e));
 
+        // Import/Export buttons
+        const btnImport = document.getElementById('btn-import-isotopes');
+        const btnExport = document.getElementById('btn-export-isotopes');
+        if (btnImport) btnImport.addEventListener('click', () => this.handleImport());
+        if (btnExport) btnExport.addEventListener('click', () => this.handleExport());
+
         // Close on outside click
         window.addEventListener('click', (e) => {
             if (e.target === this.modal) this.close();
@@ -128,5 +134,65 @@ export const isotopeUI = {
     async deleteCustomIsotope(name) {
         const res = await fetch(`/isotopes/custom/${name}`, { method: 'DELETE' });
         if (!res.ok) throw new Error("Failed to delete");
+    },
+
+    // Export all custom isotopes as downloadable JSON
+    async handleExport() {
+        try {
+            const res = await fetch('/isotopes/custom/export');
+            if (!res.ok) throw new Error("Export failed");
+            const data = await res.json();
+
+            if (data.count === 0) {
+                alert("No custom isotopes to export.");
+                return;
+            }
+
+            // Create downloadable file
+            const blob = new Blob([JSON.stringify(data.isotopes, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'custom_isotopes.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alert("Export error: " + err.message);
+        }
+    },
+
+    // Import custom isotopes from JSON file
+    async handleImport() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                const res = await fetch('/isotopes/custom/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (!res.ok) throw new Error("Import failed");
+
+                const result = await res.json();
+                alert(`Successfully imported ${result.imported} isotope(s).`);
+                this.renderList();
+            } catch (err) {
+                alert("Import error: " + err.message);
+            }
+        };
+
+        input.click();
     }
 };

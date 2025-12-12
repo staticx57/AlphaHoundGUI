@@ -51,18 +51,41 @@ class MLIdentifier:
     
     Uses authoritative gamma-ray energies from IAEA NDS, NNDC/ENSDF databases
     to generate synthetic training spectra for comprehensive isotope identification.
+    
+    TUNED FOR ALPHAHOUND AB+G DETECTOR:
+    - 1024 channels @ 3 keV/channel (0-3069 keV range)
+    - CsI(Tl) crystal: 10% FWHM at 662 keV
+    - Energy-dependent resolution: FWHM = 0.10 * sqrt(662/E) * E
     """
     
     def __init__(self):
         self.model = None
         self.is_trained = False
-        self.n_channels = 1024  # Standard channel count
-        self.keV_per_channel = 3.0  # Typical calibration: 3 keV/channel
+        self.n_channels = 1024  # AlphaHound standard channel count
+        self.keV_per_channel = 3.0  # AlphaHound calibration: ~3 keV/channel
+        # AlphaHound CsI(Tl) resolution: 10% FWHM at 662 keV
+        self.reference_fwhm_fraction = 0.10  # 10% at 662 keV
+        self.reference_energy = 662.0  # keV
         
     def energy_to_channel(self, energy_keV: float) -> int:
         """Convert gamma energy in keV to channel number."""
         channel = int(energy_keV / self.keV_per_channel)
         return max(0, min(channel, self.n_channels - 1))
+    
+    def get_fwhm_channels(self, energy_keV: float) -> int:
+        """Calculate FWHM in channels for AlphaHound CsI(Tl) detector.
+        
+        Uses energy-dependent resolution model:
+        FWHM(E) = FWHM_ref * sqrt(E_ref / E) for scintillators
+        
+        At 662 keV: FWHM = 10% = 66.2 keV = 22 channels
+        At 186 keV: FWHM = 18.8% = 35 keV = 12 channels
+        At 1461 keV: FWHM = 6.7% = 98 keV = 33 channels
+        """
+        # FWHM in keV using scintillator resolution scaling
+        fwhm_keV = self.reference_fwhm_fraction * energy_keV * (self.reference_energy / energy_keV) ** 0.5
+        fwhm_channels = max(3, int(fwhm_keV / self.keV_per_channel))
+        return fwhm_channels
         
     def lazy_train(self):
         """Train model on synthetic data using authoritative isotope database."""
@@ -158,10 +181,12 @@ class MLIdentifier:
                     base_intensity = max(50, 300 - energy_keV / 10)
                     peak_intensity = int(np.random.poisson(base_intensity) * (0.7 + np.random.random() * 0.6))
                     
-                    # Add Gaussian-like peak (FWHM ~3 channels for NaI at these energies)
-                    half_width = 3
+                    # Add Gaussian-like peak with AlphaHound CsI(Tl) FWHM
+                    # Uses energy-dependent resolution (10% at 662 keV)
+                    fwhm = self.get_fwhm_channels(energy_keV)
+                    half_width = max(2, fwhm // 2)
                     start_ch = max(0, channel - half_width)
-                    end_ch = min(self.n_channels, channel + half_width)
+                    end_ch = min(self.n_channels, channel + half_width + 1)
                     width = end_ch - start_ch
                     
                     if width > 0:
@@ -197,9 +222,11 @@ class MLIdentifier:
                         base_intensity = max(50, 300 - energy_keV / 10) * relative_strength
                         peak_intensity = int(np.random.poisson(base_intensity) * (0.7 + np.random.random() * 0.6))
                         
-                        half_width = 3
+                        # Use AlphaHound energy-dependent FWHM
+                        fwhm = self.get_fwhm_channels(energy_keV)
+                        half_width = max(2, fwhm // 2)
                         start_ch = max(0, channel - half_width)
-                        end_ch = min(self.n_channels, channel + half_width)
+                        end_ch = min(self.n_channels, channel + half_width + 1)
                         width = end_ch - start_ch
                         
                         if width > 0:

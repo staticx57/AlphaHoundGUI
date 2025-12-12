@@ -54,6 +54,7 @@ def parse_n42(file_content: str):
             "energies": energies.tolist() if len(energies) > 0 else [],
             "is_calibrated": is_calibrated,
             "metadata": {
+                "source": "N42 File",
                 "live_time": live_time_val,
                 "real_time": real_time_val
             }

@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## [Unreleased - Session 2025-12-12] - Technical Debt & Feature Polish
+
+### Added
+- **Rate Limiting (Security)**
+  - Integrated `slowapi` middleware for API rate limiting
+  - Default: 60 requests per minute per IP address
+  - Protects against API abuse and denial-of-service
+
+- **Custom Isotope Import/Export**
+  - `GET /isotopes/custom/export` - Download all custom isotopes as JSON
+  - `POST /isotopes/custom/import` - Import isotopes from JSON file
+  - UI buttons: "📥 Import JSON" and "📤 Export JSON" in Custom Isotopes modal
+  - Supports bulk import/export for library sharing
+
+- **Apache License 2.0**
+  - Created `LICENSE` file with full Apache 2.0 text
+  - Added `.github/FUNDING.yml` stub for GitHub Sponsors
+
+### Fixed
+- **COUNT TIME Metadata Bug**
+  - Fixed Pydantic type annotation (`Optional[float]`) for `actual_duration_s`
+  - Frontend now passes actual elapsed time to backend on acquisition completion
+  - Metadata `count_time_minutes` now shows real duration, not requested duration
+
+### Changed
+- **README.md Updates**
+  - Added ROI Analysis credits to NuclearGeekETH (same author as AlphaHound connector)
+  - Updated image paths to relative format for GitHub compatibility
+  - Updated license section to Apache 2.0
+
+- **Device Panel Enhancement**
+  - Split layout with controls left, live data right
+  - Consolidated inline controls for cleaner UI
+  - Added 5-minute dose rate sparkline chart
+
+- **ML AlphaHound Tuning**
+  - Energy-dependent FWHM matching CsI(Tl) resolution (10% at 662 keV)
+  - Scintillator resolution model: FWHM(E) = 0.10 × E × √(662/E)
+  - Improved training spectra realism for better AlphaHound data recognition
+
+### Documentation
+- **PYRIID_GUIDE.md**: Comprehensive 400+ line guide covering:
+  - How PyRIID works (architecture, training, prediction)
+  - AlphaHound detector tuning details
+  - 10 ways users can extend/enhance ML functionality
+  - Usage instructions and best practices
+
+### Dependencies Added
+- `slowapi` - Rate limiting for FastAPI endpoints
+
+---
+
 ## [Unreleased - Session 2025-12-11] - ML Integration & UI Enhancements
 
 ### Added

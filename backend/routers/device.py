@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, WebSocket
 from pydantic import BaseModel, Field, field_validator
+from typing import Optional
 import asyncio
 import re
 from alphahound_serial import device as alphahound_device
@@ -28,6 +29,7 @@ class ConnectRequest(BaseModel):
 class SpectrumRequest(BaseModel):
     """Request model for spectrum acquisition."""
     count_minutes: float = Field(default=0, ge=0, le=MAX_ACQUISITION_MINUTES)
+    actual_duration_s: Optional[float] = Field(default=None, ge=0, le=MAX_ACQUISITION_MINUTES * 60)
 
 @router.get("/ports")
 async def list_serial_ports():
@@ -118,7 +120,7 @@ async def acquire_spectrum(request: SpectrumRequest):
         "metadata": {
             "source": "AlphaHound Device",
             "channels": len(counts),
-            "count_time_minutes": count_minutes
+            "count_time_minutes": (request.actual_duration_s / 60) if request.actual_duration_s else count_minutes
         }
     }
 

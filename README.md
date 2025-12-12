@@ -49,6 +49,7 @@
   - Multi-isotope mixture recognition (UraniumGlass, ThoriumMantle, MedicalWaste, IndustrialGauge, etc.)
   - ~1500 training samples with realistic Poisson statistics
   - Best suited for real detector data
+  - **📖 See [PYRIID_GUIDE.md](PYRIID_GUIDE.md) for detailed usage and extension guide**
 - **Dual Detection Panel**: Side-by-side comparison of Peak Matching (legacy) vs AI Identification (ML)
 - **Dual-Mode Analysis Engine**:
   - **Live Acquisition**: Uses "Gold Standard" checks (30% confidence) to prevent false positives in live data.
@@ -214,10 +215,14 @@ The AlphaHound interface provides:
     ```
   - **Integration**: Neural network trained on 90+ isotopes with multi-isotope mixture support
 
-### AlphaHound Interface
+### AlphaHound Interface & ROI Analysis
 - **Author**: [NuclearGeekETH](https://github.com/NuclearGeekETH)
 - **Device**: [AlphaHound™ by RadView Detection](https://www.radviewdetection.com/)
 - **License**: MIT License
+- **Features Contributed**:
+  - AlphaHound serial communication and device control
+  - ROI (Region-of-Interest) analysis with AlphaHound detector efficiency database
+  - Uranium enrichment ratio analysis
 - **Trademark Notice**: AlphaHound™ and RadView Detection are trademarks of their respective holders. The AlphaHound interface is an independent, third-party project not affiliated with or endorsed by RadView Detection.
 
 ### Special Thanks
