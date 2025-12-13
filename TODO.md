@@ -151,9 +151,10 @@
     - ✅ Real-time net counts display
 - [x] **UI Icon Polish**:
     - ✅ Replace all emoji icons with professional SVG/PNG assets
-    - ✅ Icons needed: 📜 History, ⚙️ Settings, 🌓 Theme, 🔌 Device, 🔄 Refresh, ▶️ Play, ⏹️ Stop, 📂 Upload, 📄 PDF, 📊 Compare, 🔬 Analysis, 🚀 Rocket
+    - ✅ Icons needed: 📜 History, ⚙️ Settings, 🌓 Theme, 🔌 Device, 🔄 Refresh, ▶️ Play, ⏹️ Stop, 📂 Upload, 📄 PDF, 📊 Compare, 🔬 Analysis, 🚀 Rocket, 📥 Import, 📤 Export
     - ✅ Add favicon to browser tab
     - ✅ Consistent icon styling across all buttons
+    - ✅ Custom Isotopes modal: SVG icons for Import/Export
 - [x] **ROI Analysis (Advanced Mode)**:
     - ✅ Region-of-Interest analysis with activity calculation (Bq/μCi)
     - ✅ AlphaHound AB+G detector efficiency database (CsI 48 cps/μSv/h, BGO 42 cps/μSv/h)
@@ -190,3 +191,15 @@
     - ✅ **Dual-Mode Engine**: Live Acquisition uses Strict settings (30%) to filter U-235; Uploads use Robust settings.
     - ✅ **UI Fixes**: Resolved metadata text overlap with CSS `word-break`.
     - ✅ **Verified**: Confirmed correct filtering of U-235 (7% weighted) vs U-238 (53% weighted) in live data.
+
+## Low Priority / Future
+
+- [ ] **Radiacode Device Integration** (10-15 hours):
+    - [ ] Add `radiacode` Python library dependency
+    - [ ] Create `radiacode_driver.py` with USB/Bluetooth support
+    - [ ] Add Radiacode 103/103G/110 to detector efficiency database
+    - [ ] Create `/radiacode/*` API endpoints (connect, dose, spectrum)
+    - [ ] Add device selector UI (AlphaHound vs Radiacode)
+    - [ ] Tune ML for Radiacode FWHM profiles (7.4%-8.4%)
+    - **Reference**: See [RADIACODE_INTEGRATION_PLAN.md](RADIACODE_INTEGRATION_PLAN.md)
+

@@ -408,7 +408,7 @@ tbody tr:hover {
     border: 1px solid var(--border-color);
     border-radius: 1rem;
     padding: 2rem;
-    max-width: 600px;
+    max-width: 700px;
     width: 90%;
     max-height: 70vh;
     overflow-y: auto;

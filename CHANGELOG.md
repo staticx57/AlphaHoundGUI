@@ -40,6 +40,16 @@
   - Scintillator resolution model: FWHM(E) = 0.10 × E × √(662/E)
   - Improved training spectra realism for better AlphaHound data recognition
 
+- **UI Polish (2025-12-12)**
+  - Replaced emoji with SVG icons in Custom Isotopes modal (Import/Export)
+  - Fixed Custom Isotopes modal layout with proper grid alignment
+  - Increased modal width to 650px for better spacing
+  - Fixed COUNT TIME precision to 2 decimal places (was showing 15+ decimals)
+  - Changed metadata "TOOL" field to "SOURCE" with user-friendly values:
+    - "CSV File" or "CSV File (Becquerel)"
+    - "N42 File"
+    - "AlphaHound Device"
+
 ### Documentation
 - **PYRIID_GUIDE.md**: Comprehensive 400+ line guide covering:
   - How PyRIID works (architecture, training, prediction)

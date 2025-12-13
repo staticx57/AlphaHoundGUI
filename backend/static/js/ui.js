@@ -56,7 +56,7 @@ export class AlphaHoundUI {
             // Format the value based on the key
             let displayValue = value || '-';
             if (key === 'count_time_minutes' && value > 0) {
-                displayValue = `${value} min`;
+                displayValue = `${parseFloat(value).toFixed(2)} min`;
             }
 
             return `
