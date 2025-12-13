@@ -1,0 +1,91 @@
+================================================================================
+URANIUM GLASS SPECTRUM CALIBRATION COMPARISON
+================================================================================
+
+Loaded 1024 channels with 190623 total counts
+
+Option A (Device): 15.00 - 7572.24 keV (~7.39 keV/ch)
+Option B (Recalc): 0.00 - 3069.00 keV (3.00 keV/ch)
+
+================================================================================
+OPTION A: DEVICE CALIBRATION (~7.4 keV/channel)
+================================================================================
+
+Detected 3 peaks
+
+Top 10 peaks:
+  1. 108.38 keV (5038 counts)
+  2. 77.51 keV (3484 counts)
+  3. 41.95 keV (1112 counts)
+
+> Isotopes identified: 8
+  * Am-241       - HIGH     (100.0% - 1/1 peaks)
+  * U-238        - HIGH     (100.0% - 1/1 peaks)
+  * Th-234       - HIGH     (100.0% - 1/1 peaks)
+  * U-234        - HIGH     (100.0% - 1/1 peaks)
+  * Th-232       - HIGH     (100.0% - 1/1 peaks)
+  * Th-231       - MEDIUM   (50.0% - 1/2 peaks)
+  * Tl-201       - MEDIUM   (50.0% - 1/2 peaks)
+  * Ba-133       - LOW      (20.0% - 1/5 peaks)
+
+================================================================================
+OPTION B: RECALCULATED (3.0 keV/channel)
+================================================================================
+
+Detected 3 peaks
+
+Top 10 peaks:
+  1. 165.00 keV (5038 counts)
+  2. 111.00 keV (3484 counts)
+  3. 48.00 keV (1112 counts)
+
+> Isotopes identified: 12
+  * U-235        - HIGH     (75.0% - 3/4 peaks)
+  * Th-231       - HIGH     (100.0% - 2/2 peaks)
+  * Tl-201       - HIGH     (100.0% - 2/2 peaks)
+  * Am-241       - HIGH     (100.0% - 1/1 peaks)
+  * U-238        - HIGH     (100.0% - 1/1 peaks)
+  * Th-234       - HIGH     (100.0% - 1/1 peaks)
+  * U-234        - HIGH     (100.0% - 1/1 peaks)
+  * Ra-226       - HIGH     (100.0% - 1/1 peaks)
+  * Th-232       - HIGH     (100.0% - 1/1 peaks)
+  * Tc-99m       - HIGH     (100.0% - 1/1 peaks)
+
+================================================================================
+PEAK POSITION COMPARISON
+================================================================================
+
+Device vs Recalculated peak energies:
+  Peak 1:  108.38 keV (device) ->  165.00 keV (recalc) | Diff:  -56.62 keV
+  Peak 2:   77.51 keV (device) ->  111.00 keV (recalc) | Diff:  -33.49 keV
+  Peak 3:   41.95 keV (device) ->   48.00 keV (recalc) | Diff:   -6.05 keV
+
+================================================================================
+ISOTOPE IDENTIFICATION COMPARISON
+================================================================================
+
+Identified in BOTH:
+  * Am-241       | Device: 100.0% | Recalc: 100.0%
+  * Ba-133       | Device:  20.0% | Recalc:  20.0%
+  * Th-231       | Device:  50.0% | Recalc: 100.0%
+  * Th-232       | Device: 100.0% | Recalc: 100.0%
+  * Th-234       | Device: 100.0% | Recalc: 100.0%
+  * Tl-201       | Device:  50.0% | Recalc: 100.0%
+  * U-234        | Device: 100.0% | Recalc: 100.0%
+  * U-238        | Device: 100.0% | Recalc: 100.0%
+
+[+] ONLY with 3 keV/ch Recalculation:
+  * Ra-223 - LOW (33.3%)
+  * Ra-226 - HIGH (100.0%)
+  * Tc-99m - HIGH (100.0%)
+  * U-235 - HIGH (75.0%)
+
+================================================================================
+RECOMMENDATION
+================================================================================
+
+Expected for uranium glass: U-238, Th-234, Pa-234m, Bi-214, Pb-214
+
+If Option B (3 keV/ch) identifies these isotopes better, then device calibration is wrong.
+If Option A (device) identifies them better, then device calibration is correct.
+================================================================================

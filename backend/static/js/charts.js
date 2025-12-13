@@ -19,19 +19,44 @@ export class AlphaHoundChart {
         // Calculate max energy based on mode
         const fullMaxEnergy = Math.max(...labels.map(e => parseFloat(e)));
         let maxEnergy = fullMaxEnergy;
+        let maxY = undefined; // Let Chart.js auto-scale by default
 
         if (this.autoScale) {
-            // Auto-scale: trim to last significant data point
+            // ==========================================
+            // STAGE 1: X-AXIS AUTO-SCALE (Trim Noise)
+            // ==========================================
             const maxCount = Math.max(...dataPoints);
-            // Threshold: 1% of max count, but at least 1.5 (ignores single counts as noise)
-            const threshold = Math.max(maxCount * 0.01, 1.5);
 
+            // Calculate noise threshold more intelligently
+            // Use median of non-zero values to avoid being skewed by large peaks
+            const nonZeroCounts = dataPoints.filter(c => c > 0);
+            const sortedCounts = [...nonZeroCounts].sort((a, b) => a - b);
+            const medianCount = sortedCounts[Math.floor(sortedCounts.length / 2)] || 0;
+
+            // Threshold: 3x median or 2% of max, whichever is higher (more aggressive noise filtering)
+            const noiseThreshold = Math.max(medianCount * 3, maxCount * 0.02, 2);
+
+            // Scan from right to find last significant data
             for (let i = dataPoints.length - 1; i >= 0; i--) {
-                if (dataPoints[i] > threshold) {
-                    maxEnergy = Math.min(parseFloat(labels[i]) * 1.15, fullMaxEnergy); // 15% margin
+                if (dataPoints[i] > noiseThreshold) {
+                    maxEnergy = Math.min(parseFloat(labels[i]) * 1.10, fullMaxEnergy); // 10% margin
                     break;
                 }
             }
+
+            // CRITICAL: Ensure detected peaks are not truncated
+            // If we have detected peaks, extend X-axis to include the rightmost peak + 10% margin
+            if (peaks && peaks.length > 0) {
+                const maxPeakEnergy = Math.max(...peaks.map(p => p.energy));
+                // Extend maxEnergy to include all peaks with 10% headroom
+                maxEnergy = Math.max(maxEnergy, Math.min(maxPeakEnergy * 1.10, fullMaxEnergy));
+            }
+
+            // ==========================================
+            // Y-AXIS: ADD HEADROOM (NEVER CLIP)
+            // ==========================================
+            // Always show the full data range, just add buffer at top for readability
+            maxY = maxCount * 1.15; // 15% headroom above maximum peak
         }
 
 
@@ -84,6 +109,7 @@ export class AlphaHoundChart {
                     y: {
                         type: scaleType,
                         min: scaleType === 'logarithmic' ? 1 : 0,
+                        max: maxY, // Apply intelligent max if autoscale is active
                         beginAtZero: scaleType === 'linear',
                         title: { display: true, text: 'Counts', color: '#94a3b8' },
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },

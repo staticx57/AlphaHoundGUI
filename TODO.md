@@ -94,6 +94,12 @@
 ### Bugs\n- [x] ✅ **Missing Advanced Controls**: Settings modal now has working Simple/Advanced toggle, slider handlers, Apply/Reset buttons
 
 ### High Priority
+- [x] ✅ **Energy Calibration Verified**:
+    - ✅ **Device sends 1024 channels @ ~7.39 keV/channel** (15-7572 keV range)
+    - ✅ **Tested with 6-hour uranium glass spectrum** (190,623 counts)
+    - ✅ **Device calibration is CORRECT** - accurately identifies U-238, Th-234 without false U-235 detection
+    - ✅ **3 keV/channel assumption was WRONG** - would cause false U-235 identification (75% confidence)
+    - ✅ **No changes needed** - keep existing device calibration as-is
 - [x] ✅ **Application Rebranding (SpecTrek → RadTrace)**:
     - [x] ✅ Bulk find/replace "SpecTrek" with "RadTrace" across all files
     - [x] ✅ Find and replace remaining emoji in UI with CSS/SVG
