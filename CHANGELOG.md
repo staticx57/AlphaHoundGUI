@@ -1,6 +1,25 @@
 # CHANGELOG
 
+## [Unreleased - Session 2025-12-12] - Project Cleanup & Maintenance
+
+### Changed
+- **Project Directory Cleanup**
+  - Archived 49+ files (~7.6 MB) to organized subdirectories
+  - Created structured archive organization:
+    - `archive/test_scripts/` - 31 test/debug/check scripts
+    - `archive/backup_files/` - 1 backup file (app.js.bak)
+    - `archive/icon_backups/` - 12 old PNG/JPG icons
+    - `archive/sample_data/` - 1 test CSV file
+    - `archive/planning_docs/` - 2 research documents
+  - Reduced backend directory from 48 to 17 Python files
+  - Reduced root directory from 18 to 15 files
+  - Improved project navigation and maintainability
+  - All files preserved in archive (no deletions)
+
+---
+
 ## [Unreleased - Session 2025-12-12] - Technical Debt & Feature Polish
+
 
 ### Added
 - **Rate Limiting (Security)**
