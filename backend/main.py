@@ -54,7 +54,9 @@ async def websocket_dose_stream(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
-        await websocket.close()
+        # Only close if the connection is still open
+        if websocket.client_state.name != "DISCONNECTED":
+            await websocket.close()
 
 if __name__ == "__main__":
     import uvicorn
