@@ -17,6 +17,6 @@ cd backend
 
 :: Start the FastAPI server
 START "" "http://localhost:3200"
-python -m uvicorn main:app --reload --port 3200
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 3200
 
 PAUSE

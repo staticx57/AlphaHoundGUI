@@ -1,5 +1,63 @@
 # CHANGELOG
 
+## [Unreleased - Session 2025-12-14] - N42 Export & Parser Improvements
+
+### Added
+- **N42 XML Export (Complete Implementation)**
+  - Standards-compliant N42.42-2006 XML export from device acquisitions
+  - Full 1024-channel spectrum with energy calibration
+  - Proper ISO 8601 duration format (`PT60.000S`) for LiveTime/RealTime
+  - Isotope identification results included as SpectrumExtension
+  - Instrument information (manufacturer, model, serial number)
+  - "Export N42" button in controls bar
+
+- **Enhanced N42 Parser (Graceful Fallbacks)**
+  - Multi-namespace support (N42.42-2006, N42.42-2011, no-namespace)
+  - ISO 8601 duration parsing (`PT##H##M##.###S` → seconds)
+  - Extracts instrument info for proper SOURCE display (e.g., "RadView Detection AlphaHound")
+  - Searches multiple element locations for legacy file compatibility
+  - Coefficient-based energy calibration support
+  - Creates default channel array if no energies found
+
+- **Improved Auto-Scale (Chart)**
+  - 99% cumulative count algorithm for smarter X-axis trimming
+  - 15% right buffer + 5% left buffer for visual appeal
+  - Y-axis scaled to visible data region only
+  - Minimum zoom: 200 keV or 10% of full range
+  - Peak protection: never clips detected peaks
+
+### Fixed
+- **N42 Export "cannot serialize 100 (type int)" error**
+  - All XML text values now wrapped with `str()` to prevent integer serialization
+  - Affects: isotope confidence, energy values, timestamps, instrument info
+
+- **422 Unprocessable Entity error**
+  - Added `N42ExportRequest` Pydantic model for proper request validation
+  - Replaced generic `dict` type hint with structured model
+
+- **N42 Parser timing extraction**
+  - LiveTime extracted from `<Spectrum>` element
+  - RealTime extracted from `<RadMeasurement>` element
+  - Proper ISO 8601 duration parsing (was failing on `PT1.000S`)
+
+### Changed
+- **Export Buttons Styling**
+  - Export PDF and Export N42 now both use `.btn-accent` class
+  - Consistent appearance that adapts to all themes
+  - Removed hardcoded inline styles
+
+- **Backend API**
+  - `/export/n42` endpoint uses Pydantic model validation
+  - Uses `model_dump()` instead of deprecated `dict()`
+
+### Technical Notes
+- N42 exporter: `backend/n42_exporter.py` (200 lines)
+- N42 parser: `backend/n42_parser.py` (175 lines)  
+- Auto-scale: `backend/static/js/charts.js` (lines 24-78)
+- Request model: `backend/routers/analysis.py` (lines 80-88)
+
+---
+
 ## [Unreleased - Session 2025-12-12] - Project Cleanup & Maintenance
 
 ### Changed

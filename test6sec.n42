@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<RadInstrumentData xmlns="http://physics.nist.gov/N42/2006/N42">
+  <RadMeasurement>
+    <MeasurementClassCode>Foreground</MeasurementClassCode>
+    <StartTime>2025-12-14T22:05:33.238294+00:00</StartTime>
+    <RealTime>PT6.008S</RealTime>
+    <Spectrum>
+      <LiveTime>PT6.008S</LiveTime>
+      <EnergyCalibration>
+        <CalibrationEquation>List</CalibrationEquation>
+        <ChannelEnergies>0.00000 10.00000 20.00000</ChannelEnergies>
+      </EnergyCalibration>
+      <ChannelData NumberOfChannels="3">10 20 30</ChannelData>
+      <SpectrumType>PHA</SpectrumType>
+      <InstrumentInformation>
+        <Manufacturer>RadView Detection</Manufacturer>
+        <Model>AlphaHound</Model>
+        <SerialNumber>UNKNOWN</SerialNumber>
+      </InstrumentInformation>
+    </Spectrum>
+  </RadMeasurement>
+</RadInstrumentData>

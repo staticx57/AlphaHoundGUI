@@ -23,40 +23,57 @@ export class AlphaHoundChart {
 
         if (this.autoScale) {
             // ==========================================
-            // STAGE 1: X-AXIS AUTO-SCALE (Trim Noise)
+            // X-AXIS AUTO-SCALE (Aggressive Data Detection)
             // ==========================================
             const maxCount = Math.max(...dataPoints);
+            const totalCounts = dataPoints.reduce((a, b) => a + b, 0);
 
-            // Calculate noise threshold more intelligently
-            // Use median of non-zero values to avoid being skewed by large peaks
-            const nonZeroCounts = dataPoints.filter(c => c > 0);
-            const sortedCounts = [...nonZeroCounts].sort((a, b) => a - b);
-            const medianCount = sortedCounts[Math.floor(sortedCounts.length / 2)] || 0;
+            // Noise threshold: ignore channels with < 1% of max count
+            const noiseThreshold = Math.max(maxCount * 0.01, 1);
 
-            // Threshold: 3x median or 2% of max, whichever is higher (more aggressive noise filtering)
-            const noiseThreshold = Math.max(medianCount * 3, maxCount * 0.02, 2);
-
-            // Scan from right to find last significant data
+            // Method 1: Find where 95% of the counts are (tighter than 99%)
+            let cumulativeCounts = 0;
+            let percentileIndex = dataPoints.length - 1;
             for (let i = dataPoints.length - 1; i >= 0; i--) {
-                if (dataPoints[i] > noiseThreshold) {
-                    maxEnergy = Math.min(parseFloat(labels[i]) * 1.10, fullMaxEnergy); // 10% margin
+                cumulativeCounts += dataPoints[i];
+                if (cumulativeCounts >= totalCounts * 0.95) {
+                    percentileIndex = i;
                     break;
                 }
             }
 
-            // CRITICAL: Ensure detected peaks are not truncated
-            // If we have detected peaks, extend X-axis to include the rightmost peak + 10% margin
-            if (peaks && peaks.length > 0) {
-                const maxPeakEnergy = Math.max(...peaks.map(p => p.energy));
-                // Extend maxEnergy to include all peaks with 10% headroom
-                maxEnergy = Math.max(maxEnergy, Math.min(maxPeakEnergy * 1.10, fullMaxEnergy));
+            // Method 2: Find last SIGNIFICANT data (above noise threshold)
+            let lastSignificantIndex = 0;
+            for (let i = dataPoints.length - 1; i >= 0; i--) {
+                if (dataPoints[i] > noiseThreshold) {
+                    lastSignificantIndex = i;
+                    break;
+                }
             }
 
+            // Use the TIGHTER of the two (MIN = more aggressive zoom)
+            const dataEndIndex = Math.min(percentileIndex, lastSignificantIndex);
+
+            // Ensure we include at least a reasonable energy range
+            const calculatedEnergy = parseFloat(labels[dataEndIndex]) * 1.15;
+
+            // Minimum zoom: at least 200 keV or 5% of full range
+            const minZoom = Math.max(200, fullMaxEnergy * 0.05);
+            maxEnergy = Math.max(calculatedEnergy, minZoom);
+
+            // Cap at full range
+            maxEnergy = Math.min(maxEnergy, fullMaxEnergy);
+
             // ==========================================
-            // Y-AXIS: ADD HEADROOM (NEVER CLIP)
+            // Y-AXIS AUTO-SCALE 
             // ==========================================
-            // Always show the full data range, just add buffer at top for readability
-            maxY = maxCount * 1.15; // 15% headroom above maximum peak
+            // Find max count in the visible range only
+            const visibleEndIndex = labels.findIndex(e => parseFloat(e) > maxEnergy);
+            const visibleData = visibleEndIndex > 0 ? dataPoints.slice(0, visibleEndIndex) : dataPoints;
+            const visibleMaxCount = Math.max(...visibleData);
+
+            // 15% headroom above visible maximum peak
+            maxY = visibleMaxCount * 1.15;
         }
 
 
@@ -80,6 +97,22 @@ export class AlphaHoundChart {
             });
         }
 
+        // Calculate min energy (add left buffer for visual appeal)
+        let minEnergy = 0;
+        if (this.autoScale && labels.length > 0) {
+            // Find first non-zero data point
+            let firstNonZeroIndex = 0;
+            for (let i = 0; i < dataPoints.length; i++) {
+                if (dataPoints[i] > 0) {
+                    firstNonZeroIndex = i;
+                    break;
+                }
+            }
+            // Add 5% left buffer (but never go below 0)
+            const firstDataEnergy = parseFloat(labels[firstNonZeroIndex]);
+            minEnergy = Math.max(0, firstDataEnergy - (maxEnergy * 0.05));
+        }
+
         this.chart = new Chart(this.ctx, {
             type: 'line',
             data: {
@@ -101,6 +134,7 @@ export class AlphaHoundChart {
                 scales: {
                     x: {
                         type: 'linear',
+                        min: minEnergy,
                         max: maxEnergy,
                         title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },

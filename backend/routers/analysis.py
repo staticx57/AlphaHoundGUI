@@ -8,7 +8,7 @@ from isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
 from spectral_analysis import fit_gaussian, calibrate_energy, subtract_background
 from report_generator import generate_pdf_report
-from ml_analysis import get_ml_identifier
+# NOTE: ml_analysis is imported lazily in the endpoint to avoid TensorFlow loading at startup
 
 # Constants for input validation
 MAX_FILE_SIZE_MB = 10
@@ -68,6 +68,15 @@ class MLIdentifyRequest(BaseModel):
         if any(c < 0 for c in v):
             raise ValueError('Counts must be non-negative')
         return v
+
+class N42ExportRequest(BaseModel):
+    """Request model for N42 XML export"""
+    counts: List[float]
+    energies: List[float]
+    metadata: Optional[dict] = {}
+    peaks: Optional[List[dict]] = []
+    isotopes: Optional[List[dict]] = []
+    filename: Optional[str] = "spectrum"
 
 class ROIAnalysisRequest(BaseModel):
     """Request model for ROI analysis."""
@@ -216,10 +225,53 @@ async def analyze_subtract_background(request: BackgroundSubtractionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/export/n42")
+async def export_n42(request: N42ExportRequest):
+    """Export spectrum data as standards-compliant N42 XML file."""
+    print(f"[N42 Export] Endpoint called")
+    try:
+        from n42_exporter import generate_n42_xml
+        
+        # Convert Pydantic model to dict for exporter
+        request_dict = request.dict()
+        
+        print(f"[N42 Export] Generating XML for {len(request.counts)} channels...")
+        # Generate N42 XML
+        xml_content = generate_n42_xml(request_dict)
+        print(f"[N42 Export] XML generated: {len(xml_content)} chars")
+        
+        # Get filename from request or use default
+        filename = request.filename.replace('.n42', '') + '.n42'
+        print(f"[N42 Export] Filename: {filename}")
+        
+        # Encode XML string to bytes for Response
+        xml_bytes = xml_content.encode('utf-8')
+        print(f"[N42 Export] Encoded to {len(xml_bytes)} bytes, returning Response...")
+        
+        return Response(
+            content=xml_bytes,
+            media_type="application/xml",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/xml; charset=utf-8"
+            }
+        )
+    except ValueError as e:
+        print(f"[N42 Export] ValueError: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[N42 Export] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/analyze/ml-identify")
 async def ml_identify(request: MLIdentifyRequest):
     """Machine Learning isotope identification using PyRIID"""
     try:
+        # Lazy import to avoid loading TensorFlow at startup (saves ~10-15s)
+        from ml_analysis import get_ml_identifier
+        
         ml = get_ml_identifier()
         if ml is None:
             raise HTTPException(status_code=501, detail="PyRIID not installed")

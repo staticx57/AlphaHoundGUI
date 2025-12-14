@@ -177,6 +177,25 @@ export class AlphaHoundAPI {
         return response;
     }
 
+    /**
+     * Exports spectrum data as N42 XML file.
+     * @param {Object} data - Spectrum data including counts, energies, metadata
+     * @returns {Promise<Response>} N42 XML file response
+     * @throws {Error} If N42 export fails
+     */
+    async exportN42(data) {
+        const response = await fetch('/export/n42', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const errJson = await response.json();
+            throw new Error(errJson.detail || 'N42 export failed');
+        }
+        return response;
+    }
+
     // WebSocket Logic
     setupDoseWebSocket(onDoseRate, onConnectionStatus) {
         this.listeners.onDoseRate = onDoseRate;

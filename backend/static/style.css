@@ -477,6 +477,18 @@ tbody tr:hover {
     opacity: 0.9;
 }
 
+/* Accent button - for export actions */
+.btn-accent {
+    background: var(--accent-color);
+    color: #0f172a;
+    border-color: var(--accent-color);
+    font-weight: 600;
+}
+
+.btn-accent:hover {
+    opacity: 0.9;
+}
+
 select {
     background: var(--bg-color);
     border: 1px solid var(--border-color);

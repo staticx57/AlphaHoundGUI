@@ -111,6 +111,16 @@ async def acquire_spectrum(request: SpectrumRequest):
         isotopes = []
         decay_chains = []
     
+    # Calculate acquisition timing for N42 export
+    from datetime import datetime, timezone, timedelta
+    
+    # Use actual duration if provided, otherwise use count_minutes
+    actual_duration_seconds = request.actual_duration_s if request.actual_duration_s else (count_minutes * 60)
+    
+    # Calculate start time (current time minus acquisition duration)
+    end_time = datetime.now(timezone.utc)
+    start_time = end_time - timedelta(seconds=actual_duration_seconds)
+    
     return {
         "counts": counts,
         "energies": energies,
@@ -120,7 +130,13 @@ async def acquire_spectrum(request: SpectrumRequest):
         "metadata": {
             "source": "AlphaHound Device",
             "channels": len(counts),
-            "count_time_minutes": (request.actual_duration_s / 60) if request.actual_duration_s else count_minutes
+            "count_time_minutes": (actual_duration_seconds / 60),
+            # N42 export fields
+            "acquisition_time": actual_duration_seconds,
+            "live_time": actual_duration_seconds,  # AlphaHound has no dead-time correction
+            "real_time": actual_duration_seconds,   # AlphaHound has no dead-time correction
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat()
         }
     }
 

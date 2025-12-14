@@ -1,3 +1,4 @@
+// Updated: 2024-12-14 17:00 - N42 Export Fixed
 import { api } from './api.js';
 import { ui } from './ui.js';
 import { chartManager, DoseRateChart } from './charts.js?v=2.1';
@@ -167,6 +168,51 @@ function setupEventListeners() {
             setTimeout(() => window.URL.revokeObjectURL(url), 1000);
         } catch (err) {
             alert('Error generating PDF: ' + err.message);
+        } finally {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }
+    });
+
+    // N42 Export
+    document.getElementById('btn-export-n42').addEventListener('click', async () => {
+        if (!currentData) {
+            alert('No spectrum data to export');
+            return;
+        }
+
+        const btn = document.getElementById('btn-export-n42');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '⏳ Exporting...';
+        btn.disabled = true;
+
+        try {
+            const response = await api.exportN42({
+                counts: currentData.counts,
+                energies: currentData.energies,
+                metadata: {
+                    live_time: currentData.metadata?.live_time || currentData.metadata?.acquisition_time || 1.0,
+                    real_time: currentData.metadata?.real_time || currentData.metadata?.acquisition_time || 1.0,
+                    start_time: currentData.metadata?.start_time || new Date().toISOString(),
+                    source: currentData.metadata?.source || 'AlphaHound Device',
+                    channels: currentData.counts.length
+                },
+                peaks: currentData.peaks || [],
+                isotopes: currentData.isotopes || [],
+                filename: currentData.metadata?.filename || 'spectrum'
+            });
+
+            if (!response.ok) throw new Error('N42 export failed');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentData.metadata?.filename || 'spectrum'}.n42`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('Error exporting N42: ' + err.message);
         } finally {
             btn.innerHTML = originalHTML;
             btn.disabled = false;
