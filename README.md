@@ -158,25 +158,50 @@ To access the application from other devices on your network:
 - View spectrum analysis from multiple screens
 - Collaborative spectrum analysis with team members
 
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Theory of Operation](THEORY_OF_OPERATION.md) | System architecture, data flow, algorithms, and technical details |
+| [Modularity Guide](MODULARITY_GUIDE.md) | How to extend the application: add devices, isotopes, analysis methods |
+| [Calibration Guide](CALIBRATION_GUIDE.md) | Energy calibration, accuracy improvement, reference energy tables |
+| [PyRIID Guide](PYRIID_GUIDE.md) | Machine learning integration with PyRIID from Sandia National Labs |
+
 ## Project Structure
 
 ```
-N42 viewer/
-├── archive/             # Archived data and scripts
-│   └── legacy_version/  # Original AlphaHound files
+AlphaHoundGUI/
 ├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── n42_parser.py        # Custom N42 XML parser
-│   ├── peak_detection.py   # Peak finding algorithm
-│   ├── isotope_database.py # Gamma-ray energy database
-│   ├── requirements.txt     # Python dependencies
-│   └── static/              # Frontend files
-│       ├── index.html
-│       ├── style.css
-│       └── app.js
-├── AlphaHound-main/        # AlphaHound integration (see Credits)
-├── install_deps.bat        # One-time dependency installer
-└── run.bat                 # Quick-start script (no venv required)
+│   ├── main.py                 # FastAPI application entry point
+│   ├── core.py                 # Shared settings and utilities
+│   ├── routers/
+│   │   ├── analysis.py         # File upload, peak detection, ML endpoints
+│   │   ├── device.py           # AlphaHound device control
+│   │   └── isotopes.py         # Custom isotope CRUD
+│   ├── alphahound_serial.py    # Device serial communication driver
+│   ├── isotope_database.py     # 100+ isotopes from IAEA/NNDC databases
+│   ├── peak_detection.py       # scipy-based peak finding
+│   ├── ml_analysis.py          # PyRIID ML integration
+│   ├── n42_parser.py           # N42/XML file parser
+│   ├── csv_parser.py           # CSV file parser
+│   ├── detector_efficiency.py  # Detector calibration data
+│   ├── roi_analysis.py         # Region-of-interest analysis
+│   ├── report_generator.py     # PDF export
+│   └── static/
+│       ├── index.html          # Main HTML interface
+│       ├── style.css           # Application styling
+│       └── js/
+│           ├── main.js         # Application logic
+│           ├── api.js          # Backend API calls
+│           ├── charts.js       # Chart.js configuration
+│           └── ui.js           # UI rendering helpers
+├── archive/                    # Archived data and scripts
+├── THEORY_OF_OPERATION.md      # System architecture documentation
+├── MODULARITY_GUIDE.md         # Extension guide for developers
+├── CALIBRATION_GUIDE.md        # Calibration and accuracy guide
+├── PYRIID_GUIDE.md             # ML integration documentation
+├── install_deps.bat            # One-time dependency installer
+└── run.bat                     # Quick-start script
 ```
 
 ## AlphaHound Integration

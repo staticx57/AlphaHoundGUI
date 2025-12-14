@@ -209,3 +209,9 @@
     - [ ] Tune ML for Radiacode FWHM profiles (7.4%-8.4%)
     - **Reference**: See [RADIACODE_INTEGRATION_PLAN.md](RADIACODE_INTEGRATION_PLAN.md)
 
+- [ ] **N42 File Format Research & Exporter**:
+    - [ ] Research N42 (ANSI N42.42) file format specification
+    - [ ] Document N42 XML schema and required elements
+    - [ ] Implement N42 exporter for acquired spectra
+    - [ ] Add N42 export option to UI (alongside CSV/JSON)
+    - [ ] Ensure compatibility with common spectrum analysis tools

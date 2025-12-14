@@ -10,6 +10,9 @@ import asyncio
 from alphahound_serial import device as alphahound_device
 from routers import device, analysis, isotopes
 
+# Track active WebSocket connections for session management
+active_websockets = set()
+
 # Rate limiter: 60 requests per minute per IP
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
@@ -41,8 +44,11 @@ def read_index():
 # Moving it to main.py avoids any router prefix complexity for WS which can be finicky
 @app.websocket("/ws/dose")
 async def websocket_dose_stream(websocket: WebSocket):
-    """WebSocket endpoint for real-time dose rate streaming"""
+    """WebSocket endpoint for real-time dose rate streaming with session management"""
     await websocket.accept()
+    active_websockets.add(websocket)
+    print(f"[WebSocket] Client connected. Active connections: {len(active_websockets)}")
+    
     try:
         while True:
             if alphahound_device.is_connected():
@@ -52,15 +58,24 @@ async def websocket_dose_stream(websocket: WebSocket):
                 await websocket.send_json({"dose_rate": None, "status": "disconnected"})
             await asyncio.sleep(1)
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        print(f"[WebSocket] Error: {e}")
     finally:
+        # Remove from active connections
+        active_websockets.discard(websocket)
+        print(f"[WebSocket] Client disconnected. Active connections: {len(active_websockets)}")
+        
+        # Auto-disconnect device if no active sessions (prevents zombie connections)
+        if len(active_websockets) == 0 and alphahound_device.is_connected():
+            print("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
+            alphahound_device.disconnect()
+        
         # Only close if the connection is still open
         if websocket.client_state.name != "DISCONNECTED":
             await websocket.close()
 
 if __name__ == "__main__":
     import uvicorn
-    # For localhost only: uvicorn.run(app, host="127.0.0.1", port=3200)
-    # For LAN access, use: uvicorn.run(app, host="0.0.0.0", port=3200)
-    # Then access from other devices at: http://<your-ip>:3200
-    uvicorn.run(app, host="0.0.0.0", port=3200)
+    # Default: 0.0.0.0 allows both localhost AND LAN access
+    # Access locally at: http://localhost:3200
+    # Access from LAN at: http://<your-ip>:3200
+    uvicorn.run(app, host="0.0.0.0", port=3200, log_level="info")
