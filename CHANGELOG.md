@@ -100,6 +100,9 @@
   - Peak count penalty: 30% penalty for single matches, 10% bonus for 3+ matches
   - All decay chains (U-238, Th-232, U-235) now properly defined and tracked
 - **Detected Peaks Table**: Completely redesigned with sticky headers, backdrop blur, hover effects, and right-aligned numerical data (v6 CSS).
+- **Isotope Identification**: Implemented intensity-weighted scoring to prioritize diagnostic peaks (fixes weak Pb-212/Pb-214 confusion).
+- **Decay Chain Logic**: Enforced stricter confidence threshold (>40%) for flagging Uranium/Thorium chains.
+- **Detector Calibration**: Reconfigured backend to enforce 3.0 keV/channel (replacing device's 7.4 default) for accurate peak alignment.
 
 ### Fixed
 - **Page Load Crash**: Fixed `main.js` syntax error (extra brace) that prevented application load.

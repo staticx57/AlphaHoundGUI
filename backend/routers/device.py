@@ -95,7 +95,9 @@ async def acquire_spectrum(request: SpectrumRequest):
             
     spectrum = alphahound_device.get_spectrum()
     counts = [count for count, energy in spectrum]
-    energies = [energy for count, energy in spectrum]
+    # Override device calibration with requested 3.0 keV/channel
+    # energies = [energy for count, energy in spectrum]  # OLD
+    energies = [i * 3.0 for i in range(len(counts))]     # NEW (Forced 3.0 keV)
     
     peaks = detect_peaks(energies, counts)
     if peaks:

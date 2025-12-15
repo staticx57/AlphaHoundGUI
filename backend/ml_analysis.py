@@ -111,7 +111,7 @@ class MLIdentifier:
         self.is_trained = False
         self.model_type = model_type if model_type in ML_MODEL_TYPES else "hobby"
         self.n_channels = 1024  # AlphaHound standard channel count
-        self.keV_per_channel = 7.4  # AlphaHound actual calibration: ~7.4 keV/channel
+        self.keV_per_channel = 3.0  # AlphaHound actual calibration: ~3.0 keV/channel
         # AlphaHound CsI(Tl) resolution: 10% FWHM at 662 keV
         self.reference_fwhm_fraction = 0.10  # 10% at 662 keV
         self.reference_energy = 662.0  # keV

@@ -230,3 +230,15 @@
     - [x] ✅ ISO 8601 duration parsing for LiveTime/RealTime
     - [x] ✅ Standards-compliant output verified against N42.42-2006 schema
 
+- [x] **Tuning & Calibration (Dec 2025)**:
+    - ✅ **Intensity-Weighted Scoring**: Solved misidentification of Thorium (Pb-212) as Uranium (Pb-214) by penalizing missing diagnostic peaks.
+    - ✅ **Strict Chain Triggers**: Enforced >40% confidence threshold for flagging Uranium/Thorium chains.
+    - ✅ **Calibration Correction**: Validated that 3.0 keV/channel provides correct peak alignment (overriding device's 7.4 default).
+    - ✅ **Configuration Update**: Updated `ml_analysis.py` and `device.py` to enforce 3.0 keV scaling.
+    - ✅ **Bug Fixes**: Resolved "Spread Syntax" chart crash and Auto-BG floating peak artifacts.
+
+## Next Steps
+- [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`).
+- [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally.
+- [ ] **Temperature Compensation**: If serial protocol reveals temp data, use it for gain stabilization.
+

@@ -1,0 +1,35 @@
+[IAEA Parser] Loaded 41 isotopes from IAEA data
+[Isotope Database] Loaded IAEA data for 41 isotopes
+Analyzing file: data/acquisitions/spectrum_2025-12-15_14-15-26.n42
+
+==================== COMPARISON RESULTS ====================
+Total Counts: 43120
+Channels: 1024
+
+--- Calibration: 3.0 keV/Channel ---
+Detected Peaks: 46
+Th-232 (Chain): 42.0% (1 matches) [Matches: 63.8keV]
+Pb-212 (Th-232): 42.0% (1 matches) [Matches: 238.6keV]
+U-238 (Chain):  66.0% (3 matches) [Matches: 49.5keV, 63.3keV, 1001.0keV]
+Pb-214 (U-238):  100.0% (3 matches) [Matches: 295.2keV, 351.9keV, 241.0keV]
+
+Top 5 Identities:
+  Ba-133: 100.0% (5 matches)
+  Pb-214: 100.0% (3 matches)
+  Bi-214: 100.0% (3 matches)
+  Ac-228: 100.0% (3 matches)
+  Na-22: 100.0% (2 matches)
+
+--- Calibration: 7.4 keV/Channel ---
+Detected Peaks: 46
+Th-232 (Chain): 42.0% (1 matches) [Matches: 63.8keV]
+Pb-212 (Th-232): Not Detected
+U-238 (Chain):  40.0% (2 matches) [Matches: 63.3keV, 92.4keV]
+Pb-214 (U-238):  25.7% (1 matches) [Matches: 295.2keV]
+
+Top 5 Identities:
+  Th-234: 100.0% (2 matches)
+  Bi-214: 66.7% (2 matches)
+  Ac-228: 66.7% (2 matches)
+  Ba-133: 65.0% (3 matches)
+  Bi-212: 57.4% (1 matches)

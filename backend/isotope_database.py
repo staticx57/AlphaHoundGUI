@@ -382,22 +382,37 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
             
         matches = 0
         matched_peaks = []
+        total_intensity = 0.0
+        matched_intensity = 0.0
         
         for gamma_energy in gamma_energies:
+            # Get intensity weight (yield) from IAEA data
+            # Returns 1.0 if data unavailable (fallback to simple counting)
+            intensity = get_gamma_intensity(isotope, gamma_energy)
+            total_intensity += intensity
+
+            is_match = False
             for peak in peaks:
                 energy_diff = abs(peak['energy'] - gamma_energy)
                 if energy_diff <= energy_tolerance:
                     matches += 1
+                    matched_intensity += intensity
                     matched_peaks.append({
                         'expected': gamma_energy,
                         'observed': peak['energy'],
-                        'diff': energy_diff
+                        'diff': energy_diff,
+                        'intensity': intensity
                     })
+                    is_match = True
                     break
         
         if matches > 0:
-            # ========== CONFIDENCE CALCULATION ==========
-            base_confidence = (matches / len(gamma_energies)) * 100
+            # ========== CONFIDENCE CALCULATION (Intensity Weighted) ==========
+            # If we have intensity data, weighted score penalizes missing strong peaks
+            if total_intensity > 0:
+                base_confidence = (matched_intensity / total_intensity) * 100
+            else:
+                base_confidence = (matches / len(gamma_energies)) * 100
             
             # PENALTY 1: Single-line isotopes capped at 60%
             # Rationale: 1/1 match is often coincidental
@@ -415,12 +430,13 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
             abundance_weight = ABUNDANCE_WEIGHTS.get(isotope, 1.0)
             weighted_confidence = base_confidence * abundance_weight
             
-            # Track chain detection
-            if isotope in U238_CHAIN:
+            # Track chain detection (STRICTER: require >40% confidence to trigger chain)
+            # This prevents weak single matches (e.g. Pb-214 at 241 keV) from flagging entire Uranium series
+            if isotope in U238_CHAIN and weighted_confidence > 40.0:
                 chains_detected['u238'] = True
-            if isotope in TH232_CHAIN:
+            if isotope in TH232_CHAIN and weighted_confidence > 40.0:
                 chains_detected['th232'] = True
-            if isotope in U235_CHAIN:
+            if isotope in U235_CHAIN and weighted_confidence > 40.0:
                 chains_detected['u235'] = True
             
             isotope_matches[isotope] = {
