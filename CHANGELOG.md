@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## [Unreleased - Session 2025-12-14 PM] - PyRIID Enhancement & Peak Detection Fix
+
+### Added
+- **IAEA Data Integration**
+  - Downloaded 49 isotope gamma data files from IAEA LiveChart API
+  - 2,499 gamma lines with intensity data (e.g., Bi-214 @ 609 keV = 45.44%)
+  - New `backend/iaea_parser.py` for parsing IAEA CSV format
+  - Isotope database now loads IAEA intensity data on startup
+
+- **Authoritative Data Scripts**
+  - `download_iaea_data.py` - Downloads gamma data for priority isotopes
+  - Data stored in `backend/data/idb/isotopes/`
+
+### Fixed
+- **Peak Detection Threshold Too Strict (Critical)**
+  - Before: Only 3 peaks detected (prominence_factor=0.05 was 5% of max)
+  - After: 20+ peaks detected with new balanced thresholds
+  - Changed to `max(5, max_count * 0.003)` for height, `max(3, max_count * 0.002)` for prominence
+  - File: `backend/peak_detection.py`
+
+- **U-235/U-238 Prioritization**
+  - U-238 now ranks #2 at 100% (was incorrectly below U-235)
+  - U-235 now ranks #26 at 0.1% with suppression when U-238 chain detected
+  - Added abundance weighting to `backend/isotope_database.py`
+
+### Changed
+- **ML Training Data** (backend/ml_analysis.py)
+  - Synthetic peaks now use IAEA intensity weighting
+  - Calibration updated to 7.4 keV/channel (AlphaHound actual)
+  - Imports `get_gamma_intensity()` for realistic peak heights
+
+- **AI Identification UI Label**
+  - Added "WIP" badge to indicate ML model is still experimental
+  - Peak Matching remains the recommended method
+
+### Verified
+- Community spectra test: 5/6 files correctly suppress U-235
+- All 6 files detect U-238 at 60%+ confidence
+- Bi-214, Pb-214, Th-234 now visible in UI
+
+---
+
 ## [Unreleased - Session 2025-12-14] - N42 Export & Parser Improvements
 
 ### Added

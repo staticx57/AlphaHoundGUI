@@ -1,1 +1,27 @@
-{"detail":[{"type":"json_invalid","loc":["body",1],"msg":"JSON decode error","input":{},"ctx":{"error":"Expecting property name enclosed in double quotes"}}]}
+[IAEA Parser] Loaded 41 isotopes from IAEA data
+[Isotope Database] Loaded IAEA data for 41 isotopes
+Loaded: 1024 channels, 190623 total counts
+Found 80 peaks
+
+=== ISOTOPE IDENTIFICATION (Top 10) ===
+Ba-133        100.0% (raw: 100.0%, weight: 1.0) [5/5 peaks]
+U-238         100.0% (raw: 100.0%, weight: 1.0) [5/5 peaks]
+Pb-214        100.0% (raw: 100.0%, weight: 1.0) [3/3 peaks]
+Ac-228        100.0% (raw: 100.0%, weight: 1.0) [3/3 peaks]
+Co-60         100.0% (raw: 100.0%, weight: 1.0) [2/2 peaks]
+Th-234        100.0% (raw: 100.0%, weight: 1.0) [2/2 peaks]
+Pa-234m       100.0% (raw: 100.0%, weight: 1.0) [2/2 peaks]
+Tl-201        100.0% (raw: 100.0%, weight: 1.0) [2/2 peaks]
+Cs-137        100.0% (raw: 100.0%, weight: 1.0) [1/1 peaks]
+Am-241        100.0% (raw: 100.0%, weight: 1.0) [1/1 peaks]
+
+=== DECAY CHAIN DETECTION ===
+U-235 Chain     100.0% - 3/3 indicators
+U-238 Chain      95.0% - 5/5 indicators
+Th-232 Chain     91.7% - 3/3 indicators
+
+=== U-235 vs U-238 RANKING ===
+U-238 rank: #2 with 100.0% confidence
+U-235 rank: #26 with 0.1% confidence
+
+[OK] SUCCESS: U-238 correctly ranks ABOVE U-235!

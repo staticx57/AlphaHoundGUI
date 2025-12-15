@@ -1,0 +1,90 @@
+======================================================================
+Bi-214 ANALYSIS - keV CALIBRATED FILES ONLY
+======================================================================
+
+======================================================================
+FILE: Uraninite Ore.csv
+Channels: 1024, Total counts: 199,185
+Energy range: 23.4 - 14618.0 keV
+
+Bi-214 Peak Regions:
+  609.3 keV (ch 133):
+    Region counts: [696, 695, 664, 682, 688, 673, 630, 608, 586, 574, 536]
+    Max: 696 at 589.5 keV
+  1120.3 keV (ch 247):
+    Region counts: [116, 110, 118, 98, 107, 112, 98, 84, 96, 91, 96]
+    Max: 118 at 1107.2 keV
+  1764.5 keV (ch 360):
+    Region counts: [39, 38, 37, 39, 34, 29, 35, 37, 36, 33, 35]
+    Max: 39 at 1731.2 keV
+
+Peak Detection (threshold=381):
+  Peaks found: 12
+  MATCH: Bi-214 609.3 keV = peak at 589.5 keV
+
+======================================================================
+FILE: 7.5 x 4 Deep Red Uranium Glaze Bowl.csv
+Channels: 1024, Total counts: 51,704
+Energy range: 10.0 - 7469.5 keV
+
+Bi-214 Peak Regions:
+  609.3 keV (ch 252):
+    Region counts: [5, 7, 10, 8, 11, 7, 8, 7, 6, 6, 8]
+    Max: 11 at 607.7 keV
+  1120.3 keV (ch 383):
+    Region counts: [1, 2, 2, 3, 2, 1, 0, 0, 1, 1, 2]
+    Max: 3 at 1109.8 keV
+  1764.5 keV (ch 504):
+    Region counts: [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1]
+    Max: 1 at 1760.2 keV
+
+Peak Detection (threshold=67):
+  Peaks found: 12
+  NO Bi-214 peaks detected!
+  Top 5 detected peaks:
+    91.2 keV, counts: 1061
+    75.9 keV, counts: 1005
+    190.6 keV, counts: 469
+    118.5 keV, counts: 437
+    146.7 keV, counts: 350
+
+======================================================================
+FILE: Orange Red Wing Chevron Salt Cellar.csv
+Channels: 1024, Total counts: 7,209
+Energy range: 23.4 - 14618.0 keV
+
+Bi-214 Peak Regions:
+  609.3 keV (ch 133):
+    Region counts: [5, 4, 3, 5, 1, 4, 3, 4, 3, 3, 5]
+    Max: 5 at 589.5 keV
+  1120.3 keV (ch 247):
+    Region counts: [0, 1, 0, 0, 1, 0, 0, 0, 1, 2, 2]
+    Max: 2 at 1141.6 keV
+  1764.5 keV (ch 360):
+    Region counts: [0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0]
+    Max: 2 at 1770.8 keV
+
+Peak Detection (threshold=5):
+  Peaks found: 23
+  MATCH: Bi-214 609.3 keV = peak at 602.2 keV
+
+======================================================================
+FILE: Orange Fiestaware Saucer.csv
+Channels: 1024, Total counts: 48,110
+Energy range: 23.4 - 14618.0 keV
+
+Bi-214 Peak Regions:
+  609.3 keV (ch 133):
+    Region counts: [36, 32, 26, 35, 30, 29, 31, 38, 31, 28, 29]
+    Max: 38 at 619.2 keV
+  1120.3 keV (ch 247):
+    Region counts: [0, 7, 5, 0, 2, 8, 7, 8, 6, 7, 2]
+    Max: 8 at 1121.9 keV
+  1764.5 keV (ch 360):
+    Region counts: [0, 2, 3, 2, 1, 0, 0, 6, 3, 3, 0]
+    Max: 6 at 1777.5 keV
+
+Peak Detection (threshold=34):
+  Peaks found: 17
+  MATCH: Bi-214 609.3 keV = peak at 589.5 keV
+  MATCH: Bi-214 609.3 keV = peak at 619.2 keV

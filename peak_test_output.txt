@@ -1,0 +1,21 @@
+[IAEA Parser] Loaded 41 isotopes from IAEA data
+[Isotope Database] Loaded IAEA data for 41 isotopes
+[WARNING] Becquerel parsing failed: File type .csv can not be read. Attempting manual fallback.
+
+=== CSV PARSER RESULTS ===
+Counts: 1024 channels
+Energies: 1024 values
+Is calibrated: True
+
+=== PEAKS DETECTED: 4 ===
+  1. 108.4 keV, 5038 counts
+  2. 77.5 keV, 3484 counts
+  3. 42.0 keV, 1112 counts
+  4. 195.8 keV, 725 counts
+
+=== TOP 5 ISOTOPES ===
+  1. Th-234: 100.0%
+  2. Am-241: 100.0%
+  3. U-234: 100.0%
+  4. Ra-226: 100.0%
+  5. Th-232: 100.0%

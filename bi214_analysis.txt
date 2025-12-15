@@ -1,0 +1,52 @@
+============================================================
+INVESTIGATING Bi-214 DETECTION
+============================================================
+File: 14 hour spectrum of radium dial watch.csv
+Total channels: 1024, Total counts: 15,213,989
+
+=== Bi-214 Expected Peaks ===
+
+Bi-214 @ 609.3 keV (expected channel ~203):
+  Region ch 198-209: [7022, 7121, 7123, 6796, 6721, 6755, 6572, 6794, 6600, 6442, 6537]
+  Max in region: 7123 at channel 200
+  Energy at max: 600.0 keV
+
+Bi-214 @ 1120.3 keV (expected channel ~373):
+  Region ch 368-379: [3570, 3417, 3450, 3382, 3450, 3389, 3341, 3314, 3337, 3138, 3137]
+  Max in region: 3570 at channel 368
+  Energy at max: 1104.0 keV
+
+Bi-214 @ 1764.5 keV (expected channel ~588):
+  Region ch 583-594: [1347, 1334, 1340, 1293, 1248, 1264, 1221, 1156, 1156, 1140, 1099]
+  Max in region: 1347 at channel 583
+  Energy at max: 1749.0 keV
+
+============================================================
+PEAK DETECTION RESULTS
+============================================================
+Height threshold used: 3768.81
+Total peaks found: 9
+
+All detected peaks:
+  Channel    4 =    12.0 keV, counts: 67,806
+  Channel   18 =    54.0 keV, counts: 152,181
+  Channel   31 =    93.0 keV, counts: 376,881
+  Channel   60 =   180.0 keV, counts: 65,429
+  Channel   75 =   225.0 keV, counts: 83,453
+  Channel   98 =   294.0 keV, counts: 60,535
+  Channel  120 =   360.0 keV, counts: 70,393
+  Channel  143 =   429.0 keV, counts: 77,803
+  Channel  246 =   738.0 keV, counts: 25,846
+
+============================================================
+Bi-214 MATCHING
+============================================================
+  Bi-214 609.3 keV: NO MATCH FOUND
+    Region counts: [7123, 6796, 6721, 6755, 6572, 6794, 6600]
+    Max in region: 7123 (threshold: 3768.81)
+  Bi-214 1120.3 keV: NO MATCH FOUND
+    Region counts: [3450, 3382, 3450, 3389, 3341, 3314, 3337]
+    Max in region: 3450 (threshold: 3768.81)
+  Bi-214 1764.5 keV: NO MATCH FOUND
+    Region counts: [1340, 1293, 1248, 1264, 1221, 1156, 1156]
+    Max in region: 1340 (threshold: 3768.81)

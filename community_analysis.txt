@@ -1,0 +1,187 @@
+================================================================================
+COMMUNITY SPECTRA CROSS-REFERENCE ANALYSIS
+================================================================================
+
+================================================================================
+FILE: 14 hour spectrum of radium dial watch.csv
+EXPECTED: Ra-226, Pb-214, Bi-214 (U-238 Chain (Radium))
+--------------------------------------------------------------------------------
+  Format: Data,Channel (community style)
+  Channels: 1024, keV/ch: 3.0
+  Total counts: 15,213,989
+  Energy range: 0.0 - 3069.0 keV
+  Peaks found: 9
+TOP 10 DETECTED:
+   1. Pb-214        100.0% <-- EXPECTED
+   2. Th-234        100.0%
+   3. Am-241        100.0%
+   4. U-234         100.0%
+   5. Ra-226        100.0% <-- EXPECTED
+   6. Th-232        100.0%
+   7. Pb-212        100.0%
+   8. I-131         100.0%
+   9. Ba-133         80.0%
+  10. U-238          60.0%
+
+MATCHES: Ra-226 (#5, 100.0%), Pb-214 (#1, 100.0%)
+MISSING: Bi-214
+U-235: Correctly NOT in top 10 (Good!)
+
+DECAY CHAINS:
+  U-235 Chain      58.3% (2/3 indicators)
+  U-238 Chain      55.0% (3/5 indicators)
+  Th-232 Chain     25.0% (1/3 indicators)
+
+================================================================================
+FILE: 7.5 x 4 Deep Red Uranium Glaze Bowl.csv
+EXPECTED: U-238, Bi-214, Pb-214, Ra-226 (U-238 Chain (Uranium Glaze))
+--------------------------------------------------------------------------------
+  Format: Data,Channel (community style)
+  Channels: 1024, keV/ch: 0.75
+  Total counts: 51,704
+  Energy range: 0.0 - 767.2 keV
+  Peaks found: 11
+TOP 10 DETECTED:
+   1. Th-234        100.0%
+   2. Am-241        100.0%
+   3. U-234         100.0%
+   4. Th-232        100.0%
+   5. U-238          60.0% <-- EXPECTED
+   6. Tl-201         50.0%
+   7. Ba-133         20.0%
+   8. Th-231          0.5%
+
+MATCHES: U-238 (#5, 60.0%)
+MISSING: Bi-214, Pb-214, Ra-226
+U-235: Correctly NOT in top 10 (Good!)
+
+DECAY CHAINS:
+  U-238 Chain      15.0% (1/5 indicators)
+
+================================================================================
+FILE: Orange Fiestaware Saucer.csv
+EXPECTED: U-238, Bi-214, Pb-214 (U-238 Chain (Fiestaware))
+--------------------------------------------------------------------------------
+  Format: Data,Channel (community style)
+  Channels: 1024, keV/ch: 0.75
+  Total counts: 48,110
+  Energy range: 0.0 - 767.2 keV
+  Peaks found: 7
+TOP 10 DETECTED:
+   1. Th-234        100.0%
+   2. Am-241        100.0%
+   3. U-234         100.0%
+   4. Th-232        100.0%
+   5. U-238          60.0% <-- EXPECTED
+   6. Ba-133         20.0%
+   7. Th-231          0.5%
+
+MATCHES: U-238 (#5, 60.0%)
+MISSING: Bi-214, Pb-214
+U-235: Correctly NOT in top 10 (Good!)
+
+DECAY CHAINS:
+  U-238 Chain      15.0% (1/5 indicators)
+
+================================================================================
+FILE: Orange Red Wing Chevron Salt Cellar.csv
+EXPECTED: U-238, Bi-214, Pb-214 (U-238 Chain (Uranium Glaze))
+--------------------------------------------------------------------------------
+  Format: Data,Channel (community style)
+  Channels: 1024, keV/ch: 0.75
+  Total counts: 7,209
+  Energy range: 0.0 - 767.2 keV
+  Peaks found: 18
+TOP 10 DETECTED:
+   1. Th-234        100.0%
+   2. Tl-201        100.0%
+   3. Am-241        100.0%
+   4. U-234         100.0%
+   5. Th-232        100.0%
+   6. Tc-99m        100.0%
+   7. U-238          60.0% <-- EXPECTED
+   8. Ba-133         20.0%
+   9. Th-231          1.0%
+  10. Ra-223          0.3%
+
+MATCHES: U-238 (#7, 60.0%)
+MISSING: Bi-214, Pb-214
+U-235: Correctly NOT in top 10 (Good!)
+
+DECAY CHAINS:
+  U-235 Chain      58.3% (2/3 indicators)
+  U-238 Chain      15.0% (1/5 indicators)
+
+================================================================================
+FILE: Uraninite Ore.csv
+EXPECTED: U-238, Bi-214, Pb-214, Ra-226, Pa-234m (U-238 Chain (Mineral Ore))
+--------------------------------------------------------------------------------
+  Format: Data,Channel (community style)
+  Channels: 1024, keV/ch: 0.75
+  Total counts: 199,185
+  Energy range: 0.0 - 767.2 keV
+  Peaks found: 16
+TOP 10 DETECTED:
+   1. Th-234        100.0%
+   2. Tl-201        100.0%
+   3. Am-241        100.0%
+   4. U-234         100.0%
+   5. Ra-226        100.0% <-- EXPECTED
+   6. Th-232        100.0%
+   7. Tc-99m        100.0%
+   8. U-238          60.0% <-- EXPECTED
+   9. Ba-133         20.0%
+  10. Th-231          1.0%
+
+MATCHES: U-238 (#8, 60.0%), Ra-226 (#5, 100.0%)
+MISSING: Bi-214, Pb-214, Pa-234m
+U-235: Correctly NOT in top 10 (Good!)
+
+DECAY CHAINS:
+  U-235 Chain      70.8% (2/3 indicators)
+  U-238 Chain      30.0% (2/5 indicators)
+
+================================================================================
+FILE: Uranium glass 9 hours.csv
+EXPECTED: U-238, Bi-214, Pb-214, Th-234 (U-238 Chain (Vaseline Glass))
+--------------------------------------------------------------------------------
+  Format: Data,Channel (community style)
+  Channels: 1024, keV/ch: 3.0
+  Total counts: 599,046
+  Energy range: 0.0 - 3069.0 keV
+  Peaks found: 4
+TOP 10 DETECTED:
+   1. Th-234        100.0% <-- EXPECTED
+   2. Am-241        100.0%
+   3. Th-232        100.0%
+   4. Pb-212        100.0%
+   5. U-238          60.0% <-- EXPECTED
+   6. Pb-214         33.3% <-- EXPECTED
+   7. Ba-133         20.0%
+   8. Th-227          1.0%
+   9. Th-231          0.5%
+  10. U-235           0.0% [SUPPRESSED]
+
+MATCHES: U-238 (#5, 60.0%), Pb-214 (#6, 33.3%), Th-234 (#1, 100.0%)
+MISSING: Bi-214
+WARNING: U-235 false positive detected at 0.0%
+
+DECAY CHAINS:
+  U-238 Chain      30.0% (2/5 indicators)
+  U-235 Chain      29.2% (1/3 indicators)
+  Th-232 Chain     25.0% (1/3 indicators)
+
+================================================================================
+SUMMARY
+================================================================================
+File                                                    Score     U-235 FP
+--------------------------------------------------------------------------------
+14 hour spectrum of radium dial watch.csv                67%    No (Good)
+7.5 x 4 Deep Red Uranium Glaze Bowl.csv                  25%    No (Good)
+Orange Fiestaware Saucer.csv                             33%    No (Good)
+Orange Red Wing Chevron Salt Cellar.csv                  33%    No (Good)
+Uraninite Ore.csv                                        40%    No (Good)
+Uranium glass 9 hours.csv                                75%    YES (BAD)
+--------------------------------------------------------------------------------
+AVERAGE                                                  46%
+U-235 False Positives: 1/6

@@ -1,5 +1,47 @@
+# ========== IAEA DATA INTEGRATION ==========
+# Load authoritative gamma data from IAEA NDS
+# This provides intensity weights for better peak matching
+
+try:
+    from iaea_parser import load_all_isotopes, get_isotope_gammas
+    IAEA_DATA = load_all_isotopes(min_intensity=0.5, top_n=15)
+    HAS_IAEA_DATA = True
+    print(f"[Isotope Database] Loaded IAEA data for {len(IAEA_DATA)} isotopes")
+except ImportError:
+    IAEA_DATA = {}
+    HAS_IAEA_DATA = False
+    print("[Isotope Database] IAEA parser not available, using built-in data only")
+except Exception as e:
+    IAEA_DATA = {}
+    HAS_IAEA_DATA = False
+    print(f"[Isotope Database] IAEA data load failed: {e}")
+
+
+def get_gamma_intensity(isotope: str, energy: float) -> float:
+    """Get relative intensity (0.0-1.0) for a gamma line from IAEA data.
+    
+    Returns 1.0 (full weight) if intensity data not available.
+    """
+    if not HAS_IAEA_DATA or isotope not in IAEA_DATA:
+        return 1.0
+    
+    gammas = IAEA_DATA[isotope].get('gammas', [])
+    if not gammas:
+        return 1.0
+    
+    # Find matching gamma line (within 2 keV)
+    for gamma_energy, intensity in gammas:
+        if abs(gamma_energy - energy) < 2.0:
+            # Normalize intensity (max is ~100%, convert to 0-1 scale)
+            # Intensities above 10% get full weight, below are scaled
+            return min(1.0, intensity / 10.0)
+    
+    return 0.5  # Default for unmatched lines
+
+
 # ========== SIMPLE MODE DATABASE (Hobby-Focused) ==========
 # Optimized for common hobby sources, background radiation, and basic medical/industrial
+# IMPORTANT: Uranium detection uses daughter products for reliable identification
 ISOTOPE_DATABASE_SIMPLE = {
     # Medical/Industrial calibration sources
     "Co-60": [1173.2, 1332.5],
@@ -12,11 +54,12 @@ ISOTOPE_DATABASE_SIMPLE = {
     "K-40": [1460.8],
     
     # U-238 Decay Chain (Uranium series) - Hobby sources
-    "U-238": [49.55],
-    "Th-234": [63.3],
+    # NOTE: U-238 itself has weak gammas, detected via daughter products
+    "U-238": [49.55, 63.3, 92.4, 1001.0, 766.4],  # Includes Th-234, Pa-234m signatures
+    "Th-234": [63.3, 92.4],
     "Pa-234m": [1001.0, 766.4],
     "U-234": [53.2],
-    "Ra-226": [186.2],
+    "Ra-226": [186.2],  # KEY: This is in U-238 chain, NOT U-235
     "Pb-214": [295.2, 351.9, 241.0],
     "Bi-214": [609.3, 1120.3, 1764.5],
     
@@ -28,7 +71,9 @@ ISOTOPE_DATABASE_SIMPLE = {
     "Tl-208": [583.2, 860.6, 2614.5],
     
     # U-235 Decay Chain (Actinium series)
-    "U-235": [185.7, 143.8, 163.4, 205.3],
+    # NOTE: 185.7 keV REMOVED - overlaps with Ra-226 (186.2) from U-238 chain
+    # Only use non-overlapping signatures
+    "U-235": [143.8, 163.4, 205.3],  # Removed 185.7 to prevent false positives
     "Th-231": [84.2, 163.3],
     "Th-227": [236.0],
     "Ra-223": [144.2, 269.0, 324.0],
@@ -289,10 +334,24 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     if not peaks:
         return []
     
+    # Natural abundance weights for isotope families
+    # Used to correctly prioritize common isotopes over rare ones
+    ABUNDANCE_WEIGHTS = {
+        "U-238": 1.0,      # 99.3% of natural uranium - full weight
+        "U-235": 0.01,     # 0.72% of natural uranium - strongly suppress
+        "Th-231": 0.01,    # U-235 daughter - also suppress
+        "Ra-223": 0.01,    # U-235 chain
+        "Th-227": 0.01,    # U-235 chain
+        # All other isotopes default to 1.0
+    }
+    
     # Get appropriate database for mode
     database = get_isotope_database(mode)
     
     isotope_matches = {}
+    
+    # Track if U-238 chain indicators are detected
+    u238_chain_detected = False
     
     # For each isotope in database
     for isotope, gamma_energies in database.items():
@@ -318,21 +377,36 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
         
         # Calculate confidence score
         if matches > 0:
-            # Confidence based on fraction of characteristic peaks found
-            confidence = (matches / len(gamma_energies)) * 100
+            # Base confidence from fraction of characteristic peaks found
+            base_confidence = (matches / len(gamma_energies)) * 100
             
-            # Return ALL matches - application layer will filter
+            # Apply abundance weighting (defaults to 1.0 for most isotopes)
+            abundance_weight = ABUNDANCE_WEIGHTS.get(isotope, 1.0)
+            weighted_confidence = base_confidence * abundance_weight
+            
+            # Track U-238 chain detection
+            if isotope in ["Bi-214", "Pb-214", "Pa-234m", "Ra-226", "U-238"]:
+                u238_chain_detected = True
+            
             isotope_matches[isotope] = {
                 'isotope': isotope,
-                'confidence': confidence,
+                'confidence': weighted_confidence,
+                'raw_confidence': base_confidence,
                 'matches': matches,
                 'total_lines': len(gamma_energies),
-                'matched_peaks': matched_peaks
+                'matched_peaks': matched_peaks,
+                'abundance_weight': abundance_weight
             }
     
-    # Sort by confidence
+    # Post-processing: If U-238 chain is detected, further suppress U-235
+    if u238_chain_detected and "U-235" in isotope_matches:
+        # Natural samples with U-238 chain shouldn't show high U-235
+        isotope_matches["U-235"]['confidence'] *= 0.1
+        isotope_matches["U-235"]['suppressed'] = True
+    
+    # Sort by weighted confidence, then by matches
     identified = sorted(isotope_matches.values(), 
-                       key=lambda x: (x['matches'], x['confidence']), 
+                       key=lambda x: (x['confidence'], x['matches']), 
                        reverse=True)
     
     # Return all matches (no top 5 limit for flexibility)

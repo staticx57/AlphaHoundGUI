@@ -35,14 +35,16 @@ except Exception as e:
     pd = None
     print(f"[ERROR] Unexpected error importing PyRIID: {e}")
 
-# Import the authoritative isotope database
+# Import the authoritative isotope database and IAEA intensity data
 try:
-    from isotope_database import ISOTOPE_DATABASE_ADVANCED
+    from isotope_database import ISOTOPE_DATABASE_ADVANCED, get_gamma_intensity, HAS_IAEA_DATA
     HAS_ISOTOPE_DB = True
     print(f"[ML] Loaded {len(ISOTOPE_DATABASE_ADVANCED)} isotopes from database")
 except ImportError:
     HAS_ISOTOPE_DB = False
+    HAS_IAEA_DATA = False
     ISOTOPE_DATABASE_ADVANCED = {}
+    def get_gamma_intensity(isotope, energy): return 1.0
     print("[WARNING] Isotope database not found, using fallback isotopes")
 
 
@@ -62,7 +64,7 @@ class MLIdentifier:
         self.model = None
         self.is_trained = False
         self.n_channels = 1024  # AlphaHound standard channel count
-        self.keV_per_channel = 3.0  # AlphaHound calibration: ~3 keV/channel
+        self.keV_per_channel = 7.4  # AlphaHound actual calibration: ~7.4 keV/channel
         # AlphaHound CsI(Tl) resolution: 10% FWHM at 662 keV
         self.reference_fwhm_fraction = 0.10  # 10% at 662 keV
         self.reference_energy = 662.0  # keV
@@ -113,44 +115,85 @@ class MLIdentifier:
         isotopes = list(isotope_data.keys())
         print(f"[ML] Training on {len(isotopes)} single isotopes from authoritative sources")
         
+        # =========================================================
+        # ABUNDANCE-WEIGHTED SAMPLE GENERATION
+        # Generate more samples for common isotopes, fewer for rare
+        # =========================================================
+        SAMPLE_WEIGHTS = {
+            # U-238 chain - MOST COMMON in natural uranium (99.3%)
+            "U-238": 5.0, "Bi-214": 5.0, "Pb-214": 5.0, "Ra-226": 5.0,
+            "Pa-234m": 3.0, "Th-234": 3.0,
+            # U-235 chain - RARE (0.72%) - heavily suppress
+            "U-235": 0.2, "Th-231": 0.2, "Ra-223": 0.2, "Th-227": 0.2,
+            # Th-232 chain - common in mantles
+            "Th-232": 3.0, "Tl-208": 3.0, "Ac-228": 3.0, "Pb-212": 3.0,
+            # Common isotopes
+            "K-40": 3.0, "Cs-137": 2.0, "Co-60": 2.0,
+            # Default weight = 1.0
+        }
+        
         # Define realistic multi-isotope mixtures (common real-world sources)
-        # Ratios tuned to match synthetic test data in archive/data/
+        # CRITICAL: Natural uranium mixtures should NOT include U-235 prominently
         mixtures = {
-            'UraniumGlass': {  # Uranium glass / Fiestaware - matches synthetic_uranium_glass.n42
-                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Th-234', 'U-238'],
-                'ratios': [10.0, 1.8, 0.9, 0.85, 0.7]  # Bi-214@609keV DOMINATES (~10x stronger)
+            'UraniumGlass': {  # Uranium glass / Fiestaware - U-238 chain ONLY
+                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'Th-234'],
+                'ratios': [10.0, 2.0, 1.0, 0.5, 0.4],  # Bi-214@609keV dominates
+                'weight': 3.0  # More training samples for this common source
             },
             'UraniumGlassWeak': {  # Weaker uranium glass sample
-                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Th-234', 'U-238'],
-                'ratios': [5.0, 1.5, 0.7, 0.6, 0.4]
+                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Th-234'],
+                'ratios': [5.0, 1.5, 0.7, 0.3],
+                'weight': 2.0
             },
-            'ThoriumMantle': {  # Gas lantern mantles
-                'isotopes': ['Th-232', 'Ac-228', 'Tl-208', 'Pb-212'],
-                'ratios': [0.1, 0.6, 1.0, 0.4]  # Tl-208 diagnostic at 2614 keV
+            'UraniumMineral': {  # Pitchblende, autunite - U-238 chain
+                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'U-238'],
+                'ratios': [8.0, 2.0, 1.5, 0.8, 0.3],
+                'weight': 1.5
+            },
+            'RadiumDial': {  # Vintage watch dials - Ra-226 dominant
+                'isotopes': ['Ra-226', 'Bi-214', 'Pb-214'],
+                'ratios': [1.0, 5.0, 1.5],
+                'weight': 1.5
+            },
+            'ThoriumMantle': {  # Gas lantern mantles - Th-232 chain
+                'isotopes': ['Tl-208', 'Ac-228', 'Pb-212', 'Th-232'],
+                'ratios': [1.0, 0.6, 0.4, 0.1],  # Tl-208 diagnostic at 2614 keV
+                'weight': 2.0
             },
             'MedicalWaste': {  # Hospital nuclear medicine waste
                 'isotopes': ['Tc-99m', 'I-131', 'Mo-99'],
-                'ratios': [1.0, 0.5, 0.3]
+                'ratios': [1.0, 0.5, 0.3],
+                'weight': 1.0
             },
             'IndustrialGauge': {  # Level/density gauges
                 'isotopes': ['Cs-137', 'Co-60'],
-                'ratios': [1.0, 0.8]
+                'ratios': [1.0, 0.8],
+                'weight': 1.5
             },
             'CalibrationSource': {  # Multi-isotope check source
                 'isotopes': ['Am-241', 'Ba-133', 'Cs-137', 'Co-60'],
-                'ratios': [0.7, 1.0, 0.9, 0.8]
+                'ratios': [0.7, 1.0, 0.9, 0.8],
+                'weight': 1.0
             },
             'NaturalBackground': {  # Typical background radiation
-                'isotopes': ['K-40', 'Bi-214', 'Tl-208'],
-                'ratios': [1.0, 0.4, 0.2]
+                'isotopes': ['K-40', 'Bi-214', 'Tl-208', 'Pb-214'],
+                'ratios': [1.0, 0.3, 0.1, 0.2],
+                'weight': 2.0
             }
         }
         
-        # Calculate total samples (single isotopes + mixtures)
-        n_samples_per_single = 15  # Samples per single isotope
-        n_samples_per_mixture = 25  # More samples for mixtures (more important)
-        n_single_samples = len(isotopes) * n_samples_per_single
-        n_mixture_samples = len(mixtures) * n_samples_per_mixture
+        # Calculate total samples with abundance weighting
+        base_samples = 15  # Base samples per isotope
+        n_single_samples = sum(
+            int(base_samples * SAMPLE_WEIGHTS.get(iso, 1.0)) 
+            for iso in isotopes
+        )
+        
+        base_mixture_samples = 25
+        n_mixture_samples = sum(
+            int(base_mixture_samples * m['weight']) 
+            for m in mixtures.values()
+        )
         n_samples = n_single_samples + n_mixture_samples
         
         print(f"[ML] Training samples: {n_single_samples} single + {n_mixture_samples} mixtures = {n_samples} total")
@@ -161,11 +204,14 @@ class MLIdentifier:
         
         sample_idx = 0
         
-        # Generate single-isotope training data
+        # Generate single-isotope training data with abundance weighting
         for isotope in isotopes:
             energies = isotope_data.get(isotope, [])
             
-            for i in range(n_samples_per_single):
+            # Get weighted sample count for this isotope
+            n_samples_for_isotope = int(base_samples * SAMPLE_WEIGHTS.get(isotope, 1.0))
+            
+            for i in range(n_samples_for_isotope):
                 labels.append(isotope)
                 
                 # Add characteristic peaks at each gamma energy
@@ -176,9 +222,10 @@ class MLIdentifier:
                     if channel < 5 or channel >= self.n_channels - 5:
                         continue
                     
-                    # Intensity based on energy (higher energy = lower intensity typically)
-                    # Add randomness for network learning
-                    base_intensity = max(50, 300 - energy_keV / 10)
+                    # Use IAEA intensity data for realistic peak heights
+                    # Strong gamma lines (e.g., Bi-214 @ 609 keV = 45%) get taller peaks
+                    iaea_intensity = get_gamma_intensity(isotope, energy_keV)
+                    base_intensity = max(50, 500 * iaea_intensity)  # Scale by IAEA intensity
                     peak_intensity = int(np.random.poisson(base_intensity) * (0.7 + np.random.random() * 0.6))
                     
                     # Add Gaussian-like peak with AlphaHound CsI(Tl) FWHM
@@ -195,12 +242,14 @@ class MLIdentifier:
                 
                 sample_idx += 1
         
-        # Generate multi-isotope mixture training data
+        # Generate multi-isotope mixture training data with weighted sample counts
         for mixture_name, mixture_info in mixtures.items():
             mix_isotopes = mixture_info['isotopes']
             mix_ratios = mixture_info['ratios']
+            mixture_weight = mixture_info.get('weight', 1.0)
+            n_samples_for_mixture = int(base_mixture_samples * mixture_weight)
             
-            for i in range(n_samples_per_mixture):
+            for i in range(n_samples_for_mixture):
                 # Label is the mixture name
                 labels.append(mixture_name)
                 
@@ -218,8 +267,9 @@ class MLIdentifier:
                         if channel < 5 or channel >= self.n_channels - 5:
                             continue
                         
-                        # Scale intensity by mixture ratio
-                        base_intensity = max(50, 300 - energy_keV / 10) * relative_strength
+                        # Scale intensity by IAEA data and mixture ratio
+                        iaea_intensity = get_gamma_intensity(isotope, energy_keV)
+                        base_intensity = max(50, 500 * iaea_intensity) * relative_strength
                         peak_intensity = int(np.random.poisson(base_intensity) * (0.7 + np.random.random() * 0.6))
                         
                         # Use AlphaHound energy-dependent FWHM

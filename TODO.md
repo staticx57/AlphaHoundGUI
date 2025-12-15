@@ -79,10 +79,20 @@
         - ✅ UraniumGlass, ThoriumMantle, MedicalWaste, IndustrialGauge, CalibrationSource, NaturalBackground
     - ✅ `/analyze/ml-identify` API endpoint
     - ✅ Frontend "AI Identify" button with loading states
-    - ✅ ~1500 training samples (1350 single + 150 mixtures)
+    - ✅ ~2168 training samples (1782 single + 386 mixtures) with abundance weighting
     - ✅ **AlphaHound Detector Tuning**: Energy-dependent FWHM (10% at 662 keV) matching CsI(Tl) resolution
-    - ✅ **Comprehensive Documentation**: See [PYRIID_GUIDE.md](PYRIID_GUIDE.md) for usage and extension guide
-    - ⚠️ **Note**: Works best with real detector data (Poisson statistics); synthetic demo files may not match training patterns
+    - ✅ **IAEA Intensity Data**: 49 isotopes with 2,499 gamma lines from IAEA LiveChart API
+    - ✅ **Intensity-Weighted Training**: Synthetic peaks scaled by IAEA gamma intensities
+    - ✅ **Comprehensive Documentation**: See [PYRIID_GUIDE.md](PYRIID_GUIDE.md) and [PYRIID_ENHANCEMENT_PLAN.md](PYRIID_ENHANCEMENT_PLAN.md)
+    - ⚠️ **Note**: ML marked as WIP - Peak Matching is currently more accurate for uranium detection
+- [x] **Peak Detection Enhancement**:
+    - ✅ Fixed overly strict threshold (was 5% of max, now max(5, 0.3% of max))
+    - ✅ Now detects 20+ peaks (was only 3)
+    - ✅ Pb-214, Bi-214, Th-234 now visible in UI
+- [x] **U-235/U-238 Prioritization**:
+    - ✅ U-238 now ranks #2 at 100% confidence
+    - ✅ U-235 suppressed to #26 at 0.1% when U-238 chain detected
+    - ✅ Abundance weighting in `isotope_database.py`
 - [x] **Auto-Save CSV on Acquisition**:
     - ✅ Automatically saves spectrum to CSV upon acquisition completion
    - ✅ Saves to `data/acquisitions/` directory

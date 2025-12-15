@@ -1,0 +1,46 @@
+Loaded: 1024 channels, 190623 total counts
+Energy range: 15.0 - 7572.2 keV
+Actual keV/channel: 7.38
+Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+Creating converter from 7 to 5
+Creating converter from 5 to 7
+Creating converter from 7 to 5
+Creating converter from 5 to 7
+From C:\Users\stati\AppData\Local\Python\pythoncore-3.10-64\lib\site-packages\tf2onnx\tf_loader.py:68: The name tf.reset_default_graph is deprecated. Please use tf.compat.v1.reset_default_graph instead.
+
+From C:\Users\stati\AppData\Local\Python\pythoncore-3.10-64\lib\site-packages\tf2onnx\tf_loader.py:72: The name tf.train.import_meta_graph is deprecated. Please use tf.compat.v1.train.import_meta_graph instead.
+
+2025-12-14 18:41:36.268534: W tensorflow/core/framework/local_rendezvous.cc:404] Local rendezvous is aborting with status: OUT_OF_RANGE: End of sequence
+2025-12-14 18:41:40.289358: W tensorflow/core/framework/local_rendezvous.cc:404] Local rendezvous is aborting with status: OUT_OF_RANGE: End of sequence
+[ML] PyRIID successfully imported
+[ML] Loaded 95 isotopes from database
+
+============================================================
+TEST 1: PyRIID with 3 keV/channel (current setting)
+============================================================
+[ML] Training classifier on synthetic data (IAEA/NNDC energies)...
+[ML] Training on 90 single isotopes from authoritative sources
+[ML] Training samples: 1782 single + 386 mixtures = 2168 total
+[ML] Training complete. Model ready with 99 isotopes.
+
+Top 5 ML predictions (3 keV/channel):
+  Ta-182               100.0%
+
+============================================================
+TEST 2: PyRIID with 7.4 keV/channel (device actual)
+============================================================
+[ML] Training classifier on synthetic data (IAEA/NNDC energies)...
+[ML] Training on 90 single isotopes from authoritative sources
+[ML] Training samples: 1782 single + 386 mixtures = 2168 total
+[ML] Training complete. Model ready with 99 isotopes.
+
+Top 5 ML predictions (7.4 keV/channel):
+  Pu-239               100.0%
+
+============================================================
+COMPARISON SUMMARY
+============================================================
+3 keV/channel: UraniumGlass/Bi-214 confidence = 0.0%
+7.4 keV/channel: UraniumGlass/Bi-214 confidence = 0.0%
+
+--> Both calibrations perform similarly
