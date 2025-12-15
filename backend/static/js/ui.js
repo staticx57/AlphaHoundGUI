@@ -75,7 +75,7 @@ export class AlphaHoundUI {
             this.elements.peaksTbody.innerHTML = peaks.map(peak => `
                 <tr>
                     <td>${peak.energy.toFixed(2)}</td>
-                    <td>${peak.counts.toFixed(0)}</td>
+                    <td class="text-right">${peak.counts.toFixed(0)}</td>
                 </tr>
             `).join('');
         } else {

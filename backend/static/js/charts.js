@@ -7,8 +7,27 @@ export class AlphaHoundChart {
     }
 
     render(labels, dataPoints, peaks, scaleType = 'linear') {
+        // Robustness: Try to get context if missing (e.g. if loaded before DOM)
+        if (!this.ctx) {
+            this.ctx = document.getElementById('spectrumChart')?.getContext('2d');
+        }
         if (!this.ctx) return;
+
+        // Safety: Check if Chart.js is loaded
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded');
+            return;
+        }
+
+        // Validate inputs
+        if (!Array.isArray(labels) || !Array.isArray(dataPoints)) {
+            console.error('Invalid input to render:', { labels, dataPoints });
+            return;
+        }
+
         if (this.chart) this.chart.destroy();
+
+        // ... rest of render ...
 
         // Convert to {x, y} format for linear x-axis
         const chartData = labels.map((energy, idx) => ({
@@ -28,21 +47,22 @@ export class AlphaHoundChart {
             const maxCount = Math.max(...dataPoints);
             const totalCounts = dataPoints.reduce((a, b) => a + b, 0);
 
-            // Noise threshold: ignore channels with < 1% of max count
-            const noiseThreshold = Math.max(maxCount * 0.01, 1);
-
-            // Method 1: Find where 95% of the counts are (tighter than 99%)
+            // Method 1: Find where tail contains 1.0% of data (start of signal from right)
             let cumulativeCounts = 0;
             let percentileIndex = dataPoints.length - 1;
             for (let i = dataPoints.length - 1; i >= 0; i--) {
                 cumulativeCounts += dataPoints[i];
-                if (cumulativeCounts >= totalCounts * 0.95) {
+                if (cumulativeCounts >= totalCounts * 0.01) {
                     percentileIndex = i;
                     break;
                 }
             }
 
             // Method 2: Find last SIGNIFICANT data (above noise threshold)
+            // Increased threshold to avoid extending scale for single random counts
+            // min 2 counts, or 1.5% of max
+            const noiseThreshold = Math.max(maxCount * 0.015, 2);
+
             let lastSignificantIndex = 0;
             for (let i = dataPoints.length - 1; i >= 0; i--) {
                 if (dataPoints[i] > noiseThreshold) {
@@ -51,11 +71,11 @@ export class AlphaHoundChart {
                 }
             }
 
-            // Use the TIGHTER of the two (MIN = more aggressive zoom)
-            const dataEndIndex = Math.min(percentileIndex, lastSignificantIndex);
+            // Use the LARGER of the two (safe approach - show more data)
+            const dataEndIndex = Math.max(percentileIndex, lastSignificantIndex);
 
             // Ensure we include at least a reasonable energy range
-            const calculatedEnergy = parseFloat(labels[dataEndIndex]) * 1.15;
+            const calculatedEnergy = parseFloat(labels[dataEndIndex]) * 1.1;
 
             // Minimum zoom: at least 200 keV or 5% of full range
             const minZoom = Math.max(200, fullMaxEnergy * 0.05);
@@ -384,6 +404,7 @@ export class DoseRateChart {
 
     init() {
         if (!this.ctx) return;
+        if (typeof Chart === 'undefined') return; // Safety check
 
         // Get theme colors
         const styles = getComputedStyle(document.documentElement);

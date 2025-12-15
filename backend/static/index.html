@@ -8,10 +8,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=6">
     <link rel="stylesheet" href="/static/button-fixes.css?v=2">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <script
         src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -197,8 +198,9 @@
                             style="display:none; color: var(--accent-color); font-size: 0.8rem; font-weight: bold;">●
                             Active</span>
                     </div>
-                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                        <button id="btn-snip-bg" class="btn-primary" style="font-size: 0.85rem; padding: 4px 8px;" title="Auto-remove Compton continuum using SNIP algorithm">🔻 Auto Remove BG</button>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                        <button id="btn-snip-bg" class="btn-primary" style="font-size: 0.85rem; padding: 4px 8px;"
+                            title="Auto-remove Compton continuum using SNIP algorithm">🔻 Auto Remove BG</button>
                         <button id="btn-load-bg" style="font-size: 0.85rem; padding: 4px 8px;">Load Background
                             File</button>
                         <button id="btn-set-current-bg" style="font-size: 0.85rem; padding: 4px 8px;">Use Current as
@@ -220,16 +222,22 @@
             </div>
 
             <div id="peaks-container" style="display: none;">
-                <h3>Detected Peaks</h3>
-                <table id="peaks-table">
-                    <thead>
-                        <tr>
-                            <th>Energy (keV)</th>
-                            <th>Counts</th>
-                        </tr>
-                    </thead>
-                    <tbody id="peaks-tbody"></tbody>
-                </table>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h3 style="margin: 0;">Detected Peaks</h3>
+                    <button id="btn-toggle-peaks" class="btn-secondary"
+                        style="font-size: 0.8rem; padding: 2px 8px;">Hide</button>
+                </div>
+                <div id="peaks-scroll-area" class="scrollable-table-area">
+                    <table id="peaks-table" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Energy (keV)</th>
+                                <th class="text-right">Counts</th>
+                            </tr>
+                        </thead>
+                        <tbody id="peaks-tbody"></tbody>
+                    </table>
+                </div>
             </div>
 
             <div id="isotopes-container" style="display: none;">
@@ -543,7 +551,7 @@
     </main>
 
     <!-- Main Application Logic (ES6 Modules) -->
-    <script type="module" src="/static/js/main.js?v=2.1"></script>
+    <script type="module" src="/static/js/main.js?v=2.3"></script>
 </body>
 
 </html>

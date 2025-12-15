@@ -1,7 +1,7 @@
 // Updated: 2024-12-14 17:00 - N42 Export Fixed
 import { api } from './api.js';
 import { ui } from './ui.js';
-import { chartManager, DoseRateChart } from './charts.js?v=2.1';
+import { chartManager, DoseRateChart } from './charts.js?v=2.3';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
 
@@ -442,8 +442,26 @@ function setupEventListeners() {
                 currentData._originalCounts = [...currentData.counts];
             }
 
+            // Sync peaks to background-subtracted data (visual fix)
+            // Finds the new Y-value (net_counts) for each peak's energy
+            const adjustedPeaks = currentData.peaks.map(p => {
+                let bestIdx = 0;
+                let minDiff = Infinity;
+
+                // Find index corresponding to peak energy
+                for (let i = 0; i < currentData.energies.length; i++) {
+                    const diff = Math.abs(currentData.energies[i] - p.energy);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        bestIdx = i;
+                    }
+                }
+                // Return copy with updated counts
+                return { ...p, counts: result.net_counts[bestIdx] };
+            });
+
             // Update ONLY the chart display - preserve analysis results
-            chartManager.render(currentData.energies, result.net_counts, currentData.peaks, chartManager.getScaleType());
+            chartManager.render(currentData.energies, result.net_counts, adjustedPeaks, chartManager.getScaleType());
 
             // Update status - make clear this is visual only
             statusEl.innerHTML = '✓ Background removed <em>(chart only - analysis unchanged)</em>';
@@ -645,40 +663,59 @@ function setupEventListeners() {
     // ML Identification Button in Isotopes Container (new enhanced button)
     const btnRunML = document.getElementById('btn-run-ml');
     if (btnRunML) {
-        btnRunML.addEventListener('click', async () => {
-            if (!currentData || !currentData.counts) return alert('No spectrum data loaded');
+        btnRunML.addEventListener('click', () => {
+            document.getElementById('btn-ml-identify').click();
+        });
+    }
 
-            const mlList = document.getElementById('ml-isotopes-list');
-            const btn = document.getElementById('btn-run-ml');
-            const originalHTML = btn.innerHTML;
+    // Detected Peaks Toggle
+    const btnTogglePeaks = document.getElementById('btn-toggle-peaks');
+    const peaksScrollArea = document.getElementById('peaks-scroll-area');
+    if (btnTogglePeaks && peaksScrollArea) {
+        btnTogglePeaks.addEventListener('click', () => {
+            if (peaksScrollArea.style.display === 'none') {
+                peaksScrollArea.style.display = 'block';
+                btnTogglePeaks.textContent = 'Hide';
+            } else {
+                peaksScrollArea.style.display = 'none';
+                btnTogglePeaks.textContent = 'Show';
+            }
+        });
+    }
+    btnRunML.addEventListener('click', async () => {
+        if (!currentData || !currentData.counts) return alert('No spectrum data loaded');
 
-            btn.innerHTML = '<span style="font-size: 1.2rem;">⏳</span> Running...';
-            btn.disabled = true;
-            mlList.innerHTML = '<p style="color: var(--text-secondary);">Running AI identification (first run trains model ~10-30s)...</p>';
+        const mlList = document.getElementById('ml-isotopes-list');
+        const btn = document.getElementById('btn-run-ml');
+        const originalHTML = btn.innerHTML;
 
-            try {
-                const response = await fetch('/analyze/ml-identify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ counts: currentData.counts })
-                });
+        btn.innerHTML = '<span style="font-size: 1.2rem;">⏳</span> Running...';
+        btn.disabled = true;
+        mlList.innerHTML = '<p style="color: var(--text-secondary);">Running AI identification (first run trains model ~10-30s)...</p>';
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'ML identification failed');
-                }
+        try {
+            const response = await fetch('/analyze/ml-identify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ counts: currentData.counts })
+            });
 
-                const data = await response.json();
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'ML identification failed');
+            }
 
-                if (data.predictions && data.predictions.length > 0) {
-                    mlList.innerHTML = data.predictions.map(pred => {
-                        const confidence = pred.confidence;
-                        const barColor = confidence > 70 ? '#10b981' :
-                            confidence > 40 ? '#f59e0b' : '#8b5cf6';
-                        const confidenceLabel = confidence > 70 ? 'HIGH' :
-                            confidence > 40 ? 'MEDIUM' : 'LOW';
+            const data = await response.json();
 
-                        return `
+            if (data.predictions && data.predictions.length > 0) {
+                mlList.innerHTML = data.predictions.map(pred => {
+                    const confidence = pred.confidence;
+                    const barColor = confidence > 70 ? '#10b981' :
+                        confidence > 40 ? '#f59e0b' : '#8b5cf6';
+                    const confidenceLabel = confidence > 70 ? 'HIGH' :
+                        confidence > 40 ? 'MEDIUM' : 'LOW';
+
+                    return `
                             <div style="margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(139, 92, 246, 0.1); border-radius: 6px; border-left: 3px solid ${barColor};">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
                                     <strong style="color: var(--accent-color);">${pred.isotope}</strong>
@@ -695,125 +732,125 @@ function setupEventListeners() {
                                 </div>
                             </div>
                         `;
-                    }).join('');
-                } else {
-                    mlList.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No ML predictions available for this spectrum</p>';
-                }
-            } catch (err) {
-                mlList.innerHTML = `<p style="color: #ef4444;">❌ Error: ${err.message}</p>`;
-            } finally {
-                btn.innerHTML = originalHTML;
-                btn.disabled = false;
+                }).join('');
+            } else {
+                mlList.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No ML predictions available for this spectrum</p>';
             }
-        });
-    }
-
-    // Calibration Tool
-    const calBtn = document.getElementById('btn-calibrate');
-    if (calBtn) {
-        calBtn.addEventListener('click', () => {
-            document.getElementById('calibration-modal').style.display = 'block';
-        });
-    }
-
-    // Device Controls
-    document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
-    document.getElementById('btn-connect-device').addEventListener('click', connectDevice);
-    document.getElementById('btn-disconnect-device').addEventListener('click', disconnectDevice);
-    document.getElementById('btn-start-acquire').addEventListener('click', startAcquisition);
-    document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
-
-    // Top panel device controls (if they exist)
-    const refreshTop = document.getElementById('btn-refresh-ports-top');
-    const connectTop = document.getElementById('btn-connect-top');
-    const disconnectTop = document.getElementById('btn-disconnect-top');
-    const acquireTop = document.getElementById('btn-acquire-top');
-
-    if (refreshTop) refreshTop.addEventListener('click', refreshPorts);
-    if (connectTop) connectTop.addEventListener('click', connectDeviceTop);
-    if (disconnectTop) disconnectTop.addEventListener('click', disconnectDevice);
-    if (acquireTop) acquireTop.addEventListener('click', startAcquisition);
-
-    // Chart Click for Calibration
-    const chartCanvas = document.getElementById('spectrumChart');
-    if (chartCanvas) {
-        chartCanvas.onclick = (evt) => {
-            if (document.getElementById('calibration-modal').style.display === 'block') {
-                const chart = chartManager.chart;
-                const points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
-                if (points.length) {
-                    const index = points[0].index; // This is the channel index
-                    // Suggest this channel
-                    calUI.addPoint(index);
-                }
-            }
-        };
-    }
-
-    // === ROI Analysis Event Handlers (Advanced Mode) ===
-
-    // Analyze ROI Button
-    document.getElementById('btn-analyze-roi')?.addEventListener('click', async () => {
-        if (!currentData || !currentData.counts) {
-            return showToast('No spectrum data loaded', 'warning');
+        } catch (err) {
+            mlList.innerHTML = `<p style="color: #ef4444;">❌ Error: ${err.message}</p>`;
+        } finally {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
         }
+    });
+}
 
-        const isotope = document.getElementById('roi-isotope').value;
-        const detector = document.getElementById('roi-detector').value;
-        const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
+// Calibration Tool
+const calBtn = document.getElementById('btn-calibrate');
+if (calBtn) {
+    calBtn.addEventListener('click', () => {
+        document.getElementById('calibration-modal').style.display = 'block';
+    });
+}
 
-        const resultsDiv = document.getElementById('roi-results');
-        resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing...</p>';
+// Device Controls
+document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
+document.getElementById('btn-connect-device').addEventListener('click', connectDevice);
+document.getElementById('btn-disconnect-device').addEventListener('click', disconnectDevice);
+document.getElementById('btn-start-acquire').addEventListener('click', startAcquisition);
+document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
 
-        try {
-            const response = await fetch('/analyze/roi', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    energies: currentData.energies,
-                    counts: currentData.counts,
-                    isotope: isotope,
-                    detector: detector,
-                    acquisition_time_s: acqTime
-                })
-            });
+// Top panel device controls (if they exist)
+const refreshTop = document.getElementById('btn-refresh-ports-top');
+const connectTop = document.getElementById('btn-connect-top');
+const disconnectTop = document.getElementById('btn-disconnect-top');
+const acquireTop = document.getElementById('btn-acquire-top');
 
-            if (!response.ok) throw new Error((await response.json()).detail || 'ROI analysis failed');
-            const data = await response.json();
+if (refreshTop) refreshTop.addEventListener('click', refreshPorts);
+if (connectTop) connectTop.addEventListener('click', connectDeviceTop);
+if (disconnectTop) disconnectTop.addEventListener('click', disconnectDevice);
+if (acquireTop) acquireTop.addEventListener('click', startAcquisition);
 
-            // Format results
-            const activityStr = data.activity_bq
-                ? `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${(data.activity_uci * 1000).toFixed(3)} μCi)`
-                : '<span style="color: #ef4444;">Unable to calculate</span>';
+// Chart Click for Calibration
+const chartCanvas = document.getElementById('spectrumChart');
+if (chartCanvas) {
+    chartCanvas.onclick = (evt) => {
+        if (document.getElementById('calibration-modal').style.display === 'block') {
+            const chart = chartManager.chart;
+            const points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+            if (points.length) {
+                const index = points[0].index; // This is the channel index
+                // Suggest this channel
+                calUI.addPoint(index);
+            }
+        }
+    };
+}
 
-            let htmlOutput = `
+// === ROI Analysis Event Handlers (Advanced Mode) ===
+
+// Analyze ROI Button
+document.getElementById('btn-analyze-roi')?.addEventListener('click', async () => {
+    if (!currentData || !currentData.counts) {
+        return showToast('No spectrum data loaded', 'warning');
+    }
+
+    const isotope = document.getElementById('roi-isotope').value;
+    const detector = document.getElementById('roi-detector').value;
+    const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
+
+    const resultsDiv = document.getElementById('roi-results');
+    resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing...</p>';
+
+    try {
+        const response = await fetch('/analyze/roi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                energies: currentData.energies,
+                counts: currentData.counts,
+                isotope: isotope,
+                detector: detector,
+                acquisition_time_s: acqTime
+            })
+        });
+
+        if (!response.ok) throw new Error((await response.json()).detail || 'ROI analysis failed');
+        const data = await response.json();
+
+        // Format results
+        const activityStr = data.activity_bq
+            ? `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${(data.activity_uci * 1000).toFixed(3)} μCi)`
+            : '<span style="color: #ef4444;">Unable to calculate</span>';
+
+        let htmlOutput = `
                 <div style="color: var(--primary-color); font-weight: 600; margin-bottom: 0.5rem;">
                     ${data.isotope} (${data.energy_keV} keV): Net Counts ${data.net_counts.toFixed(0)} (${data.uncertainty_sigma.toFixed(1)}σ)
                 </div>
                 <div>Activity: ${activityStr}</div>
             `;
 
-            // If U-235, automatically fetch uranium enrichment ratio
-            if (isotope === 'U-235 (186 keV)') {
-                try {
-                    const ratioResponse = await fetch('/analyze/uranium-ratio', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            energies: currentData.energies,
-                            counts: currentData.counts,
-                            detector: detector,
-                            acquisition_time_s: acqTime
-                        })
-                    });
+        // If U-235, automatically fetch uranium enrichment ratio
+        if (isotope === 'U-235 (186 keV)') {
+            try {
+                const ratioResponse = await fetch('/analyze/uranium-ratio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        energies: currentData.energies,
+                        counts: currentData.counts,
+                        detector: detector,
+                        acquisition_time_s: acqTime
+                    })
+                });
 
-                    if (ratioResponse.ok) {
-                        const ratioData = await ratioResponse.json();
-                        const categoryColor = ratioData.category === 'Natural Uranium' ? '#22c55e' :
-                            ratioData.category === 'Depleted Uranium' ? '#f59e0b' :
-                                '#ef4444';
+                if (ratioResponse.ok) {
+                    const ratioData = await ratioResponse.json();
+                    const categoryColor = ratioData.category === 'Natural Uranium' ? '#22c55e' :
+                        ratioData.category === 'Depleted Uranium' ? '#f59e0b' :
+                            '#ef4444';
 
-                        htmlOutput += `
+                    htmlOutput += `
                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                 <div style="color: var(--primary-color); font-weight: 600; margin-bottom: 0.5rem;">
                                     Ratio: 186 keV peak is <strong>${ratioData.ratio_percent.toFixed(1)}%</strong> of 93 keV peak (≥${ratioData.threshold_natural}%): 
@@ -829,13 +866,13 @@ function setupEventListeners() {
                                 </div>
                             </div>
                         `;
-                    }
-                } catch (ratioErr) {
-                    console.warn('Failed to fetch uranium ratio:', ratioErr);
                 }
+            } catch (ratioErr) {
+                console.warn('Failed to fetch uranium ratio:', ratioErr);
             }
+        }
 
-            htmlOutput += `
+        htmlOutput += `
                 <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); color: var(--text-secondary);">
                     --- Calculation Parameters ---<br>
                     Detector: ${data.detector}<br>
@@ -844,49 +881,49 @@ function setupEventListeners() {
                 </div>
             `;
 
-            resultsDiv.innerHTML = htmlOutput;
+        resultsDiv.innerHTML = htmlOutput;
 
-            // Store last ROI for highlighting
-            window.lastROI = data.roi_window;
+        // Store last ROI for highlighting
+        window.lastROI = data.roi_window;
 
-        } catch (err) {
-            resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
-        }
-    });
+    } catch (err) {
+        resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+    }
+});
 
-    // Uranium Enrichment Button
-    document.getElementById('btn-uranium-ratio')?.addEventListener('click', async () => {
-        if (!currentData || !currentData.counts) {
-            return showToast('No spectrum data loaded', 'warning');
-        }
+// Uranium Enrichment Button
+document.getElementById('btn-uranium-ratio')?.addEventListener('click', async () => {
+    if (!currentData || !currentData.counts) {
+        return showToast('No spectrum data loaded', 'warning');
+    }
 
-        const detector = document.getElementById('roi-detector').value;
-        const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
+    const detector = document.getElementById('roi-detector').value;
+    const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
 
-        const resultsDiv = document.getElementById('roi-results');
-        resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing uranium ratio...</p>';
+    const resultsDiv = document.getElementById('roi-results');
+    resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing uranium ratio...</p>';
 
-        try {
-            const response = await fetch('/analyze/uranium-ratio', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    energies: currentData.energies,
-                    counts: currentData.counts,
-                    detector: detector,
-                    acquisition_time_s: acqTime
-                })
-            });
+    try {
+        const response = await fetch('/analyze/uranium-ratio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                energies: currentData.energies,
+                counts: currentData.counts,
+                detector: detector,
+                acquisition_time_s: acqTime
+            })
+        });
 
-            if (!response.ok) throw new Error((await response.json()).detail || 'Uranium ratio analysis failed');
-            const data = await response.json();
+        if (!response.ok) throw new Error((await response.json()).detail || 'Uranium ratio analysis failed');
+        const data = await response.json();
 
-            // Color based on category
-            let categoryColor = '#10b981';  // Natural = green
-            if (data.category === 'Depleted Uranium') categoryColor = '#f59e0b';  // Yellow
-            if (data.category === 'Enriched Uranium') categoryColor = '#ef4444';  // Red
+        // Color based on category
+        let categoryColor = '#10b981';  // Natural = green
+        if (data.category === 'Depleted Uranium') categoryColor = '#f59e0b';  // Yellow
+        if (data.category === 'Enriched Uranium') categoryColor = '#ef4444';  // Red
 
-            resultsDiv.innerHTML = `
+        resultsDiv.innerHTML = `
                 <div style="margin-bottom: 0.75rem;">
                     <span style="color: var(--primary-color);">U-235 (186 keV):</span> Net Counts ${data.u235_net_counts.toFixed(0)} (${data.u235_uncertainty.toFixed(1)}σ)
                 </div>
@@ -904,28 +941,28 @@ function setupEventListeners() {
                 </div>
             `;
 
-        } catch (err) {
-            resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
-        }
-    });
+    } catch (err) {
+        resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+    }
+});
 
-    // Highlight ROI Button
-    document.getElementById('btn-highlight-roi')?.addEventListener('click', () => {
-        if (!window.lastROI) {
-            return showToast('Run ROI analysis first', 'info');
-        }
-        const isotope = document.getElementById('roi-isotope').value;
-        chartManager.highlightROI(window.lastROI[0], window.lastROI[1], isotope);
-        showToast(`ROI highlighted: ${window.lastROI[0]}-${window.lastROI[1]} keV`, 'success');
-    });
+// Highlight ROI Button
+document.getElementById('btn-highlight-roi')?.addEventListener('click', () => {
+    if (!window.lastROI) {
+        return showToast('Run ROI analysis first', 'info');
+    }
+    const isotope = document.getElementById('roi-isotope').value;
+    chartManager.highlightROI(window.lastROI[0], window.lastROI[1], isotope);
+    showToast(`ROI highlighted: ${window.lastROI[0]}-${window.lastROI[1]} keV`, 'success');
+});
 
-    // Clear Highlight Button
-    document.getElementById('btn-clear-highlight')?.addEventListener('click', () => {
-        window.lastROI = null;
-        chartManager.clearROIHighlight();
-        showToast('ROI highlight cleared', 'info');
-    });
-}
+// Clear Highlight Button
+document.getElementById('btn-clear-highlight')?.addEventListener('click', () => {
+    window.lastROI = null;
+    chartManager.clearROIHighlight();
+    showToast('ROI highlight cleared', 'info');
+});
+
 
 /**
  * Gets theme-aware colors for toast notifications.
@@ -1194,8 +1231,11 @@ async function startAcquisition() {
                         body: JSON.stringify({
                             energies: data.energies,
                             counts: data.counts,
-                            live_time: elapsed,
-                            real_time: elapsed,
+                            metadata: {
+                                live_time: elapsed,
+                                real_time: elapsed,
+                                start_time: new Date(acquisitionStartTime).toISOString()
+                            },
                             peaks: data.peaks,
                             isotopes: data.isotopes
                         })
@@ -1233,8 +1273,11 @@ async function startAcquisition() {
                             body: JSON.stringify({
                                 energies: currentData.energies,
                                 counts: currentData.counts,
-                                live_time: elapsed,
-                                real_time: elapsed,
+                                metadata: {
+                                    live_time: elapsed,
+                                    real_time: elapsed,
+                                    start_time: new Date(acquisitionStartTime).toISOString()
+                                },
                                 peaks: currentData.peaks || [],
                                 isotopes: currentData.isotopes || []
                             })

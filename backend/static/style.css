@@ -261,6 +261,11 @@ input[type="file"] {
     position: relative;
 }
 
+canvas#spectrumChart {
+    touch-action: none;
+    /* Critical for Hammer.js pinch-to-zoom */
+}
+
 .metadata-panel {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -331,6 +336,13 @@ button.active {
     border: 1px solid var(--border-color);
     border-radius: 1rem;
     padding: 1.5rem;
+}
+
+.scrollable-table-area {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
 }
 
 table {
@@ -654,6 +666,86 @@ input[type="text"]:focus {
 }
 
 /* ========================================
+   ENHANCED TABLE STYLES
+   ======================================== */
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.data-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    background: var(--card-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+}
+
+.data-table td {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+
+.data-table tr:hover td {
+    background: rgba(56, 189, 248, 0.05);
+    color: var(--primary-color);
+}
+
+.data-table tr:last-child td {
+    border-bottom: none;
+}
+
+.text-right {
+    text-align: right !important;
+}
+
+.text-center {
+    text-align: center !important;
+}
+
+/* Custom Scrollbar for scrollable area */
+.scrollable-table-area::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.scrollable-table-area::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.scrollable-table-area::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.scrollable-table-area::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Scrollable Table Area Container */
+.scrollable-table-area {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    margin-top: 0.5rem;
+}
+
+/* ========================================
    RESPONSIVE DESIGN - MOBILE & TABLET
    ======================================== */
 
@@ -966,8 +1058,13 @@ input[type="text"]:focus {
         grid-template-columns: 1fr;
     }
 
-    /* On mobile, ensure chart has height since it won't stretch */
     .sparkline-container {
         min-height: 120px;
+    }
+}
+
+@media (max-width: 480px) {
+    .scrollable-table-area {
+        max-height: 150px;
     }
 }

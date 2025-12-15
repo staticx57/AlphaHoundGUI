@@ -38,6 +38,19 @@
   - Re-runs peak detection and isotope ID on cleaner data
   - Improves detection of weak peaks buried in continuum
 
+## [Unreleased]
+
+### Added
+- **UI Enhancements**: Added a toggle button and scrollable area for the "Detected Peaks" table to improve dashboard usability with many peaks.
+- **Spectrum Algebra**: Added UI controls for adding, subtracting, and comparing spectra.
+- **ML Quality Badges**: Added visual indicators for ML confidence (High/Medium/Low) and suppression status.
+- **Responsive Charts**: Enabled pinch-to-zoom and touch gestures for mobile users. Added `Hammer.js` and optimized touch interactions.
+
+### Fixed
+- **Chart Auto-Scale**: Tuned autoscale algorithm to prevent aggressive cropping of high-energy data. Now prioritizes full data visibility over noise reduction.
+- **N42 Import/Export**: Fixed a critical bug where acquisition time (Live Time/Real Time) was lost when re-importing auto-saved files. Corrected the JSON payload structure in `main.js`.
+- **Peak Matching**: Restored legacy peak matching functionality and integrated it with ML predictions for hybrid filtering.
+
 - **CHN/SPE File Import** (NEW)
   - Support for Ortec CHN (binary) and Maestro SPE (ASCII) formats
   - Automatic energy calibration extraction
@@ -86,6 +99,12 @@
   - Single-line isotopes capped at 60% confidence (prevents 1/1 = 100% false positives)
   - Peak count penalty: 30% penalty for single matches, 10% bonus for 3+ matches
   - All decay chains (U-238, Th-232, U-235) now properly defined and tracked
+- **Detected Peaks Table**: Completely redesigned with sticky headers, backdrop blur, hover effects, and right-aligned numerical data (v6 CSS).
+
+### Fixed
+- **Page Load Crash**: Fixed `main.js` syntax error (extra brace) that prevented application load.
+- **Auto-BG Chart Sync**: Fixed visual issue where peaks appeared disconnected from the spectrum after background removal.
+- **Chart Render Crash**: Fixed "Spread syntax" error when rendering invalid or background-subtracted data (validation added to `charts.js`).
 
 ---
 
