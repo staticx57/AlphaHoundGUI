@@ -147,10 +147,11 @@
     - [x] ✅ Ensure proper contrast in all theme modes
 
 ### ML & Analysis
-- [ ] **ML Improvements**:
+- [x] **ML Improvements**:
+    - [x] Confidence thresholding (5%+ minimum to display)
+    - [x] Hybrid filtering (suppress ML conflicts with Peak Matching HIGH confidence)
+    - [x] Quality badges (good/moderate/low_confidence/no_match)
     - [ ] Collect real detector data for ML fine-tuning
-    - [ ] Implement confidence thresholding (>90% only)
-    - [ ] Add hybrid filtering (suppress ML conflicts with Peak Matching HIGH confidence)
     - [ ] Update synthetic demo files to use realistic Poisson noise
     - [ ] Train on weak source scenarios (low count rates)
     - [ ] Add background-dominated mixture training

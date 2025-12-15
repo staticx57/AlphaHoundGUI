@@ -244,50 +244,131 @@ python download_iaea_data.py
 
 ---
 
-## Next Steps (Future Work)
+## 🆕 Extended Feature Roadmap (December 2024)
 
-### Priority 1: ML Model Improvement
-The ML model currently predicts incorrectly (Sb-125 instead of uranium). To fix:
+### Becquerel Library Features
 
-1. **Add Compton Continuum Simulation**
-   - Synthetic spectra lack realistic Compton scattering background
-   - Implement physics-based continuum using Klein-Nishina formula
-   - File: `backend/ml_analysis.py`
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Poisson Likelihood Fitting** | Statistically rigorous peak fitting with proper counting statistics | ✅ Complete |
+| **SNIP Background Subtraction** | Sensitive Nonlinear Iterative Peak algorithm for baseline removal | ✅ Complete |
+| **Remote Nuclear Data** | Live NNDC/IAEA queries via `nucdata` module | 🔜 Planned |
+| **Spectrum Algebra** | Add, subtract, normalize with proper error propagation | ✅ Complete |
+| **CHN/SPE Import** | Read Ortec CHN and Maestro SPE files | ✅ Complete |
 
-2. **Incorporate Real Training Spectra**
-   - Download IAEA IDB reference spectra (measured U/Pu HPGe spectra)
-   - Mix synthetic + real spectra in training set
-   - Target: 50% real, 50% synthetic
+### PyRIID Library Features
 
-3. **Reduce Isotope Classes**
-   - Current: 99 isotopes (too many, dilutes training)
-   - Target: 30-40 most common isotopes for hobby use
-   - Create "UraniumGlass" mixture class with proper ratios
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **SNIP Background Algorithm** | Industry-standard background estimation for gamma spectra | ✅ Complete |
+| **Model Export (ONNX/TFLite)** | Deploy models to edge devices and mobile apps | ✅ Complete |
+| **SeedMixer Background Addition** | Add realistic background to synthetic training data | 🔜 Planned |
+| **Spectrum Normalization** | L1-norm, L2-norm for ML preprocessing | ✅ Complete |
+| **Anomaly Detection** | Flag unusual spectra that don't match training data | ✅ Complete |
 
-4. **Increase Training Data**
-   - Current: ~2168 samples
-   - Target: 10,000+ samples with data augmentation
-   - Add Poisson noise variations per sample
+---
 
-### Priority 2: Peak Matching Enhancements
+## 🎯 Background Filtering Implementation Plan
 
-1. **Add Intensity Weighting to Confidence**
-   - Weight matched peaks by their IAEA intensities
-   - Strong peaks (e.g., Bi-214 @ 609 keV = 45%) contribute more
+### Overview
+Remove Compton continuum and environmental background from spectra to improve peak visibility and isotope identification accuracy.
 
-2. **Expand Decay Chain Detection**
-   - Add Ac-227 (U-235 chain) indicators
-   - Add short-lived daughters (Po-214, Po-218)
+### Algorithm: SNIP (Sensitive Nonlinear Iterative Peak)
+The SNIP algorithm is the industry standard for gamma spectrum background estimation. It:
+1. Uses iterative clipping to estimate the slowly-varying continuum
+2. Preserves peak shapes while removing baseline
+3. Works well with Compton edges and backscatter peaks
 
-### Priority 3: Data Quality
+### Implementation Steps
 
-1. **Community Spectra Calibration Auto-Detect**
-   - Some files use different keV/channel (0.75, 3.0, 7.4)
-   - Auto-detect calibration from peak positions
+#### Phase 1: Backend - SNIP Algorithm
+**File**: `backend/spectral_analysis.py`
 
-2. **Expand IAEA Coverage**
-   - Download data for additional 50+ isotopes
-   - Add rare earth elements for nuclear forensics
+```python
+def snip_background(counts, iterations=24, smoothing=3):
+    """
+    SNIP algorithm for background estimation.
+    
+    Args:
+        counts: Array of spectrum counts
+        iterations: Number of SNIP iterations (24 is typical)
+        smoothing: Smoothing window size
+    
+    Returns:
+        background: Estimated background array
+    """
+    import numpy as np
+    
+    # Log transform (handles zero counts)
+    log_spec = np.log(np.log(np.sqrt(np.array(counts) + 1) + 1) + 1)
+    
+    # Iterative clipping
+    for p in range(1, iterations + 1):
+        for i in range(p, len(log_spec) - p):
+            log_spec[i] = min(log_spec[i], 
+                             0.5 * (log_spec[i-p] + log_spec[i+p]))
+    
+    # Inverse transform
+    background = (np.exp(np.exp(log_spec) - 1) - 1) ** 2 - 1
+    
+    return np.maximum(background, 0)
+```
+
+#### Phase 2: API Endpoint
+**File**: `backend/routers/analysis.py`
+
+```python
+@router.post("/analyze/snip-background")
+async def remove_background(request: dict):
+    """Apply SNIP background subtraction"""
+    from spectral_analysis import snip_background
+    
+    counts = request.get('counts', [])
+    iterations = request.get('iterations', 24)
+    
+    background = snip_background(counts, iterations)
+    net_counts = [max(0, c - b) for c, b in zip(counts, background)]
+    
+    return {
+        "net_counts": net_counts,
+        "background": list(background),
+        "algorithm": "SNIP",
+        "iterations": iterations
+    }
+```
+
+#### Phase 3: Frontend UI
+**File**: `backend/static/js/main.js`
+
+- Add "🔻 Remove Background" button to chart controls
+- Toggle between raw and background-subtracted views
+- Show background curve as dashed line overlay
+- Re-run isotope identification on net counts
+
+#### Phase 4: ML Training Integration
+**File**: `backend/ml_analysis.py`
+
+- Add background to synthetic training spectra using realistic continuum shapes
+- Option to train ML model on both raw and background-subtracted data
+- Improves ML robustness for low-SNR spectra
+
+### UI Mockup
+
+```
+┌─────────────────────────────────────────────┐
+│ Chart Controls                              │
+│ ┌─────────┐ ┌─────────┐ ┌──────────────────┐│
+│ │ Linear  │ │ Log     │ │ 🔻 Rm Background ││
+│ └─────────┘ └─────────┘ └──────────────────┘│
+│                                             │
+│ [When background removal active:]           │
+│ ┌──────────────────────────────────────────┐│
+│ │ SNIP Iterations: [===24===]              ││
+│ │ ☑ Show background curve                 ││
+│ │ ☑ Apply to isotope ID                   ││
+│ └──────────────────────────────────────────┘│
+└─────────────────────────────────────────────┘
+```
 
 ---
 
@@ -319,4 +400,5 @@ The ML model currently predicts incorrectly (Sb-125 instead of uranium). To fix:
 | Top Prediction | Sb-125 (incorrect) |
 | Uranium in Top 10 | No ❌ |
 | Status | Needs improvement |
+
 

@@ -97,6 +97,10 @@ export class AlphaHoundUI {
                 const confidenceLabel = confidence > 70 ? 'HIGH' :
                     confidence > 40 ? 'MEDIUM' : 'LOW';
 
+                // Generate NNDC reference link
+                // Format isotope name for NNDC URL: "Cs-137" -> "137Cs"
+                const nndcUrl = this.getNNDCUrl(iso.isotope);
+
                 return `
                     <div class="isotope-result-item">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
@@ -109,8 +113,9 @@ export class AlphaHoundUI {
                             </div>
                             <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 45px;">${confidence.toFixed(0)}%</span>
                         </div>
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                            ${iso.matches}/${iso.total_lines} peaks matched
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                            <span>${iso.matches}/${iso.total_lines} peaks matched</span>
+                            <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat">📚 NNDC</a>
                         </div>
                     </div>
                 `;
@@ -193,12 +198,17 @@ export class AlphaHoundUI {
                                 <strong>Detected Members:</strong> ${chain.num_detected}/${chain.num_key_isotopes} key indicators
                             </div>
                             ${membersHTML}
-                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                 <strong>Likely Sources:</strong>
                                 <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
                                     ${chain.applications.map(app => `<li style="margin: 0.25rem 0;">${app}</li>`).join('')}
                                 </ul>
                             </div>
+                            ${chain.references && chain.references.length > 0 ? `
+                            <div style="margin-top: 0.5rem; font-size: 0.7rem;">
+                                <strong>References:</strong>
+                                ${chain.references.map(ref => `<a href="${ref.url}" target="_blank" rel="noopener" style="color: #3b82f6; margin-left: 0.5rem;">${ref.name}</a>`).join(' · ')}
+                            </div>` : ''}
                         </div>
                     </div>
                 `;
@@ -228,6 +238,21 @@ export class AlphaHoundUI {
             ]
         };
         return chains[chainName] || [];
+    }
+
+    /**
+     * Generate NNDC NuDat3 URL for an isotope
+     * Converts "Cs-137" -> "https://www.nndc.bnl.gov/nudat3/decaysearchdirect.jsp?nuc=137Cs"
+     */
+    getNNDCUrl(isotope) {
+        // Parse isotope name: "Cs-137" -> element="Cs", mass="137"
+        const match = isotope.match(/^([A-Za-z]+)-?(\d+)m?$/);
+        if (match) {
+            const [, element, mass] = match;
+            return `https://www.nndc.bnl.gov/nudat3/decaysearchdirect.jsp?nuc=${mass}${element}`;
+        }
+        // Fallback for unusual formats
+        return `https://www.nndc.bnl.gov/nudat3/`;
     }
 
     updateDoseDisplay(doseRate) {

@@ -7,12 +7,13 @@ from peak_detection import detect_peaks
 from isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
 from spectral_analysis import fit_gaussian, calibrate_energy, subtract_background
+from chn_spe_parser import parse_chn_file, parse_spe_file
 from report_generator import generate_pdf_report
 # NOTE: ml_analysis is imported lazily in the endpoint to avoid TensorFlow loading at startup
 
 # Constants for input validation
 MAX_FILE_SIZE_MB = 10
-ALLOWED_EXTENSIONS = {'.n42', '.xml', '.csv'}
+ALLOWED_EXTENSIONS = {'.n42', '.xml', '.csv', '.chn', '.spe'}
 MAX_SPECTRUM_CHANNELS = 16384
 
 router = APIRouter(tags=["analysis"])
@@ -174,6 +175,49 @@ async def upload_file(file: UploadFile = File(...)):
              return result
         except Exception as e:
              raise HTTPException(status_code=500, detail=str(e))
+    elif filename.endswith('.chn') or filename.endswith('.spe'):
+        try:
+            # Save temp file for binary parsing
+            import tempfile
+            import os
+            ext = '.chn' if filename.endswith('.chn') else '.spe'
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            
+            try:
+                if filename.endswith('.chn'):
+                    result = parse_chn_file(tmp_path)
+                else:
+                    result = parse_spe_file(tmp_path)
+                
+                result['filename'] = file.filename
+                result['source'] = 'CHN File' if filename.endswith('.chn') else 'SPE File'
+                result['is_calibrated'] = result.get('calibration') is not None
+                
+                if result.get('counts') and result.get('energies'):
+                    peaks = detect_peaks(result['energies'], result['counts'])
+                    result['peaks'] = peaks
+                    
+                    if peaks:
+                        is_calibrated = result.get('is_calibrated', False)
+                        current_settings = DEFAULT_SETTINGS if is_calibrated else UPLOAD_SETTINGS
+                        
+                        all_isotopes = identify_isotopes(peaks, energy_tolerance=current_settings['energy_tolerance'], mode=current_settings.get('mode', 'simple'))
+                        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=current_settings['energy_tolerance'])
+                        weighted_chains = apply_abundance_weighting(all_chains)
+                        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
+                        
+                        result['isotopes'] = isotopes
+                        result['decay_chains'] = decay_chains
+                    else:
+                        result['isotopes'] = []
+                        result['decay_chains'] = []
+                return result
+            finally:
+                os.unlink(tmp_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error parsing CHN/SPE: {str(e)}")
     else:
         raise HTTPException(status_code=400, detail="Unsupported format")
 
@@ -267,7 +311,14 @@ async def export_n42(request: N42ExportRequest):
 
 @router.post("/analyze/ml-identify")
 async def ml_identify(request: MLIdentifyRequest):
-    """Machine Learning isotope identification using PyRIID"""
+    """
+    Machine Learning isotope identification using PyRIID.
+    
+    Includes:
+    - Confidence thresholding (top result must be >20% to show)
+    - Hybrid filtering with Peak Matching results
+    - Anomaly flagging for low confidence predictions
+    """
     try:
         # Lazy import to avoid loading TensorFlow at startup (saves ~10-15s)
         from ml_analysis import get_ml_identifier
@@ -275,8 +326,56 @@ async def ml_identify(request: MLIdentifyRequest):
         ml = get_ml_identifier()
         if ml is None:
             raise HTTPException(status_code=501, detail="PyRIID not installed")
-        results = ml.identify(request.counts, top_k=5)
-        return {"predictions": results}
+        
+        raw_results = ml.identify(request.counts, top_k=5)
+        
+        # ========== CONFIDENCE THRESHOLDING ==========
+        # Only keep predictions with meaningful confidence
+        min_confidence = 5.0  # Minimum to show at all
+        results = [r for r in raw_results if r['confidence'] >= min_confidence]
+        
+        # ========== HYBRID FILTERING ==========
+        # If Peak Matching results provided, suppress conflicting ML predictions
+        peak_isotopes = getattr(request, 'peak_isotopes', None)
+        if peak_isotopes and len(results) > 0:
+            # Get HIGH confidence isotopes from Peak Matching
+            high_conf_peaks = [iso for iso in peak_isotopes 
+                              if iso.get('confidence', 0) > 70]
+            high_conf_names = {iso['isotope'] for iso in high_conf_peaks}
+            
+            # If Peak Matching has HIGH confidence for natural chains,
+            # boost ML predictions that match and suppress conflicts
+            NATURAL_CHAIN_ISOTOPES = {
+                'U-238', 'Bi-214', 'Pb-214', 'Ra-226', 'Th-234', 'Pa-234m',
+                'Th-232', 'Tl-208', 'Ac-228', 'Pb-212'
+            }
+            
+            if high_conf_names & NATURAL_CHAIN_ISOTOPES:
+                # Natural chain detected by Peak Matching - suppress conflicts
+                MEDICAL_ISOTOPES = {'Cs-137', 'I-131', 'F-18', 'Tc-99m', 'Co-60'}
+                for r in results:
+                    if r['isotope'] in MEDICAL_ISOTOPES:
+                        r['confidence'] *= 0.1
+                        r['suppressed'] = True
+                        r['suppression_reason'] = 'conflict_with_peak_matching'
+                
+                # Re-sort after suppression
+                results.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        # ========== QUALITY FLAGGING ==========
+        quality = 'good'
+        if len(results) == 0:
+            quality = 'no_match'
+        elif results[0]['confidence'] < 30:
+            quality = 'low_confidence'
+        elif results[0]['confidence'] < 60:
+            quality = 'moderate'
+        
+        return {
+            "predictions": results,
+            "quality": quality,
+            "top_confidence": results[0]['confidence'] if results else 0
+        }
     except ImportError as e:
         raise HTTPException(status_code=501, detail="PyRIID not installed")
     except Exception as e:
@@ -403,6 +502,84 @@ async def delete_n42_checkpoint():
         return {"success": False, "message": str(e)}
 
 
+# === SNIP Background Subtraction ===
+
+@router.post("/analyze/snip-background")
+async def snip_background_endpoint(request: dict):
+    """
+    Apply SNIP (Sensitive Nonlinear Iterative Peak) background estimation.
+    
+    This removes the Compton continuum and environmental background from
+    gamma spectra, making peaks more visible for isotope identification.
+    
+    Args (JSON body):
+        counts: List of spectrum counts
+        iterations: SNIP iterations (8-24, default 24, higher = smoother)
+        reanalyze: If true, also re-run peak detection and isotope ID
+        energies: Required if reanalyze=True
+    
+    Returns:
+        net_counts: Background-subtracted spectrum
+        background: Estimated background curve
+        algorithm: "SNIP"
+        peaks: (optional) Re-detected peaks on net counts
+        isotopes: (optional) Re-identified isotopes
+    """
+    try:
+        from spectral_analysis import subtract_background, snip_background
+        
+        counts = request.get('counts', [])
+        iterations = int(request.get('iterations', 24))
+        energies = request.get('energies', [])
+        reanalyze = request.get('reanalyze', False)
+        
+        if not counts:
+            raise HTTPException(status_code=400, detail="counts is required")
+        
+        # Apply SNIP background subtraction
+        result = subtract_background(counts, use_snip=True, snip_iterations=iterations)
+        
+        response = {
+            'net_counts': result['net_counts'],
+            'background': result['background'],
+            'algorithm': result['algorithm'],
+            'iterations': iterations
+        }
+        
+        # Optionally re-run analysis on net counts
+        if reanalyze and energies:
+            # Detect peaks on background-subtracted data
+            peaks = detect_peaks(energies, result['net_counts'])
+            
+            # Re-identify isotopes
+            isotopes = identify_isotopes(peaks)
+            isotopes = apply_abundance_weighting(isotopes)
+            
+            # Decay chains
+            chains = identify_decay_chains(peaks, isotopes)
+            
+            # Apply confidence filtering with proper settings
+            settings = {
+                'isotope_min_confidence': UPLOAD_SETTINGS['isotope_min_confidence'],
+                'max_isotopes': UPLOAD_SETTINGS['max_isotopes'],
+                'chain_min_confidence': UPLOAD_SETTINGS['chain_min_confidence'],
+                'chain_min_isotopes_medium': 3,
+                'chain_min_isotopes_high': 4,
+                'mode': 'simple'
+            }
+            isotopes, chains = apply_confidence_filtering(isotopes, chains, settings)
+            
+            response['peaks'] = peaks
+            response['isotopes'] = isotopes
+            response['decay_chains'] = chains
+        
+        return response
+        
+    except Exception as e:
+        print(f"SNIP background error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # === ROI Analysis Endpoints ===
 
 @router.post("/analyze/roi")
@@ -509,5 +686,229 @@ async def get_detectors():
         
         return {"detectors": detectors}
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Model Export Endpoints ===
+
+@router.post("/analyze/export-model")
+async def export_model_endpoint(request: dict):
+    """
+    Export trained ML model to ONNX or TFLite format.
+    
+    Args (JSON body):
+        format: 'onnx' or 'tflite'
+        model_type: 'hobby' or 'comprehensive'
+    
+    Returns:
+        File download or error message
+    """
+    try:
+        from ml_analysis import get_ml_identifier
+        import tempfile
+        import os
+        
+        format = request.get('format', 'onnx').lower()
+        model_type = request.get('model_type', 'hobby')
+        
+        if format not in ['onnx', 'tflite']:
+            raise HTTPException(status_code=400, detail="Format must be 'onnx' or 'tflite'")
+        
+        identifier = get_ml_identifier(model_type)
+        if not identifier:
+            raise HTTPException(status_code=500, detail="ML model not available")
+        
+        # Export to temp file
+        ext = '.onnx' if format == 'onnx' else '.tflite'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp_path = tmp.name
+        
+        result = identifier.export_model(tmp_path, format)
+        
+        if not result.get('success'):
+            raise HTTPException(status_code=500, detail=result.get('error', 'Export failed'))
+        
+        # Read file and return as response
+        with open(result['path'], 'rb') as f:
+            content = f.read()
+        
+        os.unlink(result['path'])
+        
+        filename = f"radtrace_model_{model_type}{ext}"
+        return Response(
+            content=content,
+            media_type='application/octet-stream',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Spectrum Algebra Endpoints ===
+
+@router.post("/analyze/spectrum-algebra")
+async def spectrum_algebra_endpoint(request: dict):
+    """
+    Perform spectrum algebra operations.
+    
+    Args (JSON body):
+        operation: 'add', 'subtract', 'normalize', 'compare'
+        spectra: List of spectrum counts arrays
+        options: Operation-specific options
+    """
+    try:
+        from spectrum_algebra import add_spectra, subtract_spectra, normalize_spectrum, compare_spectra
+        
+        operation = request.get('operation', 'add')
+        spectra = request.get('spectra', [])
+        options = request.get('options', {})
+        
+        if operation == 'add':
+            weights = options.get('weights')
+            return add_spectra(spectra, weights)
+        
+        elif operation == 'subtract':
+            if len(spectra) < 2:
+                raise HTTPException(status_code=400, detail="Need at least 2 spectra for subtraction")
+            return subtract_spectra(
+                spectra[0], spectra[1],
+                source_time=options.get('source_time', 1.0),
+                bg_time=options.get('bg_time', 1.0)
+            )
+        
+        elif operation == 'normalize':
+            if not spectra:
+                raise HTTPException(status_code=400, detail="Need spectrum to normalize")
+            return normalize_spectrum(
+                spectra[0],
+                method=options.get('method', 'l1'),
+                live_time=options.get('live_time')
+            )
+        
+        elif operation == 'compare':
+            if len(spectra) < 2:
+                raise HTTPException(status_code=400, detail="Need 2 spectra to compare")
+            return compare_spectra(spectra[0], spectra[1])
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation: {operation}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Anomaly Detection Endpoint ===
+
+@router.post("/analyze/anomaly-detection")
+async def anomaly_detection_endpoint(request: dict):
+    """
+    Detect anomalous spectra that don't match expected patterns.
+    
+    Uses multiple heuristics to flag unusual spectra:
+    - ML confidence too low (unknown source)
+    - Unusual peak patterns
+    - Unexpected isotope combinations
+    
+    Args (JSON body):
+        counts: Spectrum counts
+        energies: Energy axis
+    
+    Returns:
+        Anomaly score and flags
+    """
+    try:
+        from ml_analysis import get_ml_identifier
+        import numpy as np
+        
+        counts = request.get('counts', [])
+        energies = request.get('energies', [])
+        
+        if not counts:
+            raise HTTPException(status_code=400, detail="counts is required")
+        
+        anomalies = []
+        anomaly_score = 0.0
+        
+        # Check 1: ML confidence
+        identifier = get_ml_identifier('hobby')
+        if identifier:
+            try:
+                predictions = identifier.identify(counts, top_k=3)
+                if predictions:
+                    top_conf = predictions[0]['confidence']
+                    if top_conf < 30:
+                        anomalies.append({
+                            'type': 'low_ml_confidence',
+                            'message': f'Top ML prediction only {top_conf}% confident',
+                            'severity': 'warning'
+                        })
+                        anomaly_score += 0.3
+                    if top_conf < 10:
+                        anomaly_score += 0.2
+                else:
+                    anomalies.append({
+                        'type': 'no_ml_prediction',
+                        'message': 'ML model returned no predictions',
+                        'severity': 'info'
+                    })
+            except:
+                pass
+        
+        # Check 2: Total counts
+        arr = np.array(counts, dtype=float)
+        total = arr.sum()
+        if total < 100:
+            anomalies.append({
+                'type': 'low_counts',
+                'message': f'Very low total counts ({total:.0f})',
+                'severity': 'warning'
+            })
+            anomaly_score += 0.2
+        
+        # Check 3: Peak-to-background ratio
+        if len(arr) > 50:
+            bg_estimate = np.percentile(arr, 25)
+            peak_estimate = np.percentile(arr, 99)
+            if bg_estimate > 0:
+                ratio = peak_estimate / bg_estimate
+                if ratio < 2:
+                    anomalies.append({
+                        'type': 'flat_spectrum',
+                        'message': f'Very flat spectrum (peak/bg ratio: {ratio:.1f})',
+                        'severity': 'warning'
+                    })
+                    anomaly_score += 0.2
+        
+        # Check 4: Unusual spectral shape (entropy)
+        if total > 0:
+            probs = arr / total
+            probs = probs[probs > 0]
+            entropy = -np.sum(probs * np.log2(probs + 1e-10))
+            max_entropy = np.log2(len(arr))
+            normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
+            
+            if normalized_entropy > 0.95:
+                anomalies.append({
+                    'type': 'high_entropy',
+                    'message': 'Spectrum appears random/noise-like',
+                    'severity': 'warning'
+                })
+                anomaly_score += 0.3
+        
+        return {
+            'anomaly_score': min(1.0, anomaly_score),
+            'is_anomalous': anomaly_score > 0.5,
+            'anomalies': anomalies,
+            'total_counts': float(total)
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

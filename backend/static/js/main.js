@@ -408,6 +408,60 @@ function setupEventListeners() {
 
     document.getElementById('btn-clear-bg').addEventListener('click', clearBackground);
 
+    // SNIP Auto-Background Removal (Visual Only - preserves original analysis)
+    document.getElementById('btn-snip-bg').addEventListener('click', async () => {
+        if (!currentData || !currentData.counts) {
+            alert('No spectrum loaded to remove background from.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-snip-bg');
+        const statusEl = document.getElementById('bg-status');
+        const originalText = btn.textContent;
+
+        btn.textContent = '⏳ Processing...';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/analyze/snip-background', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    counts: currentData.counts,
+                    iterations: 24,
+                    reanalyze: false  // Visual only - don't re-analyze
+                })
+            });
+
+            if (!response.ok) throw new Error('SNIP analysis failed');
+
+            const result = await response.json();
+
+            // Store original counts for potential restore
+            if (!currentData._originalCounts) {
+                currentData._originalCounts = [...currentData.counts];
+            }
+
+            // Update ONLY the chart display - preserve analysis results
+            chartManager.render(currentData.energies, result.net_counts, currentData.peaks, chartManager.getScaleType());
+
+            // Update status - make clear this is visual only
+            statusEl.innerHTML = '✓ Background removed <em>(chart only - analysis unchanged)</em>';
+            statusEl.style.color = '#10b981';
+            document.getElementById('bg-active-indicator').style.display = 'inline';
+
+            showToast('Background removed from chart (analysis preserved)', 'success');
+        } catch (err) {
+            console.error('SNIP background error:', err);
+            statusEl.textContent = 'Error: ' + err.message;
+            statusEl.style.color = '#ef4444';
+            showToast('Failed to remove background', 'error');
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    });
+
     // Calibration
     const btnCalibrate = document.getElementById('btn-calibrate-mode');
     if (btnCalibrate) btnCalibrate.addEventListener('click', () => calUI.show());
@@ -539,8 +593,25 @@ function setupEventListeners() {
             const data = await response.json();
 
             if (data.predictions && data.predictions.length > 0) {
+                // Quality badge based on top confidence
+                const quality = data.quality || 'unknown';
+                const qualityColors = {
+                    'good': '#10b981',
+                    'moderate': '#f59e0b',
+                    'low_confidence': '#ef4444',
+                    'no_match': '#6b7280'
+                };
+                const qualityLabels = {
+                    'good': '✓ High Confidence',
+                    'moderate': '⚠ Moderate',
+                    'low_confidence': '⚠ Low Confidence',
+                    'no_match': '? No Match'
+                };
+                const qualityBadge = quality !== 'unknown' ?
+                    `<span style="color: ${qualityColors[quality]}; font-size: 0.8rem; margin-left: 0.5rem;">${qualityLabels[quality]}</span>` : '';
+
                 resultsContainer.innerHTML = `
-                    <h4 style="margin-top: 0;">ML Predictions (PyRIID)</h4>
+                    <h4 style="margin-top: 0;">ML Predictions (PyRIID)${qualityBadge}</h4>
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                         <thead>
                             <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
@@ -551,8 +622,8 @@ function setupEventListeners() {
                         </thead>
                         <tbody>
                             ${data.predictions.map(pred => `
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                    <td style="padding: 4px;"><strong>${pred.isotope}</strong></td>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${pred.suppressed ? 'opacity: 0.5;' : ''}">
+                                    <td style="padding: 4px;"><strong>${pred.isotope}</strong>${pred.suppressed ? ' <span style="font-size:0.7rem;color:#ef4444;">(suppressed)</span>' : ''}</td>
                                     <td style="padding: 4px;">${pred.confidence.toFixed(1)}%</td>
                                     <td style="padding: 4px;">${pred.method}</td>
                                 </tr>

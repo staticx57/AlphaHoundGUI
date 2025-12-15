@@ -334,15 +334,33 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     if not peaks:
         return []
     
-    # Natural abundance weights for isotope families
-    # Used to correctly prioritize common isotopes over rare ones
+    # ========== DECAY CHAIN DEFINITIONS ==========
+    # Define which isotopes belong to which chains
+    U238_CHAIN = ["U-238", "Th-234", "Pa-234m", "U-234", "Th-230", "Ra-226", 
+                  "Rn-222", "Po-218", "Pb-214", "Bi-214", "Po-214", "Pb-210", "Bi-210", "Po-210"]
+    TH232_CHAIN = ["Th-232", "Ra-228", "Ac-228", "Th-228", "Ra-224", 
+                   "Rn-220", "Po-216", "Pb-212", "Bi-212", "Tl-208", "Po-212"]
+    U235_CHAIN = ["U-235", "Th-231", "Pa-231", "Ac-227", "Th-227", "Ra-223", "Rn-219"]
+    
+    # Isotopes that should NOT appear together with natural uranium samples
+    INCOMPATIBLE_WITH_NATURAL = [
+        "Cs-137",   # Fission product / medical
+        "I-131",    # Medical isotope
+        "F-18",     # PET imaging
+        "Tc-99m",   # Medical
+        "Co-60",    # Industrial/medical
+        "Sr-90",    # Fission product
+        "Pu-239",   # Weapons-grade
+        "Np-237",   # Reactor product
+    ]
+    
+    # Natural abundance weights - penalize rare isotopes
     ABUNDANCE_WEIGHTS = {
-        "U-238": 1.0,      # 99.3% of natural uranium - full weight
-        "U-235": 0.01,     # 0.72% of natural uranium - strongly suppress
-        "Th-231": 0.01,    # U-235 daughter - also suppress
+        "U-238": 1.0,      # 99.3% of natural uranium
+        "U-235": 0.01,     # 0.72% - strongly suppress
+        "Th-231": 0.01,    # U-235 daughter
         "Ra-223": 0.01,    # U-235 chain
         "Th-227": 0.01,    # U-235 chain
-        # All other isotopes default to 1.0
     }
     
     # Get appropriate database for mode
@@ -350,19 +368,21 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     
     isotope_matches = {}
     
-    # Track if U-238 chain indicators are detected
-    u238_chain_detected = False
+    # Track which chains are detected
+    chains_detected = {
+        'u238': False,
+        'th232': False,
+        'u235': False
+    }
     
-    # For each isotope in database
+    # First pass: identify all matches
     for isotope, gamma_energies in database.items():
-        # Skip isotopes with no gamma emissions
         if not gamma_energies:
             continue
             
         matches = 0
         matched_peaks = []
         
-        # Check how many of its gamma energies match detected peaks
         for gamma_energy in gamma_energies:
             for peak in peaks:
                 energy_diff = abs(peak['energy'] - gamma_energy)
@@ -375,18 +395,33 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
                     })
                     break
         
-        # Calculate confidence score
         if matches > 0:
-            # Base confidence from fraction of characteristic peaks found
+            # ========== CONFIDENCE CALCULATION ==========
             base_confidence = (matches / len(gamma_energies)) * 100
             
-            # Apply abundance weighting (defaults to 1.0 for most isotopes)
+            # PENALTY 1: Single-line isotopes capped at 60%
+            # Rationale: 1/1 match is often coincidental
+            if len(gamma_energies) == 1 and matches == 1:
+                base_confidence = min(base_confidence, 60.0)
+            
+            # PENALTY 2: Peak count bonus/penalty
+            # Need 2+ matches for full confidence
+            if matches == 1:
+                base_confidence *= 0.7  # 30% penalty for single match
+            elif matches >= 3:
+                base_confidence = min(base_confidence * 1.1, 100.0)  # 10% bonus for 3+
+            
+            # Apply abundance weighting
             abundance_weight = ABUNDANCE_WEIGHTS.get(isotope, 1.0)
             weighted_confidence = base_confidence * abundance_weight
             
-            # Track U-238 chain detection
-            if isotope in ["Bi-214", "Pb-214", "Pa-234m", "Ra-226", "U-238"]:
-                u238_chain_detected = True
+            # Track chain detection
+            if isotope in U238_CHAIN:
+                chains_detected['u238'] = True
+            if isotope in TH232_CHAIN:
+                chains_detected['th232'] = True
+            if isotope in U235_CHAIN:
+                chains_detected['u235'] = True
             
             isotope_matches[isotope] = {
                 'isotope': isotope,
@@ -395,21 +430,34 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
                 'matches': matches,
                 'total_lines': len(gamma_energies),
                 'matched_peaks': matched_peaks,
-                'abundance_weight': abundance_weight
+                'abundance_weight': abundance_weight,
+                'suppressed': False
             }
     
-    # Post-processing: If U-238 chain is detected, further suppress U-235
-    if u238_chain_detected and "U-235" in isotope_matches:
-        # Natural samples with U-238 chain shouldn't show high U-235
-        isotope_matches["U-235"]['confidence'] *= 0.1
-        isotope_matches["U-235"]['suppressed'] = True
+    # ========== CONTEXTUAL SUPPRESSION ==========
+    # If any natural decay chain is detected, suppress incompatible isotopes
+    any_chain_detected = chains_detected['u238'] or chains_detected['th232']
+    
+    if any_chain_detected:
+        for iso in INCOMPATIBLE_WITH_NATURAL:
+            if iso in isotope_matches:
+                isotope_matches[iso]['confidence'] *= 0.1  # 90% reduction
+                isotope_matches[iso]['suppressed'] = True
+                isotope_matches[iso]['suppression_reason'] = 'incompatible_with_natural_chain'
+    
+    # If U-238 chain detected, also suppress U-235 chain isotopes
+    if chains_detected['u238']:
+        for iso in U235_CHAIN:
+            if iso in isotope_matches and iso not in ["U-235"]:  # Already handled by abundance
+                isotope_matches[iso]['confidence'] *= 0.2
+                isotope_matches[iso]['suppressed'] = True
+                isotope_matches[iso]['suppression_reason'] = 'u238_chain_dominant'
     
     # Sort by weighted confidence, then by matches
     identified = sorted(isotope_matches.values(), 
                        key=lambda x: (x['confidence'], x['matches']), 
                        reverse=True)
     
-    # Return all matches (no top 5 limit for flexibility)
     return identified
 
 

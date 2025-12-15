@@ -1,5 +1,94 @@
 # CHANGELOG
 
+## [Unreleased - Session 2025-12-15] - Acquisition Resilience & Reference Links
+
+### Fixed
+- **8-Hour Acquisition Limit Bug (Critical)**
+  - Root cause: `MAX_ACQUISITION_MINUTES = 60` caused 422 validation error for 480-minute capture
+  - Fix: Increased limit to 1440 (24 hours) in `backend/routers/device.py`
+  - Long acquisitions now complete and auto-save correctly
+
+### Added
+- **Acquisition Crash Recovery**
+  - Periodic checkpoint saves every 5 minutes during acquisition
+  - Single overwriting file: `data/acquisitions/acquisition_in_progress.n42`
+  - If acquisition fails, checkpoint contains all data up to last save
+  - Automatic cleanup after successful completion
+  - New endpoints: `POST /export/n42-checkpoint`, `DELETE /export/n42-checkpoint`
+
+- **Device Write Retry Logic**
+  - Serial write operations now retry 3 times before disconnecting
+  - Prevents transient USB timeouts from killing long acquisitions
+  - All device log messages now include timestamps for debugging
+
+- **NNDC Reference Links for Isotopes**
+  - Each identified isotope now has a clickable "📚 NNDC" link
+  - Links directly to NNDC NuDat3 decay data page
+  - Example: Cs-137 links to `https://www.nndc.bnl.gov/nudat3/decaysearchdirect.jsp?nuc=137Cs`
+
+- **Authoritative Source References for Decay Chains**
+  - Decay chain cards now display NNDC, IAEA, and other reference links
+  - U-238, Th-232, U-235 chains include 3 authoritative sources each
+  - Links open in new tab for easy research
+
+- **SNIP Background Filtering** (NEW)
+  - "🔻 Auto Remove BG" button in Analysis → Background Subtraction
+  - Removes Compton continuum without requiring separate background file
+  - Uses industry-standard SNIP (Sensitive Nonlinear Iterative Peak) algorithm
+  - Re-runs peak detection and isotope ID on cleaner data
+  - Improves detection of weak peaks buried in continuum
+
+- **CHN/SPE File Import** (NEW)
+  - Support for Ortec CHN (binary) and Maestro SPE (ASCII) formats
+  - Automatic energy calibration extraction
+  - Full analysis pipeline on import (peaks, isotopes, chains)
+  - New: `backend/chn_spe_parser.py`
+
+- **Spectrum Algebra** (NEW)
+  - Add, subtract, normalize, compare spectra
+  - Proper Poisson error propagation
+  - Live time normalization support
+  - Endpoint: `POST /analyze/spectrum-algebra`
+  - New: `backend/spectrum_algebra.py`
+
+- **ONNX/TFLite Model Export** (NEW)
+  - Export trained ML models for mobile/edge deployment
+  - ONNX format for desktop inference
+  - TFLite format for Android/iOS apps
+  - Endpoint: `POST /analyze/export-model`
+
+- **Anomaly Detection** (NEW)
+  - Flag unusual spectra that don't match training data
+  - Multi-factor scoring: ML confidence, peak/BG ratio, entropy
+  - Endpoint: `POST /analyze/anomaly-detection`
+
+- **Poisson Peak Fitting** (NEW)
+  - Maximum likelihood estimation for low-count peaks
+  - Proper counting statistics uncertainty
+  - More robust than least-squares for weak signals
+  - New: `poisson_peak_fit()` in `spectral_analysis.py`
+
+- **ML Hybrid Filtering** (NEW)
+  - Confidence thresholding: 5% minimum to display predictions
+  - Hybrid filtering: Suppresses medical isotopes when natural chains detected
+  - Quality badges: "✓ High Confidence", "⚠ Moderate", "⚠ Low Confidence"
+  - Suppressed predictions shown dimmed with "(suppressed)" label
+
+### Changed
+- **`alphahound_serial.py`**: `_write()` method now has retry loop with exponential backoff
+- **`ui.js`**: Added `getNNDCUrl()` helper, enhanced `renderIsotopes()` and `renderDecayChains()`
+- **`spectral_analysis.py`**: Added `snip_background()` and `poisson_peak_fit()` functions
+- **`analysis.py`**: 6 new endpoints for SNIP, ML export, spectrum algebra, anomaly detection
+- **`ml_analysis.py`**: Added `export_model()`, `_export_onnx()`, `_export_tflite()` methods
+- **`main.js`**: ML predictions now show quality badges and suppression indicators
+- **`isotope_database.py`**: Major peak matching improvements:
+  - Contextual suppression: Medical/fission isotopes suppressed when natural decay chains detected
+  - Single-line isotopes capped at 60% confidence (prevents 1/1 = 100% false positives)
+  - Peak count penalty: 30% penalty for single matches, 10% bonus for 3+ matches
+  - All decay chains (U-238, Th-232, U-235) now properly defined and tracked
+
+---
+
 ## [Unreleased - Session 2025-12-14 Late] - ML Model Selection & N42 Auto-Save
 
 ### Added

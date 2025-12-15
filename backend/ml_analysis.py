@@ -483,6 +483,97 @@ class MLIdentifier:
         except Exception as e:
             print(f"[ML] Prediction error: {e}")
             return []
+    
+    def export_model(self, output_path: str, format: str = 'onnx') -> dict:
+        """
+        Export trained model to ONNX or TFLite format for deployment.
+        
+        Args:
+            output_path: Path to save the exported model
+            format: 'onnx' or 'tflite'
+        
+        Returns:
+            dict with export status and metadata
+        """
+        if not self.is_trained:
+            self.lazy_train()
+        
+        if self.model is None:
+            return {'success': False, 'error': 'Model not trained'}
+        
+        try:
+            if format.lower() == 'onnx':
+                return self._export_onnx(output_path)
+            elif format.lower() == 'tflite':
+                return self._export_tflite(output_path)
+            else:
+                return {'success': False, 'error': f'Unknown format: {format}'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def _export_onnx(self, output_path: str) -> dict:
+        """Export to ONNX format."""
+        try:
+            import tf2onnx
+            import tensorflow as tf
+            
+            # Get the underlying Keras model from PyRIID
+            keras_model = self.model.model
+            
+            # Convert to ONNX
+            spec = (tf.TensorSpec((None, self.n_channels), tf.float32, name="input"),)
+            model_proto, _ = tf2onnx.convert.from_keras(keras_model, input_signature=spec)
+            
+            # Save
+            if not output_path.endswith('.onnx'):
+                output_path += '.onnx'
+            
+            with open(output_path, 'wb') as f:
+                f.write(model_proto.SerializeToString())
+            
+            return {
+                'success': True,
+                'format': 'onnx',
+                'path': output_path,
+                'input_shape': [self.n_channels],
+                'output_classes': list(self.model.model.output_names) if hasattr(self.model.model, 'output_names') else [],
+                'model_type': self.model_type
+            }
+        except ImportError:
+            return {'success': False, 'error': 'tf2onnx not installed. Run: pip install tf2onnx'}
+        except Exception as e:
+            return {'success': False, 'error': f'ONNX export failed: {e}'}
+    
+    def _export_tflite(self, output_path: str) -> dict:
+        """Export to TensorFlow Lite format."""
+        try:
+            import tensorflow as tf
+            
+            # Get the underlying Keras model
+            keras_model = self.model.model
+            
+            # Convert to TFLite
+            converter = tf.lite.TFLiteConverter.from_keras_model(keras_model)
+            converter.optimizations = [tf.lite.Optimize.DEFAULT]
+            tflite_model = converter.convert()
+            
+            # Save
+            if not output_path.endswith('.tflite'):
+                output_path += '.tflite'
+            
+            with open(output_path, 'wb') as f:
+                f.write(tflite_model)
+            
+            return {
+                'success': True,
+                'format': 'tflite',
+                'path': output_path,
+                'input_shape': [self.n_channels],
+                'size_bytes': len(tflite_model),
+                'model_type': self.model_type
+            }
+        except Exception as e:
+            return {'success': False, 'error': f'TFLite export failed: {e}'}
 
 # Global instances (one per model type)
 _ml_identifiers = {}

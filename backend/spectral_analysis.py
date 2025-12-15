@@ -94,30 +94,93 @@ def calibrate_energy(channels, known_energies, known_channels):
     calibrated_energies = slope * np.array(channels) + intercept
     return calibrated_energies.tolist(), {"slope": slope, "intercept": intercept}
 
-def subtract_background(source_counts, background_counts, scaling_factor=1.0):
+def subtract_background(source_counts, background_counts=None, scaling_factor=1.0, use_snip=False, snip_iterations=24):
     """
     Subtract background spectrum from source spectrum.
     
     Args:
         source_counts (list): Counts from the sample source
-        background_counts (list): Counts from the background noise
+        background_counts (list): Counts from the background noise (optional if use_snip=True)
         scaling_factor (float): Multiplier for background (e.g. time normalization)
+        use_snip (bool): If True, estimate background using SNIP algorithm
+        snip_iterations (int): Number of SNIP iterations (8-24 typical)
         
     Returns:
-        list: Net counts (clamped to 0)
+        dict: Contains net_counts, background, and metadata
     """
     src = np.array(source_counts, dtype=float)
-    bg = np.array(background_counts, dtype=float)
     
-    # Ensure dimensions match
-    length = min(len(src), len(bg))
-    src = src[:length]
-    bg = bg[:length]
+    if use_snip or background_counts is None:
+        # Use SNIP algorithm to estimate background
+        bg = snip_background(src, iterations=snip_iterations)
+    else:
+        bg = np.array(background_counts, dtype=float) * scaling_factor
+        # Ensure dimensions match
+        length = min(len(src), len(bg))
+        src = src[:length]
+        bg = bg[:length]
     
     # Subtract
-    net_counts = src - (bg * scaling_factor)
+    net_counts = src - bg
     
     # Clamp negative values to 0
     net_counts[net_counts < 0] = 0
     
-    return net_counts.tolist()
+    return {
+        'net_counts': net_counts.tolist(),
+        'background': bg.tolist() if hasattr(bg, 'tolist') else list(bg),
+        'gross_counts': src.tolist(),
+        'algorithm': 'SNIP' if use_snip else 'subtraction',
+        'iterations': snip_iterations if use_snip else None
+    }
+
+
+def snip_background(counts, iterations=24):
+    """
+    SNIP (Sensitive Nonlinear Iterative Peak) algorithm for background estimation.
+    
+    This is the industry-standard algorithm for gamma spectrum baseline removal.
+    It uses iterative clipping in LLS (Log-Log-Square-root) space to estimate
+    the slowly-varying Compton continuum while preserving peak shapes.
+    
+    Args:
+        counts: Array of spectrum counts (1024 channels typical)
+        iterations: Number of SNIP iterations (8-24 typical, higher = smoother)
+    
+    Returns:
+        background: Estimated background array (same length as counts)
+    
+    Reference:
+        C.G. Ryan et al., "SNIP, a statistics-sensitive background treatment
+        for the quantitative analysis of PIXE spectra in geoscience applications"
+        Nuclear Instruments and Methods B, 34 (1988) 396-402
+    """
+    counts = np.array(counts, dtype=float)
+    n = len(counts)
+    
+    if n == 0:
+        return np.array([])
+    
+    # LLS transform: v = log(log(sqrt(y+1)+1)+1)
+    # This compresses the dynamic range and makes the algorithm more robust
+    v = np.log(np.log(np.sqrt(counts + 1) + 1) + 1)
+    
+    # Make a working copy
+    working = v.copy()
+    
+    # Iterative clipping from large window to small
+    for p in range(iterations, 0, -1):
+        for i in range(p, n - p):
+            # Compare current point to average of neighbors at distance p
+            avg = 0.5 * (working[i - p] + working[i + p])
+            if working[i] > avg:
+                working[i] = avg
+    
+    # Inverse LLS transform: y = (exp(exp(v)-1)-1)^2 - 1
+    background = (np.exp(np.exp(working) - 1) - 1) ** 2 - 1
+    
+    # Ensure non-negative background
+    background = np.maximum(background, 0)
+    
+    return background
+
