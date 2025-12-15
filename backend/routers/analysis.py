@@ -355,6 +355,54 @@ async def export_n42_auto(request: dict):
         print(f"N42 auto-save error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save N42: {str(e)}")
 
+
+@router.post("/export/n42-checkpoint")
+async def export_n42_checkpoint(request: dict):
+    """Save spectrum to overwriting checkpoint file during acquisition.
+    
+    This provides crash recovery - if acquisition fails, the most recent
+    checkpoint can be recovered from data/acquisitions/acquisition_in_progress.n42
+    """
+    try:
+        import os
+        from datetime import datetime
+        from n42_exporter import generate_n42_xml
+        
+        save_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'acquisitions')
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Single overwriting checkpoint file
+        filepath = os.path.join(save_dir, "acquisition_in_progress.n42")
+        n42_content = generate_n42_xml(request)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(n42_content)
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] Checkpoint saved: {filepath}")
+        
+        return {"success": True, "message": "Checkpoint saved"}
+    except Exception as e:
+        print(f"Checkpoint save error: {e}")
+        # Don't fail the acquisition for checkpoint failures
+        return {"success": False, "message": str(e)}
+
+
+@router.delete("/export/n42-checkpoint")
+async def delete_n42_checkpoint():
+    """Delete checkpoint file after successful acquisition completion"""
+    try:
+        import os
+        filepath = os.path.join(os.path.dirname(__file__), '..', 'data', 'acquisitions', 'acquisition_in_progress.n42')
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"Checkpoint file cleaned up: {filepath}")
+        return {"success": True}
+    except Exception as e:
+        print(f"Checkpoint cleanup error: {e}")
+        return {"success": False, "message": str(e)}
+
+
 # === ROI Analysis Endpoints ===
 
 @router.post("/analyze/roi")

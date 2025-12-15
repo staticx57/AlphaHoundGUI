@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## [Unreleased - Session 2025-12-14 Late] - ML Model Selection & N42 Auto-Save
+
+### Added
+- **Compton Continuum Simulation** (ml_analysis.py)
+  - `add_compton_continuum()` method for realistic CsI(Tl) detector response
+  - Calculates Compton edge and distributes ~35% of peak counts to continuum
+  - Applied to all synthetic training peaks
+
+- **Selectable ML Model Types**
+  - `HOBBY_ISOTOPES` list with 35 common isotopes (uranium glass, mantles, calibration)
+  - `ML_MODEL_TYPES` config: hobby (35 isotopes, 30 samples) vs comprehensive (95+, 15 samples)
+  - `get_ml_identifier(model_type)` caches separate instances per model
+  - `get_available_ml_models()` for future settings UI integration
+
+- **N42 Auto-Save Format** (default)
+  - New `/export/n42-auto` endpoint replaces `/export/csv-auto`
+  - Auto-saves to `data/acquisitions/spectrum_YYYY-MM-DD_HH-MM-SS.n42`
+  - Includes peaks, isotopes, live_time, real_time in saved files
+  - Standards-compliant N42.42 format for better portability
+
+### Fixed
+- **N42 Auto-Save Import Error**
+  - Fixed wrong function name: `create_n42_xml` → `generate_n42_xml`
+  - Auto-save now works correctly after server restart
+
+---
+
 ## [Unreleased - Session 2025-12-14 PM] - PyRIID Enhancement & Peak Detection Fix
 
 ### Added

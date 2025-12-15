@@ -94,16 +94,28 @@ class AlphaHoundDevice:
         return self.spectrum.copy()
     
     def _write(self, data: bytes):
-        """Thread-safe write to serial port"""
+        """Thread-safe write to serial port with retry logic"""
         if not self.serial_conn:
             return
-        try:
-            with self.write_lock:
-                self.serial_conn.write(data)
-                # print(f"[TX] {data}") 
-        except Exception as e:
-            print(f"[AlphaHound] Write error: {e}")
-            self.disconnect()
+        
+        from datetime import datetime
+        
+        for attempt in range(3):
+            try:
+                with self.write_lock:
+                    self.serial_conn.write(data)
+                return  # Success
+            except Exception as e:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{timestamp}] [AlphaHound] Write error (attempt {attempt+1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(0.5)  # Brief pause before retry
+        
+        # All retries failed
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] [AlphaHound] Write failed after 3 attempts, disconnecting")
+        self.disconnect()
     
     def _read_worker(self):
         """Background thread for reading serial data"""

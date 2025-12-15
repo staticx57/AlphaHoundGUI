@@ -14,6 +14,8 @@ let overlaySpectra = [];
 let compareMode = false;
 let backgroundData = null; // New background state
 let doseChart = null; // Live dose rate chart instance
+let lastCheckpointTime = 0; // Checkpoint save tracking
+const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
 const colors = ['#38bdf8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 // Settings
@@ -1096,6 +1098,7 @@ async function startAcquisition() {
         await api.clearDevice();
         isAcquiring = true;
         acquisitionStartTime = Date.now();
+        lastCheckpointTime = Date.now(); // Reset checkpoint timer
 
         document.getElementById('btn-start-acquire').style.display = 'none';
         document.getElementById('btn-stop-acquire').style.display = 'block';
@@ -1129,6 +1132,10 @@ async function startAcquisition() {
                     if (saveResponse.ok) {
                         const saveResult = await saveResponse.json();
                         showToast(saveResult.message, 'success');
+                        // Clean up checkpoint file after successful final save
+                        try {
+                            await fetch('/export/n42-checkpoint', { method: 'DELETE' });
+                        } catch (e) { console.warn('Checkpoint cleanup failed:', e); }
                     }
                 } catch (e) {
                     console.error('Auto-save failed:', e);
@@ -1145,6 +1152,28 @@ async function startAcquisition() {
                 currentData = data;
                 ui.renderDashboard(data);
                 if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
+
+                // Periodic checkpoint save (every 5 minutes)
+                if (Date.now() - lastCheckpointTime >= CHECKPOINT_INTERVAL_MS && currentData?.counts?.length > 0) {
+                    try {
+                        await fetch('/export/n42-checkpoint', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                energies: currentData.energies,
+                                counts: currentData.counts,
+                                live_time: elapsed,
+                                real_time: elapsed,
+                                peaks: currentData.peaks || [],
+                                isotopes: currentData.isotopes || []
+                            })
+                        });
+                        lastCheckpointTime = Date.now();
+                        console.log(`[Checkpoint] Saved at ${elapsed.toFixed(0)}s elapsed`);
+                    } catch (checkpointErr) {
+                        console.warn('Checkpoint save failed:', checkpointErr);
+                    }
+                }
             } catch (e) { console.error(e); }
         }, 2000);
 

@@ -11,7 +11,7 @@ from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_f
 router = APIRouter(prefix="/device", tags=["device"])
 
 # Validation constants
-MAX_ACQUISITION_MINUTES = 60  # 1 hour max
+MAX_ACQUISITION_MINUTES = 1440  # 24 hours max - supports overnight acquisitions
 PORT_PATTERN = re.compile(r'^(COM\d+|/dev/tty[A-Za-z0-9]+)$')
 
 class ConnectRequest(BaseModel):
