@@ -1112,14 +1112,18 @@ async function startAcquisition() {
                 ui.renderDashboard(data);
                 if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
 
-                // Auto-save CSV
+                // Auto-save N42 (standards-compliant format)
                 try {
-                    const saveResponse = await fetch('/export/csv-auto', {
+                    const saveResponse = await fetch('/export/n42-auto', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             energies: data.energies,
-                            counts: data.counts
+                            counts: data.counts,
+                            live_time: elapsed,
+                            real_time: elapsed,
+                            peaks: data.peaks,
+                            isotopes: data.isotopes
                         })
                     });
                     if (saveResponse.ok) {

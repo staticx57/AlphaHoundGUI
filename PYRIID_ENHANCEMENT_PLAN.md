@@ -63,6 +63,48 @@ PyRIID ML model incorrectly identifies uranium glass as Ta-182 or Pu-239 instead
 - [x] **Result**: Now detecting 20+ peaks including Pb-214, Bi-214, Th-234
 - [x] **File Modified**: `backend/peak_detection.py`
 
+### 2024-12-14 Late Evening Session
+
+#### Compton Continuum Simulation (COMPLETE)
+- [x] Added `add_compton_continuum()` method to MLIdentifier class
+- [x] Calculates Compton edge energy: `E_edge = E_gamma / (1 + 2*E_gamma/511)`
+- [x] Creates triangular distribution from 0 to Compton edge
+- [x] Intensity: ~35% of peak counts distributed across continuum
+- [x] Applied to all peaks during training spectrum generation
+- [x] **Physics**: Realistic CsI(Tl) scintillator detector response
+
+```python
+# Key implementation in ml_analysis.py
+def add_compton_continuum(self, spectrum, peak_energy_keV, peak_intensity):
+    E_edge = peak_energy_keV / (1 + 2 * peak_energy_keV / 511.0)
+    # Distribute ~35% of peak intensity from 0 to Compton edge
+```
+
+#### Selectable ML Model Types (COMPLETE)
+- [x] Created `HOBBY_ISOTOPES` list with **35 common isotopes**:
+  - Calibration: Co-60, Cs-137, Na-22, Am-241, Ba-133
+  - U-238 chain: U-238, Th-234, Pa-234m, U-234, Ra-226, Pb-214, Bi-214
+  - Th-232 chain: Th-232, Ac-228, Pb-212, Bi-212, Tl-208
+  - U-235 chain: U-235, Th-231, Th-227, Ra-223
+  - Medical: I-131, Tc-99m, F-18, Tl-201
+  - Industrial: Ir-192, Se-75, Co-57, Eu-152
+- [x] Created `ML_MODEL_TYPES` configuration dict
+- [x] Added `model_type` parameter to MLIdentifier constructor
+- [x] Updated `get_ml_identifier(model_type)` to cache per-model instances
+- [x] Added `get_available_ml_models()` for settings UI integration
+
+| Model Type | Isotopes | Samples/Isotope | Total Samples |
+|------------|----------|-----------------|---------------|
+| **hobby** (default) | 31-35 | 30 | ~1800 |
+| **comprehensive** | 95+ | 15 | ~2200 |
+
+#### Auto-Save Format Changed to N42 (COMPLETE)
+- [x] Created `/export/n42-auto` endpoint in `analysis.py`
+- [x] Updated `main.js` to call n42-auto instead of csv-auto
+- [x] N42 files include: energies, counts, peaks, isotopes, live_time, real_time
+- [x] Files saved to: `data/acquisitions/spectrum_YYYY-MM-DD_HH-MM-SS.n42`
+- [x] **Benefit**: Standards-compliant format, more portable than CSV
+
 ---
 
 ## Implementation Steps (Detailed)

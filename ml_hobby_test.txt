@@ -1,0 +1,28 @@
+Loaded: 1024 channels, 190623 total counts
+Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+Creating converter from 7 to 5
+Creating converter from 5 to 7
+Creating converter from 7 to 5
+Creating converter from 5 to 7
+From C:\Users\stati\AppData\Local\Python\pythoncore-3.10-64\lib\site-packages\tf2onnx\tf_loader.py:68: The name tf.reset_default_graph is deprecated. Please use tf.compat.v1.reset_default_graph instead.
+
+From C:\Users\stati\AppData\Local\Python\pythoncore-3.10-64\lib\site-packages\tf2onnx\tf_loader.py:72: The name tf.train.import_meta_graph is deprecated. Please use tf.compat.v1.train.import_meta_graph instead.
+
+2025-12-14 23:34:51.964217: W tensorflow/core/framework/local_rendezvous.cc:404] Local rendezvous is aborting with status: OUT_OF_RANGE: End of sequence
+[ML] PyRIID successfully imported
+[IAEA Parser] Loaded 41 isotopes from IAEA data
+[Isotope Database] Loaded IAEA data for 41 isotopes
+[ML] Loaded 95 isotopes from database
+[ML] Model type: Hobby (35 isotopes)
+
+=== ML IDENTIFICATION ===
+Training ML model (this may take a moment)...
+[ML] Training classifier on synthetic data (Hobby (35 isotopes))...
+[ML] Training on 31 isotopes with 30 samples each
+[ML] Training samples: 1794 single + 386 mixtures = 2180 total
+[ML] Training complete. Model ready with 40 isotopes.
+
+Top 10 ML predictions:
+  1. CalibrationSource     100.0%
+
+[!] No uranium-related isotopes in top 10 ML predictions

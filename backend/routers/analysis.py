@@ -320,6 +320,41 @@ async def export_csv_auto(request: dict):
         print(f"CSV auto-save error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save CSV: {str(e)}")
 
+
+@router.post("/export/n42-auto")
+async def export_n42_auto(request: dict):
+    """Auto-save spectrum to N42 with timestamped filename (default format)"""
+    try:
+        import os
+        from datetime import datetime
+        from n42_exporter import generate_n42_xml
+        
+        # Create acquisitions directory if it doesn't exist
+        save_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'acquisitions')
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Generate timestamped filename
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"spectrum_{timestamp}.n42"
+        filepath = os.path.join(save_dir, filename)
+        
+        # Generate N42 XML
+        n42_content = generate_n42_xml(request)
+        
+        # Write N42 file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(n42_content)
+        
+        return {
+            "success": True,
+            "filename": filename,
+            "path": filepath,
+            "message": f"Spectrum saved: {filename}"
+        }
+    except Exception as e:
+        print(f"N42 auto-save error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save N42: {str(e)}")
+
 # === ROI Analysis Endpoints ===
 
 @router.post("/analyze/roi")

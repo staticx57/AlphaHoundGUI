@@ -48,6 +48,47 @@ except ImportError:
     print("[WARNING] Isotope database not found, using fallback isotopes")
 
 
+# =========================================================
+# SELECTABLE ML MODEL TYPES
+# Hobby: ~35 common isotopes for hobby use (uranium glass, mantles, etc.)
+# Comprehensive: All 95+ isotopes for advanced/research use
+# =========================================================
+
+HOBBY_ISOTOPES = [
+    # Calibration sources
+    "Co-60", "Cs-137", "Na-22", "Am-241", "Ba-133",
+    # Natural background
+    "K-40",
+    # U-238 decay chain (uranium glass, Fiestaware, radium watches)
+    "U-238", "Th-234", "Pa-234m", "U-234", "Ra-226", "Pb-214", "Bi-214",
+    # Th-232 decay chain (lantern mantles, welding rods)
+    "Th-232", "Ac-228", "Pb-212", "Bi-212", "Tl-208",
+    # U-235 chain (rare, but needed for completeness)
+    "U-235", "Th-231", "Th-227", "Ra-223",
+    # Common medical (may encounter from medical waste)
+    "I-131", "Tc-99m", "F-18", "Tl-201",
+    # Industrial (gauges, sources)
+    "Ir-192", "Se-75", "Co-57", "Eu-152",
+    # Background placeholder
+    "Background"
+]
+
+ML_MODEL_TYPES = {
+    "hobby": {
+        "name": "Hobby (35 isotopes)",
+        "description": "Common sources: uranium glass, mantles, radium, calibration",
+        "isotopes": HOBBY_ISOTOPES,
+        "samples_per_isotope": 30
+    },
+    "comprehensive": {
+        "name": "Comprehensive (95+ isotopes)",
+        "description": "All isotopes including fission products, transuranics",
+        "isotopes": None,  # Use full database
+        "samples_per_isotope": 15
+    }
+}
+
+
 class MLIdentifier:
     """ML-based isotope identifier using PyRIID MLPClassifier.
     
@@ -60,14 +101,21 @@ class MLIdentifier:
     - Energy-dependent resolution: FWHM = 0.10 * sqrt(662/E) * E
     """
     
-    def __init__(self):
+    def __init__(self, model_type: str = "hobby"):
+        """Initialize ML identifier with selectable model type.
+        
+        Args:
+            model_type: "hobby" for 35 common isotopes, "comprehensive" for 95+ isotopes
+        """
         self.model = None
         self.is_trained = False
+        self.model_type = model_type if model_type in ML_MODEL_TYPES else "hobby"
         self.n_channels = 1024  # AlphaHound standard channel count
         self.keV_per_channel = 7.4  # AlphaHound actual calibration: ~7.4 keV/channel
         # AlphaHound CsI(Tl) resolution: 10% FWHM at 662 keV
         self.reference_fwhm_fraction = 0.10  # 10% at 662 keV
         self.reference_energy = 662.0  # keV
+        print(f"[ML] Model type: {ML_MODEL_TYPES[self.model_type]['name']}")
         
     def energy_to_channel(self, energy_keV: float) -> int:
         """Convert gamma energy in keV to channel number."""
@@ -88,6 +136,44 @@ class MLIdentifier:
         fwhm_keV = self.reference_fwhm_fraction * energy_keV * (self.reference_energy / energy_keV) ** 0.5
         fwhm_channels = max(3, int(fwhm_keV / self.keV_per_channel))
         return fwhm_channels
+    
+    def add_compton_continuum(self, spectrum: np.ndarray, peak_energy_keV: float, peak_intensity: float):
+        """Add realistic Compton scattering continuum for a gamma-ray peak.
+        
+        Compton scattering creates a continuous distribution of energies from
+        the Compton edge down to zero. The Compton edge energy is:
+        E_edge = E_gamma / (1 + 2*E_gamma/(511 keV))
+        
+        For CsI(Tl), we add a simplified continuum shape that:
+        1. Rises from the Compton edge toward lower energies
+        2. Peaks around 1/3 of the way to zero
+        3. Falls off gradually at very low energies
+        """
+        # Calculate Compton edge energy
+        E_gamma = peak_energy_keV
+        E_edge = E_gamma / (1 + 2 * E_gamma / 511.0)
+        edge_channel = self.energy_to_channel(E_edge)
+        
+        # Compton continuum intensity is typically 30-50% of peak for CsI
+        continuum_fraction = 0.35 * np.random.uniform(0.8, 1.2)
+        total_continuum = int(peak_intensity * continuum_fraction)
+        
+        # Distribute counts from channel 0 to Compton edge
+        if edge_channel > 5 and total_continuum > 0:
+            # Create triangular-ish distribution (peak around 1/3 of edge)
+            channels = np.arange(0, edge_channel)
+            # Distribution rises then falls - peak around edge/3
+            peak_pos = edge_channel // 3
+            weights = np.where(channels < peak_pos, 
+                              channels / (peak_pos + 1),
+                              (edge_channel - channels) / (edge_channel - peak_pos + 1))
+            weights = weights / (weights.sum() + 1e-10)  # Normalize
+            
+            # Add Poisson-distributed counts
+            continuum_counts = np.random.multinomial(total_continuum, weights)
+            spectrum[:edge_channel] += continuum_counts
+        
+        return spectrum
         
     def lazy_train(self):
         """Train model on synthetic data using authoritative isotope database."""
@@ -97,23 +183,30 @@ class MLIdentifier:
         if self.is_trained:
             return
             
-        print("[ML] Training classifier on synthetic data (IAEA/NNDC energies)...")
+        model_config = ML_MODEL_TYPES[self.model_type]
+        print(f"[ML] Training classifier on synthetic data ({model_config['name']})...")
         
         # Build isotope list from authoritative database
         # Filter to isotopes with gamma emissions (non-empty energy lists)
         isotope_data = {}
         
+        # Get allowed isotopes for this model type
+        allowed_isotopes = model_config['isotopes']  # None = all isotopes
+        
         if HAS_ISOTOPE_DB and ISOTOPE_DATABASE_ADVANCED:
             for isotope, energies in ISOTOPE_DATABASE_ADVANCED.items():
                 if energies and len(energies) > 0:  # Has gamma emissions
-                    isotope_data[isotope] = energies
+                    # Filter by model type if specified
+                    if allowed_isotopes is None or isotope in allowed_isotopes:
+                        isotope_data[isotope] = energies
         
         # Add Background if not present
         if 'Background' not in isotope_data:
             isotope_data['Background'] = []
             
         isotopes = list(isotope_data.keys())
-        print(f"[ML] Training on {len(isotopes)} single isotopes from authoritative sources")
+        base_samples = model_config['samples_per_isotope']  # Use model-specific sample count
+        print(f"[ML] Training on {len(isotopes)} isotopes with {base_samples} samples each")
         
         # =========================================================
         # ABUNDANCE-WEIGHTED SAMPLE GENERATION
@@ -183,7 +276,7 @@ class MLIdentifier:
         }
         
         # Calculate total samples with abundance weighting
-        base_samples = 15  # Base samples per isotope
+        # base_samples already set from model_config above
         n_single_samples = sum(
             int(base_samples * SAMPLE_WEIGHTS.get(iso, 1.0)) 
             for iso in isotopes
@@ -239,6 +332,9 @@ class MLIdentifier:
                     if width > 0:
                         peak_counts = np.random.poisson(max(1, peak_intensity // width), width)
                         spectra_matrix[sample_idx, start_ch:end_ch] += peak_counts
+                        
+                        # Add Compton continuum for realistic CsI(Tl) response
+                        self.add_compton_continuum(spectra_matrix[sample_idx], energy_keV, peak_intensity)
                 
                 sample_idx += 1
         
@@ -388,17 +484,42 @@ class MLIdentifier:
             print(f"[ML] Prediction error: {e}")
             return []
 
-# Global instance (singleton pattern)
-_ml_identifier = None
+# Global instances (one per model type)
+_ml_identifiers = {}
 
-def get_ml_identifier() -> Optional[MLIdentifier]:
-    """Get or create the global ML identifier instance."""
-    global _ml_identifier
+def get_ml_identifier(model_type: str = "hobby") -> Optional[MLIdentifier]:
+    """Get or create ML identifier instance for specified model type.
+    
+    Args:
+        model_type: "hobby" for 35 common isotopes, "comprehensive" for 95+
+        
+    Returns:
+        MLIdentifier instance (trained or None if PyRIID not available)
+    """
+    global _ml_identifiers
     
     if not HAS_RIID:
         return None
-        
-    if _ml_identifier is None:
-        _ml_identifier = MLIdentifier()
     
-    return _ml_identifier
+    # Normalize model type
+    if model_type not in ML_MODEL_TYPES:
+        model_type = "hobby"
+    
+    # Create instance for this model type if not exists
+    if model_type not in _ml_identifiers:
+        _ml_identifiers[model_type] = MLIdentifier(model_type=model_type)
+    
+    return _ml_identifiers[model_type]
+
+
+def get_available_ml_models() -> dict:
+    """Get available ML model types for settings UI.
+    
+    Returns:
+        Dict of model_type -> {"name": str, "description": str}
+    """
+    return {
+        k: {"name": v["name"], "description": v["description"]}
+        for k, v in ML_MODEL_TYPES.items()
+    }
+
