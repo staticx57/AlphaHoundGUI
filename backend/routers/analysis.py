@@ -13,10 +13,78 @@ from report_generator import generate_pdf_report
 
 # Constants for input validation
 MAX_FILE_SIZE_MB = 10
-ALLOWED_EXTENSIONS = {'.n42', '.xml', '.csv', '.chn', '.spe'}
+# Extended file format support via SandiaSpecUtils
+ALLOWED_EXTENSIONS = {
+    # Native parsers (CSV, N42, CHN, SPE)
+    '.n42', '.xml', '.csv', '.chn', '.spe',
+    # SandiaSpecUtils extended formats (most common)
+    '.spc',   # ORTEC SPC
+    '.pcf',   # GADRAS PCF
+    '.dat',   # Generic DAT
+    '.txt',   # Text/ASCII
+    '.mca',   # Amptek MCA
+    '.iem',   # IEM
+    '.gam',   # GAM
+    '.cnf',   # Canberra CNF
+    '.tka',   # TKA
+    '.pks',   # PKS
+    '.grd',   # GRD
+    '.sal',   # SAL
+    '.lis',   # LIS
+    '.phd',   # PHD
+    '.pmf',   # PMF
+}
 MAX_SPECTRUM_CHANNELS = 16384
 
+def _analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0) -> dict:
+    """
+    Common analysis pipeline for all file formats.
+    Detects peaks, identifies isotopes, and finds decay chains.
+    
+    Args:
+        result: Parsed spectrum dict with 'counts' and 'energies'
+        is_calibrated: Whether the spectrum has energy calibration
+        live_time: Acquisition time in seconds (for settings selection)
+    
+    Returns:
+        Updated result dict with 'peaks', 'isotopes', and 'decay_chains'
+    """
+    if not result.get("counts") or not result.get("energies"):
+        return result
+    
+    peaks = detect_peaks(result["energies"], result["counts"])
+    result["peaks"] = peaks
+    
+    if not peaks:
+        result["isotopes"] = []
+        result["decay_chains"] = []
+        return result
+    
+    # Select settings based on calibration and acquisition time
+    if is_calibrated and live_time > 30.0:
+        current_settings = DEFAULT_SETTINGS
+    else:
+        current_settings = UPLOAD_SETTINGS
+    
+    # Identify isotopes and decay chains
+    all_isotopes = identify_isotopes(
+        peaks, 
+        energy_tolerance=current_settings['energy_tolerance'], 
+        mode=current_settings.get('mode', 'simple')
+    )
+    all_chains = identify_decay_chains(
+        peaks, all_isotopes, 
+        energy_tolerance=current_settings['energy_tolerance']
+    )
+    weighted_chains = apply_abundance_weighting(all_chains)
+    isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
+    
+    result["isotopes"] = isotopes
+    result["decay_chains"] = decay_chains
+    return result
+
 router = APIRouter(tags=["analysis"])
+
 
 class AnalysisRequest(BaseModel):
     """Request model for spectrum analysis."""
@@ -86,6 +154,8 @@ class ROIAnalysisRequest(BaseModel):
     isotope: str = Field(..., min_length=1)
     detector: str = Field(default="AlphaHound CsI(Tl)")
     acquisition_time_s: float = Field(..., ge=1, le=86400)  # 1 sec to 24 hours
+    source_type: Optional[str] = Field(default="auto")  # User-specified source type
+
 
 class UraniumRatioRequest(BaseModel):
     """Request model for uranium enrichment analysis."""
@@ -122,59 +192,29 @@ async def upload_file(file: UploadFile = File(...)):
         try:
             content_str = content.decode('utf-8')
             result = parse_n42(content_str)
-            if "error" in result: raise HTTPException(status_code=400, detail=result["error"])
+            if "error" in result: 
+                raise HTTPException(status_code=400, detail=result["error"])
             
-            if result.get("counts") and result.get("energies"):
-                peaks = detect_peaks(result["energies"], result["counts"])
-                result["peaks"] = peaks
-                
-                if peaks:
-                    is_calibrated = result.get("is_calibrated", True)
-                    live_time = float(result.get("metadata", {}).get("live_time", 0))
-                    
-                    if is_calibrated and live_time > 30.0:
-                        current_settings = DEFAULT_SETTINGS
-                    else:
-                        current_settings = UPLOAD_SETTINGS
-                    
-                    all_isotopes = identify_isotopes(peaks, energy_tolerance=current_settings['energy_tolerance'], mode=current_settings.get('mode', 'simple'))
-                    all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=current_settings['energy_tolerance'])
-                    weighted_chains = apply_abundance_weighting(all_chains)
-                    isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
-                    
-                    result["isotopes"] = isotopes
-                    result["decay_chains"] = decay_chains
-                else:
-                     result["isotopes"] = []
-                     result["decay_chains"] = []
+            # Use common analysis pipeline
+            is_calibrated = result.get("is_calibrated", True)
+            live_time = float(result.get("metadata", {}).get("live_time", 0))
+            result = _analyze_spectrum_peaks(result, is_calibrated, live_time)
             return result
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error parsing N42: {str(e)}")
 
+
     elif filename.endswith('.csv'):
         try:
-             result = parse_csv_spectrum(content, filename)
-             if result.get("counts") and result.get("energies"):
-                 peaks = detect_peaks(result["energies"], result["counts"])
-                 result["peaks"] = peaks
-                 
-                 if peaks:
-                     is_calibrated = result.get("is_calibrated", False)
-                     current_settings = DEFAULT_SETTINGS if is_calibrated else UPLOAD_SETTINGS
-                     
-                     all_isotopes = identify_isotopes(peaks, energy_tolerance=current_settings['energy_tolerance'], mode=current_settings.get('mode', 'simple'))
-                     all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=current_settings['energy_tolerance'])
-                     weighted_chains = apply_abundance_weighting(all_chains)
-                     isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
-                     
-                     result["isotopes"] = isotopes
-                     result["decay_chains"] = decay_chains
-                 else:
-                     result["isotopes"] = []
-                     result["decay_chains"] = []
-             return result
+            result = parse_csv_spectrum(content, filename)
+            # Use common analysis pipeline
+            is_calibrated = result.get("is_calibrated", False)
+            result = _analyze_spectrum_peaks(result, is_calibrated)
+            return result
         except Exception as e:
-             raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
     elif filename.endswith('.chn') or filename.endswith('.spe'):
         try:
             # Save temp file for binary parsing
@@ -195,31 +235,69 @@ async def upload_file(file: UploadFile = File(...)):
                 result['source'] = 'CHN File' if filename.endswith('.chn') else 'SPE File'
                 result['is_calibrated'] = result.get('calibration') is not None
                 
-                if result.get('counts') and result.get('energies'):
-                    peaks = detect_peaks(result['energies'], result['counts'])
-                    result['peaks'] = peaks
-                    
-                    if peaks:
-                        is_calibrated = result.get('is_calibrated', False)
-                        current_settings = DEFAULT_SETTINGS if is_calibrated else UPLOAD_SETTINGS
-                        
-                        all_isotopes = identify_isotopes(peaks, energy_tolerance=current_settings['energy_tolerance'], mode=current_settings.get('mode', 'simple'))
-                        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=current_settings['energy_tolerance'])
-                        weighted_chains = apply_abundance_weighting(all_chains)
-                        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
-                        
-                        result['isotopes'] = isotopes
-                        result['decay_chains'] = decay_chains
-                    else:
-                        result['isotopes'] = []
-                        result['decay_chains'] = []
+                # Use common analysis pipeline
+                is_calibrated = result.get('is_calibrated', False)
+                result = _analyze_spectrum_peaks(result, is_calibrated)
                 return result
             finally:
                 os.unlink(tmp_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error parsing CHN/SPE: {str(e)}")
+            
     else:
-        raise HTTPException(status_code=400, detail="Unsupported format")
+        # Try generic parser (SandiaSpecUtils) for all other allowed extensions
+        try:
+            from specutils_parser import parse_spectrum_generic
+            import tempfile
+            import os
+            
+            # SpecUtils often requires a file path
+            ext = os.path.splitext(filename)[1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+                
+            try:
+                result = parse_spectrum_generic(tmp_path)
+                
+                if not result or not result.get("counts"):
+                    raise ValueError("Could not parse file structure or empty counts")
+                
+                result['filename'] = file.filename
+                result['source'] = 'Generic Spectrum'
+                
+                # Determine calibration status
+                cal = result.get('energy_calibration', {})
+                is_calibrated = (cal.get('slope', 1) != 1) or (cal.get('intercept', 0) != 0)
+                result['is_calibrated'] = is_calibrated
+                
+                # Expand energies if not present but calibration exists
+                if is_calibrated and not result.get('energies'):
+                    result['energies'] = []
+                    slope = cal.get('slope', 1)
+                    intercept = cal.get('intercept', 0)
+                    quad = cal.get('quadratic', 0)
+                    for i in range(len(result['counts'])):
+                        # E = A + B*x + C*x^2
+                        e = intercept + slope * i + quad * (i**2)
+                        result['energies'].append(e)
+                elif not result.get('energies'):
+                    # Default linear 1 keV/ch
+                     result['energies'] = list(range(len(result['counts'])))
+
+                # Use common analysis pipeline
+                live_time = result.get('live_time', 0.0)
+                result = _analyze_spectrum_peaks(result, is_calibrated, live_time)
+                return result
+                
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+                    
+        except ImportError:
+            raise HTTPException(status_code=501, detail="SandiaSpecUtils support not available (module missing)")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Generic parser error: {str(e)}")
 
 @router.post("/analyze/fit-peaks")
 async def analyze_fit_peaks(request: AnalysisRequest):
@@ -580,6 +658,36 @@ async def snip_background_endpoint(request: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/analyze/decay-prediction")
+async def decay_prediction_endpoint(request: dict):
+    """
+    Predict radioactive decay chain evolution over time.
+    
+    Uses Custom Bateman Solver (backend/decay_calculator.py).
+    Arguments:
+    - isotope (str): Parent isotope (e.g., "U-238", "Th-232")
+    - initial_activity_bq (float): Starting activity
+    - duration_days (float): Time span to simulate
+    """
+    try:
+        from decay_calculator import predict_decay_chain
+        
+        isotope = request.get("isotope", "U-238")
+        activity = float(request.get("initial_activity_bq", 1000.0))
+        duration = float(request.get("duration_days", 365.0))
+        
+        result = predict_decay_chain(isotope, activity, duration)
+        
+        if not result:
+            raise HTTPException(status_code=400, detail=f"Unsupported chain for isotope: {isotope}")
+            
+        return result
+        
+    except Exception as e:
+        print(f"Decay prediction error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # === ROI Analysis Endpoints ===
 
 @router.post("/analyze/roi")
@@ -607,7 +715,8 @@ async def analyze_roi_endpoint(request: ROIAnalysisRequest):
             counts=[int(c) for c in request.counts],
             isotope_name=request.isotope,
             detector_name=request.detector,
-            acquisition_time_s=request.acquisition_time_s
+            acquisition_time_s=request.acquisition_time_s,
+            source_type=request.source_type
         )
         
         return result
@@ -629,11 +738,17 @@ async def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
     try:
         from roi_analysis import analyze_uranium_enrichment
         
+        # Check if source_type implies uranium context
+        source_type = "auto"
+        if hasattr(request, "source_type"):
+            source_type = request.source_type
+        
         result = analyze_uranium_enrichment(
             energies=request.energies,
             counts=[int(c) for c in request.counts],
             detector_name=request.detector,
-            acquisition_time_s=request.acquisition_time_s
+            acquisition_time_s=request.acquisition_time_s,
+            source_type=source_type
         )
         
         return result
@@ -664,6 +779,76 @@ async def get_roi_isotopes():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze/identify-source")
+async def identify_source_endpoint(request: UraniumRatioRequest):
+    """
+    Identify the source type based on spectral signatures.
+    
+    Recognizes common radioactive sources:
+    - Uranium Glass (Vaseline Glass)
+    - Thoriated Camera Lenses
+    - Radium Dial Watches/Clocks
+    - Smoke Detectors (Am-241)
+    - Natural Background (K-40)
+    
+    If no match is found, returns the raw isotope detection data.
+    """
+    try:
+        from source_identification import identify_source_type
+        
+        result = identify_source_type(
+            energies=request.energies,
+            counts=[int(c) for c in request.counts],
+            detector_name=request.detector,
+            acquisition_time_s=request.acquisition_time_s
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[Source ID] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analyze/source-types")
+async def get_source_types():
+    """Get list of known source types for the dropdown selector."""
+    try:
+        from source_identification import SOURCE_SIGNATURES
+        
+        source_types = [
+            {
+                "id": "auto",
+                "name": "Auto-detect",
+                "description": "Automatically identify source type from spectrum"
+            }
+        ]
+        
+        for source_id, signature in SOURCE_SIGNATURES.items():
+            source_types.append({
+                "id": source_id,
+                "name": signature.name,
+                "description": signature.description,
+                "notes": signature.notes
+            })
+        
+        source_types.append({
+            "id": "unknown",
+            "name": "Unknown / Other",
+            "description": "Just show raw isotope detection data without assumptions"
+        })
+        
+        return {"source_types": source_types}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/analyze/detectors")
 async def get_detectors():
@@ -910,5 +1095,152 @@ async def anomaly_detection_endpoint(request: dict):
         
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Phase 1B & 2: Activity Calculator & Decay Predictions ===
+
+class DoseRateRequest(BaseModel):
+    """Request model for dose rate calculation."""
+    isotope: str = Field(..., min_length=2, max_length=20)
+    activity_bq: float = Field(..., ge=0)
+    distance_m: float = Field(default=1.0, ge=0.01, le=1000)
+
+class ActivityRequest(BaseModel):
+    """Request model for activity calculation from net counts."""
+    net_counts: float = Field(..., ge=0)
+    efficiency: float = Field(..., ge=0.001, le=1.0)
+    branching_ratio: float = Field(..., ge=0.001, le=1.0)
+    live_time_s: float = Field(..., ge=1, le=86400)
+
+class DecayPredictionRequest(BaseModel):
+    """Request model for decay chain prediction."""
+    parent_isotope: str = Field(..., min_length=2, max_length=20)
+    initial_activity_bq: float = Field(default=1000.0, ge=0)
+    time_hours: float = Field(default=24.0, ge=0.001, le=8760)  # up to 1 year
+
+class IsotopeInfoRequest(BaseModel):
+    """Request model for isotope information lookup."""
+    isotope: str = Field(..., min_length=2, max_length=20)
+
+
+@router.post("/analyze/dose-rate")
+async def calculate_dose_rate_endpoint(request: DoseRateRequest):
+    """
+    Calculate gamma dose rate from isotope activity at specified distance.
+    
+    Uses gamma dose constants from IAEA/NIST standards.
+    Returns dose rate in μSv/h, mrem/h, and mSv/h.
+    """
+    try:
+        from activity_calculator import calculate_dose_rate
+        
+        result = calculate_dose_rate(
+            isotope=request.isotope,
+            activity_bq=request.activity_bq,
+            distance_m=request.distance_m
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[Dose Rate] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze/calculate-activity")
+async def calculate_activity_endpoint(request: ActivityRequest):
+    """
+    Calculate source activity from net peak counts.
+    
+    Uses the standard activity equation: A = N / (ε × Iγ × t)
+    Returns activity in Bq, μCi, mCi with uncertainty estimates.
+    """
+    try:
+        from activity_calculator import calculate_activity
+        
+        result = calculate_activity(
+            net_counts=request.net_counts,
+            efficiency=request.efficiency,
+            branching_ratio=request.branching_ratio,
+            live_time_s=request.live_time_s
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[Activity] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze/decay-prediction")
+async def predict_decay_endpoint(request: DecayPredictionRequest):
+    """
+    Predict decay chain activity evolution over time.
+    
+    Uses Bateman equations to calculate how parent and daughter
+    isotope activities change. Returns chart data for visualization.
+    """
+    try:
+        from decay_calculator import predict_decay_series
+        
+        result = predict_decay_series(
+            parent_isotope=request.parent_isotope,
+            initial_activity_bq=request.initial_activity_bq,
+            time_hours=request.time_hours
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[Decay Prediction] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze/isotope-info")
+async def get_isotope_info_endpoint(request: IsotopeInfoRequest):
+    """
+    Get comprehensive information about an isotope.
+    
+    Returns half-life, decay mode, daughter isotope, and decay chain membership.
+    """
+    try:
+        from decay_calculator import get_isotope_info, get_decay_chain
+        
+        info = get_isotope_info(request.isotope)
+        info['decay_chain'] = get_decay_chain(request.isotope)
+        
+        return info
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[Isotope Info] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analyze/gamma-constants")
+async def get_gamma_constants():
+    """
+    Get list of isotopes with known gamma dose constants.
+    
+    Returns dictionary of isotope names to gamma constants (μSv·m²/h per MBq).
+    """
+    try:
+        from activity_calculator import GAMMA_CONSTANTS
+        
+        return {
+            "constants": GAMMA_CONSTANTS,
+            "units": "μSv·m²/h per MBq",
+            "description": "Gamma dose rate constants at 1 meter per MBq activity"
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

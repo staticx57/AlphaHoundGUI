@@ -69,9 +69,11 @@ async def websocket_dose_stream(websocket: WebSocket):
             print("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
             alphahound_device.disconnect()
         
-        # Only close if the connection is still open
-        if websocket.client_state.name != "DISCONNECTED":
+        # Safely attempt to close - may already be closed by client
+        try:
             await websocket.close()
+        except RuntimeError:
+            pass  # Already closed, ignore
 
 if __name__ == "__main__":
     import uvicorn

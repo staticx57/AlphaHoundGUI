@@ -23,7 +23,7 @@ ISOTOPE_ROI_DATABASE = {
         "roi_window": (165, 205),
         "branching_ratio": 0.572,  # 57.2% intensity
         "half_life_years": 7.04e8,
-        "background_region": (210, 250),
+        "background_region": (140, 165),  # Changed: below peak for proper Compton baseline
         "background_method": "compton",
         "related_peaks": ["Ra-226 (186.2 keV)"],  # Potential interference
         "notes": "Primary U-235 gamma. Overlaps with Ra-226 at 186.2 keV.",

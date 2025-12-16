@@ -326,9 +326,7 @@ function setupEventListeners() {
         document.getElementById('history-modal').style.display = 'none';
     });
 
-    // Background Subtraction
-    document.getElementById('bg-file-input').addEventListener('change', handleBackgroundFile);
-    document.getElementById('btn-clear-bg').addEventListener('click', clearBackground);
+    // NOTE: Background subtraction listeners registered below with full set (btn-load-bg, btn-set-current-bg, btn-clear-bg)
 
     // Theme Toggle
     document.getElementById('btn-theme').addEventListener('click', () => {
@@ -489,35 +487,8 @@ function setupEventListeners() {
         applyCalibration(e.detail.slope, e.detail.intercept);
     });
 
-    // Scale Toggle (Linear/Log)
-    document.getElementById('btn-lin').addEventListener('click', () => {
-        document.getElementById('btn-lin').classList.add('active');
-        document.getElementById('btn-log').classList.remove('active');
-        updateChartScale('linear');
-    });
-
-    document.getElementById('btn-log').addEventListener('click', () => {
-        document.getElementById('btn-lin').classList.remove('active');
-        document.getElementById('btn-log').classList.add('active');
-        updateChartScale('logarithmic');
-    });
-
-    // Reset Zoom
-    document.getElementById('btn-reset-zoom').addEventListener('click', () => {
-        if (chartManager.chart) chartManager.chart.resetZoom();
-    });
-
-    // Compare Mode Toggle
-    document.getElementById('btn-compare').addEventListener('click', toggleCompareMode);
-    document.getElementById('btn-add-file').addEventListener('click', () => {
-        document.getElementById('compare-file-input').click();
-    });
-    document.getElementById('compare-file-input').addEventListener('change', handleCompareFile);
-    document.getElementById('btn-clear-overlays').addEventListener('click', () => {
-        overlaySpectra = [];
-        updateOverlayCount();
-        if (chartManager.chart) chartManager.chart.destroy();
-    });
+    // NOTE: Scale toggle, reset zoom, and compare mode listeners are already registered above (lines 347-398)
+    // Duplicate registrations removed to prevent double-execution
 
     // Analysis Panel Toggle
     document.getElementById('btn-analysis').addEventListener('click', () => {
@@ -753,12 +724,8 @@ if (calBtn) {
     });
 }
 
-// Device Controls
-document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
-document.getElementById('btn-connect-device').addEventListener('click', connectDevice);
-document.getElementById('btn-disconnect-device').addEventListener('click', disconnectDevice);
-document.getElementById('btn-start-acquire').addEventListener('click', startAcquisition);
-document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
+// NOTE: Device control listeners already registered in setupEventListeners() (lines 372-377)
+// Duplicate registrations removed to prevent double-execution
 
 // Get Current Spectrum button (downloads cumulative without clearing)
 const btnGetCurrent = document.getElementById('btn-get-current');
@@ -833,6 +800,31 @@ if (chartCanvas) {
 
 // === ROI Analysis Event Handlers (Advanced Mode) ===
 
+// Source type descriptions for display
+const SOURCE_TYPE_INFO = {
+    'uranium_glass': '🟢 Uranium Glass: Looking for U-238 decay chain (Th-234, Bi-214, Pa-234m). Ra-226 interference expected in 186 keV region.',
+    'thoriated_lens': '🟠 Thoriated Lens: Looking for Th-232 decay chain (Ac-228, Tl-208). May also contain uranium.',
+    'radium_dial': '☢️ Radium Dial: Looking for Ra-226 daughters (Bi-214, Pb-214) WITHOUT U-238 parents (Th-234).',
+    'smoke_detector': '🔵 Smoke Detector: Looking for Am-241 at 60 keV.',
+    'natural_background': '🌍 Natural Background: Looking for K-40 at 1461 keV.',
+    'unknown': 'Standard Analysis: Detecting isotopes without specific source assumptions.',
+    'auto': 'legacy' // fallback
+};
+
+// Update source info banner when selection changes
+document.getElementById('roi-source-type')?.addEventListener('change', (e) => {
+    const sourceType = e.target.value;
+    const infoDiv = document.getElementById('roi-source-info');
+    const infoText = document.getElementById('roi-source-info-text');
+
+    if (sourceType !== 'auto') {
+        infoText.textContent = SOURCE_TYPE_INFO[sourceType] || '';
+        infoDiv.style.display = 'block';
+    } else {
+        infoDiv.style.display = 'none';
+    }
+});
+
 // Analyze ROI Button
 document.getElementById('btn-analyze-roi')?.addEventListener('click', async () => {
     if (!currentData || !currentData.counts) {
@@ -842,6 +834,10 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
     const isotope = document.getElementById('roi-isotope').value;
     const detector = document.getElementById('roi-detector').value;
     const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
+
+    // Safely get source type (handle missing element for older cached HTML)
+    const sourceTypeElement = document.getElementById('roi-source-type');
+    const sourceType = sourceTypeElement ? sourceTypeElement.value : 'unknown';
 
     const resultsDiv = document.getElementById('roi-results');
     resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing...</p>';
@@ -855,16 +851,18 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
                 counts: currentData.counts,
                 isotope: isotope,
                 detector: detector,
-                acquisition_time_s: acqTime
+                acquisition_time_s: acqTime,
+                source_type: sourceType  // Pass source type for context
             })
         });
 
         if (!response.ok) throw new Error((await response.json()).detail || 'ROI analysis failed');
         const data = await response.json();
 
+
         // Format results
         const activityStr = data.activity_bq
-            ? `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${(data.activity_uci * 1000).toFixed(3)} μCi)`
+            ? `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${data.activity_uci.toFixed(6)} μCi)`
             : '<span style="color: #ef4444;">Unable to calculate</span>';
 
         let htmlOutput = `
@@ -884,7 +882,8 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
                         energies: currentData.energies,
                         counts: currentData.counts,
                         detector: detector,
-                        acquisition_time_s: acqTime
+                        acquisition_time_s: acqTime,
+                        source_type: sourceType // Pass source type for uranium logic context
                     })
                 });
 
@@ -927,8 +926,9 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
 
         resultsDiv.innerHTML = htmlOutput;
 
-        // Store last ROI for highlighting
+        // Store last ROI for highlighting and Decay Tool
         window.lastROI = data.roi_window;
+        window.lastROIResult = data;
 
     } catch (err) {
         resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
@@ -1575,4 +1575,153 @@ function applyCalibration(slope, intercept) {
     } else {
         chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
     }
+}
+
+// ==========================================
+// Decay Prediction Modal Logic
+// ==========================================
+
+const decayModal = document.getElementById('decay-modal');
+const decayChartCtx = document.getElementById('decayChart').getContext('2d');
+let decayChartInstance = null;
+
+if (document.getElementById('btn-decay-tool')) {
+    document.getElementById('btn-decay-tool').addEventListener('click', () => {
+        decayModal.style.display = 'flex';
+
+        // Auto-populate from last ROI if available
+        if (window.lastROIResult && window.lastROIResult.activity_bq) {
+            document.getElementById('decay-activity').value = window.lastROIResult.activity_bq.toFixed(2);
+            showToast(`Loaded ${window.lastROIResult.activity_bq.toFixed(1)} Bq from last analysis`, 'info');
+        }
+
+        // Run initial default prediction
+        runDecayPrediction();
+    });
+}
+
+if (document.getElementById('close-decay')) {
+    document.getElementById('close-decay').addEventListener('click', () => {
+        decayModal.style.display = 'none';
+    });
+}
+
+if (document.getElementById('btn-run-decay')) {
+    document.getElementById('btn-run-decay').addEventListener('click', runDecayPrediction);
+}
+
+// Close on outside click
+decayModal.addEventListener('click', (e) => {
+    if (e.target === decayModal) decayModal.style.display = 'none';
+});
+
+async function runDecayPrediction() {
+    const isotope = document.getElementById('decay-isotope').value;
+    const activity = parseFloat(document.getElementById('decay-activity').value);
+    const duration = parseFloat(document.getElementById('decay-duration').value);
+
+    try {
+        const response = await fetch('/analyze/decay-prediction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                isotope: isotope,
+                initial_activity_bq: activity,
+                duration_days: duration * 365.25 // input is years
+            })
+        });
+
+        if (!response.ok) throw new Error("Prediction failed");
+
+        const result = await response.json();
+        renderDecayChart(result);
+
+    } catch (e) {
+        console.error(e);
+        alert("Error running prediction: " + e.message);
+    }
+}
+
+function renderDecayChart(result) {
+    if (decayChartInstance) {
+        decayChartInstance.destroy();
+    }
+
+    const labels = result.time_points_days.map(d => (d / 365.25).toFixed(2)); // Years
+
+    // Create datasets for each isotope
+    const datasets = [];
+    const colors = [
+        '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
+        '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef'
+    ];
+
+    let colorIdx = 0;
+    for (const iso of result.isotopes) {
+        // Skip isotopes with negligible activity if list is huge? 
+        // For now show all.
+        datasets.push({
+            label: iso,
+            data: result.activities[iso],
+            borderColor: colors[colorIdx % colors.length],
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.4
+        });
+        colorIdx++;
+    }
+
+    decayChartInstance = new Chart(decayChartCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: `Decay Chain: ${result.isotopes[0]} over ${labels[labels.length - 1]} Years`,
+                    color: '#94a3b8'
+                },
+                legend: {
+                    position: 'right',
+                    labels: { color: '#94a3b8' }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Time (Years)', color: '#94a3b8' },
+                    grid: { color: '#334155' },
+                    ticks: { color: '#94a3b8' }
+                },
+                y: {
+                    type: 'logarithmic',
+                    title: { display: true, text: 'Activity (Bq)', color: '#94a3b8' },
+                    grid: { color: '#334155' },
+                    ticks: {
+                        color: '#94a3b8',
+                        callback: function (value, index, values) {
+                            // Clean up log scale ticks
+                            // Show 10^x values clearly
+                            const log10 = Math.log10(value);
+                            if (Number.isInteger(log10)) {
+                                return value.toExponential();
+                            }
+                            // Show a few intermediates if needed, otherwise hide
+                            if (values.length < 5) return value.toPrecision(2);
+                            return null; // hide cluttered ticks
+                        }
+                    }
+                }
+            }
+        }
+    });
 }

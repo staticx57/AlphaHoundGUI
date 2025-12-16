@@ -173,10 +173,15 @@
     - ✅ Consistent icon styling across all buttons
     - ✅ Custom Isotopes modal: SVG icons for Import/Export
 - [x] **ROI Analysis (Advanced Mode)**:
-    - ✅ Region-of-Interest analysis with activity calculation (Bq/μCi)
-    - ✅ AlphaHound AB+G detector efficiency database (CsI 48 cps/μSv/h, BGO 42 cps/μSv/h)
+    - ✅ ROI Analysis with activity calculation (Bq/μCi)
     - ✅ Uranium enrichment ratio analysis (Natural/Depleted/Enriched)
-    - ✅ Chart ROI highlighting with orange overlay
+    - ✅ **Source Identification** (NEW):
+      - ✅ Auto-detect common sources (Uranium Glass, Thoriated Lenses, Radium Dials)
+      - ✅ User-driven assumption handling ("Source Type" dropdown)
+      - ✅ Systematic validation of detected isotopes against source profile
+    - ✅ **Ra-226 Interference Handling**:
+      - ✅ Explicit warnings for overlapping 186 keV peaks (U-235 vs Ra-226)
+      - ✅ Context-aware "Indeterminate" classification when appropriate
     - [x] Isotope ROI database with NNDC/IAEA branching ratios
     
 
@@ -236,6 +241,21 @@
     - ✅ **Calibration Correction**: Validated that 3.0 keV/channel provides correct peak alignment (overriding device's 7.4 default).
     - ✅ **Configuration Update**: Updated `ml_analysis.py` and `device.py` to enforce 3.0 keV scaling.
     - ✅ **Bug Fixes**: Resolved "Spread Syntax" chart crash and Auto-BG floating peak artifacts.
+
+## Next Steps
+- [x] **Universal Spectrum Support**:
+    - ✅ Integrated `SandiaSpecUtils` for 100+ file formats (.spc, .pcf, .dat, etc.)
+- [x] **Activity & Dose Calculator**:
+    - ✅ Implemented Bq/μCi conversion (backend + frontend display fixed)
+    - ✅ Added Gamma Dose Rate estimation in μSv/h
+    - ✅ Fixed Ra-226 interference with "Forced Subtraction" for Uranium Glass
+- [x] **Decay Prediction Engine**:
+    - ✅ Hybrid backend: `curie` authoritative data + Custom Bateman Solver fallback
+    - ✅ Interactive UI: Log-scale Chart.js visualization of daughter buildup
+    - ✅ Smart Workflow: Auto-populates activity from ROI analysis results
+- [x] **ROI Analysis Tuning**: 
+    - ✅ Fixed activity unit conversion (1000x error)
+    - ✅ Refined thresholds and subtraction logic
 
 ## Next Steps
 - [ ] **Replace New Emoji Icons with SVG**: Device control buttons (📥 Get Current, 🗑️ Clear, 🌡️ Temperature, ◀▶ Display) need professional SVG icons

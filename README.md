@@ -29,19 +29,11 @@
 ## ✨ Key Features
 
 ### 📊 Advanced Analysis
-- **Multi-Format Support**: N42/XML and CSV
-### Core Analysis
-- **Automatic Peak Detection**: Uses `scipy.signal.find_peaks` for automatic peak detection and labeling
-- **Multi-Algorithm Isotope Identification**:
-  - **Peak Matching (Legacy)**: Traditional energy-based identification using IAEA/NNDC authoritative databases
-  - **AI Identification (ML)**: PyRIID neural network trained on 90+ isotopes with ~1500 samples for pattern recognition
-  - **Dual Detection Panel**: Side-by-side comparison of both methods with graphical confidence bars
-- **Decay Chain Detection**: Identifies natural decay series (U-238, U-235, Th-232) with:
-  - **Graphical Flow Diagrams**: Visual parent→daughter→stable sequences with color-coded detection status
-  - Confidence scoring with natural abundance weighting
-  - Authoritative source links (NNDC, IAEA, LBNL, USGS, NRC)
-- **Advanced/Simple Mode Toggle**: Adjustable confidence thresholds and isotope library size
-- **Auto-Save CSV**: Automatically saves acquired spectra to timestamped CSV files (`data/acquisitions/spectrum_YYYY-MM-DD_HH-MM-SS.csv`) with toast notificationsrs
+- **Universal File Support**: Analysis of 100+ spectrum formats (N42, CSV, SPE, CNF, MCA, etc.) via `SandiaSpecUtils` integration.
+- **Decay Chain Prediction**: 
+  - **Hybrid Engine**: Uses authoritative `curie` library data with a custom Bateman solver fallback.
+  - **Interactive Visualization**: Models daughter product buildup (U-238, Th-232 chains) over time with log-scale charts.
+- **Dose Rate Calculator**: Estimates gamma dose rates (μSv/h) from activity using rigorous nuclear data.
 - **Natural Abundance Weighting**: Scientifically accurate ranking based on LBNL/NRC isotopic abundance data
 - **Authoritative References**: Direct links to NNDC, IAEA, LBNL, USGS, NRC sources for each detected chain
 - **ML Integration (PyRIID)**:

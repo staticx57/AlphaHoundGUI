@@ -1,5 +1,67 @@
 # CHANGELOG
 
+## [Released - Session 2025-12-16] - Decay Prediction & Universal File Support
+
+### Added
+- **Decay Prediction System (Hybrid Engine)**
+  - **Interactive UI**: "⏳ Decay Prediction" tool in Analysis panel with log-scale visualization.
+  - **Hybrid Backend**:
+    - **Primary**: Uses `curie` (nuclear-curie) for authoritative half-life and decay data (Integrated & Verified).
+    - **Fallback**: Custom Bateman Solver (Python) ensures functionality even without C++ dependencies.
+  - **Features**: U-238 and Th-232 chain simulation, user-definable activity/duration.
+  - **Endpoint**: `/analyze/decay-prediction`.
+
+- **Universal Spectrum Support (SandiaSpecUtils)**
+  - Integrated `SandiaSpecUtils` wrapper to handle 100+ file formats.
+  - Supports: `.spc`, `.pcf`, `.mca`, `.dat`, `.cnf` and many legacy formats.
+  - Seamless fallback: Backend automatically tries generic parser if native N42/CSV fails.
+
+- **Activity & Dose Rate Calculator**
+  - **Centralized Logic**: New `activity_calculator.py` module for rigorous physics math.
+  - **Features**: 
+    - Bq/μCi conversion (fixed 1000x scaling bug).
+    - Gamma Dose Rate estimation from activity and distance.
+    - MDA (Minimum Detectable Activity) calculations.
+  - **Refactor**: ROI analysis now uses this shared engine for consistent results.
+
+- **UI & UX Polish**
+  - **Smart Activity Population**: Decay Prediction tool automatically pulls "Initial Activity" (Bq) from the last performed ROI Analysis.
+  - **Chart Visualization**: Decay chart now uses clean scientific notation (e.g., `1e-5`, `100`) on the logarithmic Y-axis to prevent label clutter.
+  - **Layout Fixes**: Improved responsiveness of ROI Analysis panel to prevent input field overlap on smaller screens.
+
+### Fixed
+- **Activity Unit Display**: Fixed frontend bug where μCi values were erroneously multiplied by 1000.
+- **Ra-226 Interference**: 
+    - Implemented "Forced Subtraction" for Uranium Glass mode.
+    - System now attempts to estimate and subtract Ra-226 contribution from 186 keV peak even with weak Bi-214 signals.
+
+---
+
+## [Unreleased - Session 2025-12-16] - Source Identification & ROI V2
+
+### Added
+- **Source Type Identification**
+  - **Auto-Suggest**: Rule-based identification of common sources (Uranium Glass, Thoriated Lenses, Radium Dials, Smoke Detectors).
+  - **User-Driven Context**: New "Source Type" dropdown in ROI Analysis panel allows users to specify what they are measuring.
+  - **Systematic Validation**: Checks detected isotopes against the expected profile of the selected source.
+    - Warns if unexpected isotopes are analyzed (e.g., U-235 in a Thoriated Lens).
+    - Prevents misleading "Natural Uranium" classification for mixed/Thoriated sources.
+
+- **Enhanced ROI Analysis**
+  - **Context-Aware Logic**: Uses source type selection to inform analysis assumptions.
+  - **Ra-226 Interference Handling**:
+    - "Standard Analysis" (Default): Flags interference only if Bi-214 is detected.
+    - "Uranium Glass" Mode: Proactively assumes Ra-226 interference (secular equilibrium) and warns about U-235 enrichment uncertainty.
+  - **Diagnostic Feedback**: Detailed feedback on *why* a result is indeterminate (e.g., "Overlapping peaks", "Low SNR").
+
+### Changed
+- **ROI UI Layout**
+  - Compact grid layout for better space utilization.
+  - "Standard Analysis" is now the default mode (no assumptions).
+  - Minimized info banners to reduce clutter.
+
+---
+
 ## [Unreleased - Session 2025-12-15 PM] - Server-Side Acquisition Management
 
 ### Added

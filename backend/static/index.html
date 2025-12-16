@@ -212,6 +212,9 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                     <strong>Spectral Analysis</strong>
                     <div style="display: flex; gap: 8px;">
+                        <button id="btn-decay-tool" class="btn-primary"
+                            style="padding: 4px 12px; font-size: 0.8rem; background: var(--bg-secondary); border: 1px solid var(--accent-color); color: var(--accent-color);">
+                            ⏳ Decay Prediction</button>
                         <button id="btn-ml-identify" class="btn-primary"
                             style="padding: 4px 12px; font-size: 0.8rem;"><img src="/static/icons/robot.svg"
                                 class="icon" style="margin-right: 0.25rem;">AI Identify</button>
@@ -359,50 +362,114 @@
             <div id="roi-analysis-panel" style="display: none;">
                 <h3><img src="/static/icons/analysis.svg" class="icon"> Region-of-Interest (ROI) Analysis</h3>
 
-                <!-- Configuration Row -->
-                <div class="roi-config-row"
-                    style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
-                        Detector:
-                        <select id="roi-detector">
-                            <option value="AlphaHound CsI(Tl)">CsI(Tl) 1.1cm³ (48 cps/μSv/h)</option>
-                            <option value="AlphaHound BGO">BGO 0.6cm³ (42 cps/μSv/h)</option>
+                <!-- Configuration Grid -->
+                <!-- Use CSS Grid for layout -->
+                <style>
+                    .roi-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                        gap: 1.5rem;
+                        padding: 1.5rem;
+                        background: var(--bg-secondary);
+                        border-radius: 8px;
+                        margin-bottom: 0.75rem;
+                        align-items: end;
+                    }
+
+                    .roi-field {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 0.35rem;
+                        font-size: 0.85rem;
+                        color: var(--text-secondary);
+                    }
+
+                    .roi-field select,
+                    .roi-field input {
+                        padding: 0.4rem;
+                        border: 1px solid var(--border-color);
+                        border-radius: 4px;
+                        background: var(--bg-primary);
+                        color: var(--text-primary);
+                        width: 100%;
+                    }
+
+                    .roi-actions {
+                        display: flex;
+                        gap: 0.5rem;
+                        grid-column: 1 / -1;
+                        padding-top: 0.5rem;
+                        border-top: 1px solid var(--border-color);
+                        margin-top: 0.25rem;
+                    }
+                </style>
+
+                <div class="roi-grid">
+                    <label class="roi-field">
+                        Source Type
+                        <select id="roi-source-type">
+                            <option value="unknown">Standard Analysis (Default)</option>
+                            <option value="uranium_glass">Uranium Glass (Vaseline)</option>
+                            <option value="thoriated_lens">Thoriated Camera Lens</option>
+                            <option value="radium_dial">Radium Dial (Watch/Clock)</option>
+                            <option value="smoke_detector">Smoke Detector (Am-241)</option>
+                            <option value="natural_background">Natural Background</option>
                         </select>
                     </label>
 
-                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
-                        Acq. Time (s):
-                        <input type="number" id="roi-acq-time" value="600" min="1" max="86400" style="width: 80px;">
+                    <label class="roi-field">
+                        Detector
+                        <select id="roi-detector">
+                            <option value="AlphaHound CsI(Tl)">CsI(Tl) 1.1cm³</option>
+                            <option value="AlphaHound BGO">BGO 0.6cm³</option>
+                        </select>
                     </label>
 
-                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
-                        Isotope:
+                    <label class="roi-field">
+                        Acq. Time (s)
+                        <input type="number" id="roi-acq-time" value="600" min="1" max="86400">
+                    </label>
+
+                    <label class="roi-field">
+                        Target Isotope
                         <select id="roi-isotope">
                             <option value="U-235 (186 keV)">U-235 (186 keV)</option>
                             <option value="Th-234 (93 keV)">Th-234 (93 keV)</option>
+                            <option value="Bi-214 (609 keV)">Bi-214 (609 keV)</option>
                             <option value="Cs-137 (662 keV)">Cs-137 (662 keV)</option>
                             <option value="Co-60 (1173 keV)">Co-60 (1173 keV)</option>
                             <option value="Co-60 (1332 keV)">Co-60 (1332 keV)</option>
                             <option value="K-40 (1461 keV)">K-40 (1461 keV)</option>
-                            <option value="Bi-214 (609 keV)">Bi-214 (609 keV)</option>
-                            <option value="Tl-208 (2614 keV)">Tl-208 (2614 keV)</option>
                             <option value="Am-241 (60 keV)">Am-241 (60 keV)</option>
+                            <option value="Tl-208 (2614 keV)">Tl-208 (2614 keV)</option>
+                            <option value="Ac-228 (911 keV)">Ac-228 (911 keV)</option>
+                            <option value="Pb-214 (352 keV)">Pb-214 (352 keV)</option>
+                            <option value="Pa-234m (1001 keV)">Pa-234m (1001 keV)</option>
                         </select>
                     </label>
 
-                    <button id="btn-analyze-roi" class="btn-primary" style="padding: 0.5rem 1rem;">Analyze
-                        ROI</button>
-                    <button id="btn-highlight-roi" class="btn-secondary"
-                        style="padding: 0.5rem 1rem;">Highlight</button>
-                    <button id="btn-clear-highlight" class="btn-secondary" style="padding: 0.5rem 1rem;">Clear</button>
+                    <div class="roi-actions">
+                        <button id="btn-analyze-roi" class="btn-primary"
+                            style="padding: 0.5rem 1.5rem; flex: 1;">Analyze ROI</button>
+                        <button id="btn-highlight-roi" class="btn-secondary"
+                            style="padding: 0.5rem 1rem;">Highlight</button>
+                        <button id="btn-clear-highlight" class="btn-secondary"
+                            style="padding: 0.5rem 1rem;">Clear</button>
+                    </div>
+                </div>
+
+                <!-- Compact Source Info Banner -->
+                <div id="roi-source-info"
+                    style="display: none; padding: 0.5rem 0.75rem; background: rgba(56, 189, 248, 0.1); border-left: 3px solid var(--accent-color); border-radius: 4px; margin-bottom: 0.75rem; font-size: 0.8rem; color: var(--text-primary);">
+                    <span id="roi-source-info-text"></span>
                 </div>
 
                 <!-- Results Section -->
                 <div id="roi-results"
-                    style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-family: 'Roboto Mono', monospace; font-size: 0.85rem; line-height: 1.8; min-height: 100px;">
-                    <p style="color: var(--text-secondary); font-style: italic;">Select an isotope and click
-                        "Analyze
-                        ROI" to calculate activity.</p>
+                    style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-family: 'Roboto Mono', monospace; font-size: 0.85rem; line-height: 1.6; min-height: 80px;">
+                    <p style="color: var(--text-secondary); font-style: italic; margin: 0;">
+                        Select an isotope and click "Analyze ROI".
+                    </p>
                 </div>
             </div>
         </div>
@@ -589,6 +656,52 @@
                         <img src="/static/icons/export.svg" style="width: 18px; height: 18px;" alt="">
                         Export JSON
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decay Prediction Modal -->
+        <div id="decay-modal" class="modal" style="display: none; z-index: 1200;">
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h3>Radioactive Decay Prediction</h3>
+                    <button id="close-decay" class="close-btn">✕</button>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary);">Parent
+                            Isotope</label>
+                        <select id="decay-isotope"
+                            style="width: 100%; padding: 0.5rem; background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <option value="U-238">Uranium-238 Chain (U -> Pb)</option>
+                            <option value="Th-232">Thorium-232 Chain (Th -> Pb)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary);">Initial Activity
+                            (Bq)</label>
+                        <input type="number" id="decay-activity" value="1000" min="1"
+                            style="width: 100%; padding: 0.5rem; background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary);">Duration
+                            (Years)</label>
+                        <input type="number" id="decay-duration" value="1" min="0.01" max="1000000000" step="0.1"
+                            style="width: 100%; padding: 0.5rem; background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
+                    <div style="display: flex; align-items: end;">
+                        <button id="btn-run-decay" class="btn-primary" style="width: 100%; padding: 0.6rem;">Calculate &
+                            Plot</button>
+                    </div>
+                </div>
+
+                <div
+                    style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; height: 400px; position: relative;">
+                    <canvas id="decayChart"></canvas>
+                </div>
+                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
+                    * Predictions use authoritative nuclear data (Curie) or custom Bateman solver fallback.
                 </div>
             </div>
         </div>

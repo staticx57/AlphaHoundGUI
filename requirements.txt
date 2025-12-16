@@ -16,3 +16,9 @@ pandas
 # Machine Learning (Optional - ~377MB)
 # Install with: pip install git+https://github.com/sandialabs/pyriid.git@main
 # Or use install.bat for automatic installation
+
+# Extended Analysis (Phase 1 & 2)
+SandiaSpecUtils      # 100+ spectrum file formats (Sandia National Labs)
+curie                # Decay chain Bateman solver, nuclear data
+becquerel            # Spectrum analysis (already in backend/requirements.txt)
+slowapi              # Rate limiting

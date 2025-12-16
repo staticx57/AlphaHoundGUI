@@ -225,16 +225,38 @@ def parse_spectrum_file(filepath):
     """
     Auto-detect file type and parse spectrum.
     
-    Supports: .chn, .spe, .n42, .csv
+    Native support: .chn, .spe
+    Extended support via SandiaSpecUtils: 100+ additional formats
     """
     ext = os.path.splitext(filepath)[1].lower()
     
+    # Native parsers for common formats
     if ext == '.chn':
         return parse_chn_file(filepath)
     elif ext == '.spe':
         return parse_spe_file(filepath)
     else:
-        raise ValueError(f"Unsupported file type: {ext}")
+        # Try SandiaSpecUtils for 100+ other formats
+        try:
+            from specutils_parser import parse_with_specutils, is_specutils_available
+            if is_specutils_available():
+                result = parse_with_specutils(filepath)
+                # Normalize output format
+                return {
+                    'counts': result['counts'],
+                    'energies': result['energies'],
+                    'num_channels': len(result['counts']),
+                    'live_time': result['metadata'].get('live_time', 0),
+                    'real_time': result['metadata'].get('real_time', 0),
+                    'calibration': None,  # SpecUtils handles calibration internally
+                    'metadata': result['metadata']
+                }
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"[SpecUtils] Failed to parse {filepath}: {e}")
+        
+        raise ValueError(f"Unsupported file type: {ext}. Install SandiaSpecUtils for extended format support.")
 
 
 if __name__ == '__main__':
