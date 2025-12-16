@@ -443,6 +443,81 @@ UPLOAD_SETTINGS = {
 }
 ```
 
+```
+
+### Universal File Support (SandiaSpecUtils)
+
+For files not natively supported (e.g., `.spc`, `.pcf`, `.dat`), the system wraps `SandiaSpecUtils`:
+
+```python
+# specutils_parser.py
+def parse_generic_file(file_path):
+    # 1. Detect format using SpecUtils
+    spec = SpecUtils.Spectrum(file_path)
+    
+    # 2. Extract standard attributes
+    counts = spec.counts
+    energies = spec.energies
+    live_time = spec.live_time
+    
+    # 3. Normalize metadata structure
+    return {
+        "energies": energies,
+        "counts": counts,
+        "metadata": {...}
+    }
+```
+
+---
+
+## ☢️ Radiometric Calculations
+
+### Activity Calculation
+
+Source activity is calculated using the standard equation:
+
+```
+Activity (Bq) = Net Counts / (Efficiency × Branching Ratio × Time)
+```
+
+- **Net Counts**: Counts in peak area minus background/continuum.
+- **Efficiency**: Interpolated intrinsic efficiency of the CsI(Tl) detector at that energy.
+- **Branching Ratio**: Probability of gamma emission (from NNDC/IAEA/Curie data).
+- **Time**: Live Acquisition Time in seconds.
+
+**Unit Conversions**:
+- 1 Bq = 1 disintegration/second
+- 1 μCi = 37,000 Bq
+- `activity_uci = activity_bq / 37000.0` (factor 2.703e-5)
+
+### Decay Prediction Engine
+
+The decay predictor uses a hybrid engine to model parent/daughter relationships over time:
+
+1.  **Primary Engine (`curie`)**:
+    - Uses authoritative nuclear data (half-lives, branching fractions) from the `curie` C++ library.
+    - Example: `curie.Isotope("U-238").decay(days=365)` returns daughter activities.
+
+2.  **Fallback Engine (Bateman Solver)**:
+    - Custom Python implementation of the **Bateman Equations** for linear decay chains.
+    - Used if `curie` library is unavailable or installation fails.
+    - Solves:
+      ```
+      dN_1/dt = -λ_1 N_1
+      dN_i/dt = λ_{i-1} N_{i-1} - λ_i N_i
+      ```
+
+### Dose Rate Estimation
+
+Gamma dose rate is estimated using the "Gamma Constant" approximation for a point source:
+
+```
+Dose Rate (μSv/h) = (Activity_MBq × Γ × 1000) / Distance_mm²
+```
+
+- **Γ (Gamma Constant)**: Specific gamma ray constant for the nuclide (mSv·cm²/MBq·h).
+- **Distance**: User-specified distance from source (default 100mm).
+
 ---
 
 ## 🔐 Security Features
