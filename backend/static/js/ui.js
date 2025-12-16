@@ -263,6 +263,18 @@ export class AlphaHoundUI {
         }
     }
 
+    updateTemperature(temp) {
+        const tempDisplay = document.getElementById('temp-display');
+        if (tempDisplay) {
+            if (temp !== null && temp !== undefined) {
+                tempDisplay.textContent = `🌡️ ${temp.toFixed(1)}°C`;
+                tempDisplay.style.display = 'inline';
+            } else {
+                tempDisplay.style.display = 'none';
+            }
+        }
+    }
+
     updateConnectionStatus(status) {
         if (status === 'connected') {
             this.elements.doseDisplay.textContent = '-- µRem/hr';

@@ -1,5 +1,72 @@
 # CHANGELOG
 
+## [Unreleased - Session 2025-12-15 PM] - Server-Side Acquisition Management
+
+### Added
+- **Server-Side Acquisition Timer (Critical Robustness Feature)**
+  - Root cause of unfinalized acquisitions: Browser JS timer throttled during display sleep
+  - Solution: Acquisition timing now managed entirely by Python backend
+  - Survives browser tab throttling, display sleep, and tab closure
+  - New module: `backend/acquisition_manager.py` with `AcquisitionManager` singleton
+  - New endpoints:
+    - `POST /device/acquisition/start` - Start managed acquisition
+    - `GET /device/acquisition/status` - Poll current state (includes spectrum data)
+    - `POST /device/acquisition/stop` - Stop and finalize
+    - `GET /device/acquisition/data` - Get latest spectrum data
+    - `GET /device/spectrum/current` - Get cumulative device spectrum
+
+- **Cumulative Spectrum Endpoint**
+  - `GET /device/spectrum/current` - Get whatever's on the device without clearing
+  - Useful for checking device accumulation or resuming after browser disconnect
+  - Based on legacy AlphaHound `G` command behavior
+
+### Changed
+- **`main.js`**: `startAcquisition()` now uses server API instead of `setInterval`
+- **`api.js`**: Added `startManagedAcquisition()`, `getAcquisitionStatus()`, `stopManagedAcquisition()`, `getAcquisitionData()`
+- Frontend now polls server for status; timing accuracy independent of browser
+
+## [Unreleased - Session 2025-12-15 PM2] - Serial Command Discovery & UI Enhancements
+
+### Discovered (via serial probing)
+- **Undocumented AlphaHound serial commands:**
+  - `E` - Cycle display mode FORWARD
+  - `Q` - Cycle display mode BACKWARD
+  - `K` - Get device config (actThresh, NoiseFloor)
+  - `L` - Get activity threshold
+  - `DB` - **Correct dose rate** (matches device display)
+  - Device uses single-character command parsing
+- Full documentation: `docs/ALPHAHOUND_SERIAL_COMMANDS.md`
+
+### Added
+- **Display Mode Control UI**
+  - ◀/▶ buttons in device panel to cycle display modes remotely
+  - New endpoint: `POST /device/display/{next|prev}`
+  - Uses newly discovered `E` and `Q` commands
+
+- **Get Current Spectrum Button**
+  - Downloads cumulative spectrum without clearing device
+  - Useful for checking accumulation or recovering after disconnect
+
+- **Clear Spectrum Button**
+  - Manually reset device spectrum with confirmation dialog
+  - New endpoint: `POST /device/clear`
+  - Uses `W` command (tested and confirmed)
+
+- **Temperature Display**
+  - Shows device temperature (🌡️) next to dose rate
+  - Updated from spectrum metadata (Temp field)
+
+- **Server-Managed Acquisition Indicators**
+  - "SERVER-MANAGED" badge when acquisition is running
+  - Info message: "You can close this tab and it will continue"
+
+### Fixed
+- **Dose rate now uses `DB` command** instead of `D`
+  - Statistical analysis confirmed D/DA/DB are identical
+  - `DB` chosen as it synchronized best with device display
+
+---
+
 ## [Unreleased - Session 2025-12-15] - Acquisition Resilience & Reference Links
 
 ### Fixed

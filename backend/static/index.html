@@ -66,6 +66,10 @@
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
                         <span style="color: #10b981; font-size: 1.2rem;">●</span>
                         <span style="color: var(--text-secondary); font-weight: 500;">Connected</span>
+                        <span id="acquisition-server-status"
+                            style="display: none; margin-left: 0.5rem; padding: 2px 8px; background: var(--accent-color); color: white; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                            SERVER-MANAGED
+                        </span>
                     </div>
 
                     <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
@@ -88,6 +92,37 @@
                             <img src="/static/icons/stop.svg" class="icon"> Stop
                         </button>
 
+                        <!-- Get Current Spectrum (cumulative from device) -->
+                        <button id="btn-get-current" class="btn-secondary"
+                            style="padding: 0.4rem 0.8rem; font-size: 0.9rem; background: var(--card-bg); border: 1px solid var(--accent-color); color: var(--accent-color);"
+                            title="Download current cumulative spectrum from device without clearing">
+                            📥 Get Current
+                        </button>
+
+                        <!-- Clear Spectrum -->
+                        <button id="btn-clear-spectrum" class="btn-secondary"
+                            style="padding: 0.4rem 0.8rem; font-size: 0.9rem; background: var(--card-bg); border: 1px solid #f59e0b; color: #f59e0b;"
+                            title="Clear/reset spectrum on device (W command)">
+                            🗑️ Clear
+                        </button>
+
+                        <!-- Display Mode Controls -->
+                        <div
+                            style="display: flex; gap: 0.25rem; border: 1px solid var(--border-color); border-radius: 6px; padding: 2px;">
+                            <button id="btn-display-prev" class="btn-secondary"
+                                style="padding: 0.25rem 0.5rem; font-size: 0.8rem; background: var(--card-bg); border: none; border-radius: 4px;"
+                                title="Previous display mode (Q command)">
+                                ◀
+                            </button>
+                            <span
+                                style="padding: 0.25rem 0.4rem; font-size: 0.75rem; color: var(--text-secondary);">Display</span>
+                            <button id="btn-display-next" class="btn-secondary"
+                                style="padding: 0.25rem 0.5rem; font-size: 0.8rem; background: var(--card-bg); border: none; border-radius: 4px;"
+                                title="Next display mode (E command)">
+                                ▶
+                            </button>
+                        </div>
+
                         <!-- Timer Box -->
                         <div id="acquisition-status"
                             style="display: none; padding: 0.4rem 0.8rem; background: var(--bg-secondary); border: 1px solid var(--accent-color); border-radius: 6px; font-size: 0.9rem; white-space: nowrap;">
@@ -103,6 +138,13 @@
                             Disconnect
                         </button>
                     </div>
+
+                    <!-- Server-managed acquisition info -->
+                    <div id="server-acquisition-info"
+                        style="display: none; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); padding: 0.5rem; background: rgba(56, 189, 248, 0.1); border-radius: 4px;">
+                        <span style="color: var(--accent-color);">ℹ</span> Acquisition managed server-side. You can
+                        close this tab and it will continue.
+                    </div>
                 </div>
 
                 <!-- Right: Chart & Data -->
@@ -113,9 +155,12 @@
                         <span
                             style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">LATEST
                             DOSE RATE</span>
-                        <div>
+                        <div style="display: flex; gap: 1rem; align-items: baseline;">
                             <span id="dose-display"
                                 style="font-size: 1.25rem; font-weight: 700; color: var(--accent-color);">--</span>
+                            <span id="temp-display"
+                                style="font-size: 0.9rem; color: var(--text-secondary); display: none;"
+                                title="Device Temperature">🌡️ --°C</span>
                         </div>
                     </div>
                     <div class="sparkline-container" style="flex: 1; min-height: 50px; position: relative;">

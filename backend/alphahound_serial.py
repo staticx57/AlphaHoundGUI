@@ -33,6 +33,8 @@ class AlphaHoundDevice:
         self.current_dose: float = 0.0
         self.spectrum: List[tuple] = []  # [(count, energy), ...]
         self.collecting_spectrum = False
+        self.temperature: Optional[float] = None  # Device temperature in °C
+        self.comp_factor: Optional[float] = None  # Temperature compensation factor
         
         # Callbacks for real-time updates
         self.dose_callback: Optional[Callable] = None
@@ -93,6 +95,18 @@ class AlphaHoundDevice:
         """Get latest spectrum data"""
         return self.spectrum.copy()
     
+    def get_temperature(self) -> Optional[float]:
+        """Get device temperature in °C (updated when spectrum is requested)"""
+        return self.temperature
+    
+    def get_comp_factor(self) -> Optional[float]:
+        """Get temperature compensation factor (updated when spectrum is requested)"""
+        return self.comp_factor
+    
+    def send_command(self, cmd: str):
+        """Send a raw command string to the device (e.g., 'E' for display next, 'Q' for display prev)"""
+        self._write(cmd.encode('utf-8'))
+    
     def _write(self, data: bytes):
         """Thread-safe write to serial port with retry logic"""
         if not self.serial_conn:
@@ -140,6 +154,20 @@ class AlphaHoundDevice:
                         
                         if not line:
                             continue
+                        
+                        # Parse temperature from spectrum metadata
+                        if line.startswith('Temp:'):
+                            try:
+                                self.temperature = float(line.split(':')[1])
+                            except ValueError:
+                                pass
+                        
+                        # Parse compensation factor from spectrum metadata
+                        if line.startswith('CompFactor:'):
+                            try:
+                                self.comp_factor = float(line.split(':')[1])
+                            except ValueError:
+                                pass
                             
                         # Spectrum Start
                         if line == "Comp":
@@ -184,8 +212,9 @@ class AlphaHoundDevice:
                 # 2. POLL LOOP
                 curr = time.time()
                 # Poll dose every 1.0s IF NOT collecting spectrum
+                # Using 'DB' command which matches the device display (discovered via probing)
                 if not self.collecting_spectrum and (curr - last_dose_time >= 1.0):
-                    self._write(b'D')
+                    self._write(b'DB')
                     last_dose_time = curr
                 
                 time.sleep(0.05)

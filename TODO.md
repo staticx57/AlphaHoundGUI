@@ -238,7 +238,8 @@
     - ✅ **Bug Fixes**: Resolved "Spread Syntax" chart crash and Auto-BG floating peak artifacts.
 
 ## Next Steps
-- [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`).
-- [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally.
-- [ ] **Temperature Compensation**: If serial protocol reveals temp data, use it for gain stabilization.
+- [ ] **Replace New Emoji Icons with SVG**: Device control buttons (📥 Get Current, 🗑️ Clear, 🌡️ Temperature, ◀▶ Display) need professional SVG icons
+- [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`)
+- [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally
+- [ ] **Temperature Compensation**: ✅ Temperature now captured from spectrum metadata - consider using for gain stabilization
 

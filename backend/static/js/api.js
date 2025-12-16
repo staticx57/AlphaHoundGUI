@@ -196,6 +196,68 @@ export class AlphaHoundAPI {
         return response;
     }
 
+    // ============================================================
+    // Server-Side Managed Acquisition API
+    // ============================================================
+
+    /**
+     * Starts a server-managed acquisition.
+     * Acquisition runs independently of browser - survives tab throttling, display sleep.
+     * @param {number} durationMinutes - How long to acquire (in minutes)
+     * @returns {Promise<Object>} Status object with success flag
+     * @throws {Error} If start fails
+     */
+    async startManagedAcquisition(durationMinutes) {
+        const response = await fetch('/device/acquisition/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ duration_minutes: durationMinutes })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to start acquisition');
+        }
+        return await response.json();
+    }
+
+    /**
+     * Gets current acquisition status from server.
+     * @returns {Promise<Object>} State including status, elapsed_seconds, progress_percent
+     */
+    async getAcquisitionStatus() {
+        const response = await fetch('/device/acquisition/status');
+        return await response.json();
+    }
+
+    /**
+     * Stops current acquisition and finalizes.
+     * @returns {Promise<Object>} Status with final_filename
+     * @throws {Error} If stop fails
+     */
+    async stopManagedAcquisition() {
+        const response = await fetch('/device/acquisition/stop', {
+            method: 'POST'
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to stop acquisition');
+        }
+        return await response.json();
+    }
+
+    /**
+     * Gets latest spectrum data from active acquisition.
+     * Use for UI updates without affecting timing.
+     * @returns {Promise<Object>} Spectrum data (counts, energies, peaks, isotopes)
+     */
+    async getAcquisitionData() {
+        const response = await fetch('/device/acquisition/data');
+        if (!response.ok) {
+            return null; // No data available
+        }
+        return await response.json();
+    }
+
     // WebSocket Logic
     setupDoseWebSocket(onDoseRate, onConnectionStatus) {
         this.listeners.onDoseRate = onDoseRate;

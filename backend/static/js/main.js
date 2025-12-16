@@ -760,6 +760,50 @@ document.getElementById('btn-disconnect-device').addEventListener('click', disco
 document.getElementById('btn-start-acquire').addEventListener('click', startAcquisition);
 document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
 
+// Get Current Spectrum button (downloads cumulative without clearing)
+const btnGetCurrent = document.getElementById('btn-get-current');
+if (btnGetCurrent) {
+    btnGetCurrent.addEventListener('click', getCurrentSpectrum);
+}
+
+// Display mode control buttons (E = next, Q = prev)
+const btnDisplayNext = document.getElementById('btn-display-next');
+const btnDisplayPrev = document.getElementById('btn-display-prev');
+
+if (btnDisplayNext) {
+    btnDisplayNext.addEventListener('click', async () => {
+        try {
+            await fetch('/device/display/next', { method: 'POST' });
+        } catch (e) {
+            console.error('Display next error:', e);
+        }
+    });
+}
+
+if (btnDisplayPrev) {
+    btnDisplayPrev.addEventListener('click', async () => {
+        try {
+            await fetch('/device/display/prev', { method: 'POST' });
+        } catch (e) {
+            console.error('Display prev error:', e);
+        }
+    });
+}
+
+// Clear Spectrum button (W command)
+const btnClearSpectrum = document.getElementById('btn-clear-spectrum');
+if (btnClearSpectrum) {
+    btnClearSpectrum.addEventListener('click', async () => {
+        if (!confirm('Clear all accumulated counts on the device?')) return;
+        try {
+            await fetch('/device/clear', { method: 'POST' });
+            showToast('Spectrum cleared');
+        } catch (e) {
+            console.error('Clear spectrum error:', e);
+        }
+    });
+}
+
 // Top panel device controls (if they exist)
 const refreshTop = document.getElementById('btn-refresh-ports-top');
 const connectTop = document.getElementById('btn-connect-top');
@@ -1177,6 +1221,10 @@ async function checkDeviceStatus() {
         const status = await api.getDeviceStatus();
         if (status.connected) {
             ui.setDeviceConnected(true);
+            // Update temperature if available
+            if (status.temperature) {
+                ui.updateTemperature(status.temperature);
+            }
             api.setupDoseWebSocket(
                 (rate) => {
                     ui.updateDoseDisplay(rate);
@@ -1194,7 +1242,7 @@ async function checkDeviceStatus() {
 
 /**
  * Starts spectrum acquisition from the AlphaHound device.
- * Polls device every 2 seconds and auto-saves CSV on completion.
+ * Uses server-side managed acquisition for robustness against browser throttling.
  * @returns {Promise<void>}
  */
 async function startAcquisition() {
@@ -1203,93 +1251,74 @@ async function startAcquisition() {
     const seconds = minutes * 60;
 
     try {
-        await api.clearDevice();
+        // Start server-managed acquisition
+        const result = await api.startManagedAcquisition(minutes);
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to start acquisition');
+        }
+
         isAcquiring = true;
         acquisitionStartTime = Date.now();
-        lastCheckpointTime = Date.now(); // Reset checkpoint timer
 
         document.getElementById('btn-start-acquire').style.display = 'none';
         document.getElementById('btn-stop-acquire').style.display = 'block';
         document.getElementById('acquisition-status').style.display = 'block';
 
+        // Show server-managed acquisition indicators
+        showServerManagedUI();
+
+        // Poll server for status updates (timing is server-controlled)
         acquisitionInterval = setInterval(async () => {
-            const elapsed = (Date.now() - acquisitionStartTime) / 1000;
-            if (elapsed >= seconds) {
-                stopAcquisition();
-                alert('Acquisition Complete');
-                // Final fetch - pass actual elapsed time for accurate metadata
-                const data = await api.getSpectrum(0, elapsed);
-                currentData = data;
-                ui.renderDashboard(data);
-                if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
-
-                // Auto-save N42 (standards-compliant format)
-                try {
-                    const saveResponse = await fetch('/export/n42-auto', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            energies: data.energies,
-                            counts: data.counts,
-                            metadata: {
-                                live_time: elapsed,
-                                real_time: elapsed,
-                                start_time: new Date(acquisitionStartTime).toISOString()
-                            },
-                            peaks: data.peaks,
-                            isotopes: data.isotopes
-                        })
-                    });
-                    if (saveResponse.ok) {
-                        const saveResult = await saveResponse.json();
-                        showToast(saveResult.message, 'success');
-                        // Clean up checkpoint file after successful final save
-                        try {
-                            await fetch('/export/n42-checkpoint', { method: 'DELETE' });
-                        } catch (e) { console.warn('Checkpoint cleanup failed:', e); }
-                    }
-                } catch (e) {
-                    console.error('Auto-save failed:', e);
-                    showToast('Warning: Could not auto-save spectrum', 'warning');
-                }
-
-                return;
-            }
-            ui.updateAcquisitionTimer(elapsed, seconds);
-
-            // Poll spectrum
             try {
-                const data = await api.getSpectrum(0);
-                currentData = data;
-                ui.renderDashboard(data);
-                if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
+                const status = await api.getAcquisitionStatus();
 
-                // Periodic checkpoint save (every 5 minutes)
-                if (Date.now() - lastCheckpointTime >= CHECKPOINT_INTERVAL_MS && currentData?.counts?.length > 0) {
-                    try {
-                        await fetch('/export/n42-checkpoint', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                energies: currentData.energies,
-                                counts: currentData.counts,
-                                metadata: {
-                                    live_time: elapsed,
-                                    real_time: elapsed,
-                                    start_time: new Date(acquisitionStartTime).toISOString()
-                                },
-                                peaks: currentData.peaks || [],
-                                isotopes: currentData.isotopes || []
-                            })
-                        });
-                        lastCheckpointTime = Date.now();
-                        console.log(`[Checkpoint] Saved at ${elapsed.toFixed(0)}s elapsed`);
-                    } catch (checkpointErr) {
-                        console.warn('Checkpoint save failed:', checkpointErr);
+                // Update UI timer
+                ui.updateAcquisitionTimer(status.elapsed_seconds, seconds);
+
+                // Update spectrum display if data available
+                if (status.spectrum_data) {
+                    currentData = status.spectrum_data;
+                    ui.renderDashboard(currentData);
+                    if (isPageVisible) {
+                        chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
                     }
                 }
-            } catch (e) { console.error(e); }
+
+                // Check if acquisition completed or stopped
+                if (status.status === 'complete' || status.status === 'stopped') {
+                    stopAcquisitionUI();
+
+                    if (status.status === 'complete') {
+                        showToast(`Acquisition complete! Saved: ${status.final_filename}`, 'success');
+                    } else {
+                        showToast(`Acquisition stopped. Saved: ${status.final_filename}`, 'info');
+                    }
+
+                    // Fetch final data
+                    const finalData = await api.getAcquisitionData();
+                    if (finalData) {
+                        currentData = finalData;
+                        ui.renderDashboard(currentData);
+                        if (isPageVisible) {
+                            chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
+                        }
+                    }
+                    return;
+                }
+
+                // Check for errors
+                if (status.status === 'error') {
+                    stopAcquisitionUI();
+                    showToast(`Acquisition error: ${status.error}`, 'error');
+                    return;
+                }
+
+            } catch (e) {
+                console.error('Status poll error:', e);
+            }
         }, 2000);
+
+        showToast(`Server-managed acquisition started for ${minutes} minutes`, 'info');
 
     } catch (err) {
         alert(err.message);
@@ -1298,16 +1327,89 @@ async function startAcquisition() {
 
 /**
  * Stops the current spectrum acquisition.
- * Clears polling interval and resets UI state.
+ * Calls server to stop and finalize, then updates UI.
+ * @returns {Promise<void>}
+ */
+async function stopAcquisition() {
+    if (!isAcquiring) return;
+
+    try {
+        const result = await api.stopManagedAcquisition();
+
+        if (result.success) {
+            showToast(`Acquisition stopped. Saved: ${result.final_filename}`, 'success');
+        }
+    } catch (err) {
+        console.error('Stop acquisition error:', err);
+    }
+
+    stopAcquisitionUI();
+}
+
+/**
+ * Resets acquisition UI state.
+ * Called after acquisition completes or stops.
  * @returns {void}
  */
-function stopAcquisition() {
+function stopAcquisitionUI() {
     isAcquiring = false;
     clearInterval(acquisitionInterval);
     document.getElementById('btn-start-acquire').style.display = 'block';
     document.getElementById('btn-stop-acquire').style.display = 'none';
     document.getElementById('acquisition-status').style.display = 'none';
     document.getElementById('acquisition-timer').textContent = '0s';
+
+    // Hide server-managed indicators
+    const serverStatus = document.getElementById('acquisition-server-status');
+    const serverInfo = document.getElementById('server-acquisition-info');
+    if (serverStatus) serverStatus.style.display = 'none';
+    if (serverInfo) serverInfo.style.display = 'none';
+}
+
+/**
+ * Shows server-managed acquisition UI indicators.
+ * @returns {void}
+ */
+function showServerManagedUI() {
+    const serverStatus = document.getElementById('acquisition-server-status');
+    const serverInfo = document.getElementById('server-acquisition-info');
+    if (serverStatus) serverStatus.style.display = 'inline';
+    if (serverInfo) serverInfo.style.display = 'block';
+}
+
+/**
+ * Gets the current cumulative spectrum from the device without clearing.
+ * Useful for checking what's accumulated on the device or resuming after browser disconnect.
+ * @returns {Promise<void>}
+ */
+async function getCurrentSpectrum() {
+    try {
+        showToast('Fetching current spectrum from device...', 'info');
+
+        const response = await fetch('/device/spectrum/current');
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to get spectrum');
+        }
+
+        const data = await response.json();
+        currentData = data;
+
+        // Show dashboard if hidden
+        document.getElementById('drop-zone').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+
+        ui.renderDashboard(data);
+        if (isPageVisible) {
+            chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
+        }
+
+        showToast('Current spectrum loaded (cumulative from device)', 'success');
+
+    } catch (err) {
+        console.error('Get current spectrum error:', err);
+        showToast(`Error: ${err.message}`, 'warning');
+    }
 }
 
 /**
