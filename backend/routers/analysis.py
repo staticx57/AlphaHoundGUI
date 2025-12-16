@@ -689,6 +689,7 @@ async def decay_prediction_endpoint(request: dict):
 
 
 # === ROI Analysis Endpoints ===
+# (Reload Triggered)
 
 @router.post("/analyze/roi")
 async def analyze_roi_endpoint(request: ROIAnalysisRequest):
@@ -719,7 +720,12 @@ async def analyze_roi_endpoint(request: ROIAnalysisRequest):
             source_type=request.source_type
         )
         
-        return result
+        from dataclasses import asdict
+        print(f"[DEBUG] Analyze ROI Result Type: {type(result)}")
+        # If it's already a dict, just return it. If dataclass, convert.
+        if isinstance(result, dict):
+             return result
+        return asdict(result)
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

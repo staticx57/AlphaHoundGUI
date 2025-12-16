@@ -48,6 +48,9 @@ class ROIResult:
     detected: bool = False                    # Is isotope actually detected?
     confidence: float = 0.0                   # Confidence score 0.0-1.0
     snr: float = 0.0                          # Signal-to-noise ratio
+    fit_success: bool = False                 # Was advanced fitting successful?
+    resolution: Optional[float] = None        # Energy Resolution (%)
+    fwhm: Optional[float] = None              # Full Width Half Max (keV)
     detection_limit_counts: float = 0.0       # Minimum detectable counts (3-sigma)
     detection_status: str = "Not Detected"    # Status message
     limiting_factors: List[str] = None        # Why confidence is low
@@ -98,16 +101,58 @@ class ROIAnalyzer:
         peak_energy = isotope["energy_keV"]
         branching_ratio = isotope["branching_ratio"]
         
-        # Calculate gross counts in ROI
-        gross_counts = self._sum_counts_in_region(energies, counts, roi_window)
+        # Default metrics
+        resolution = 0.0
+        fwhm = 0.0
         
-        # Calculate background
-        background_counts = self._calculate_background(
-            energies, counts, roi_window, bg_region, isotope["background_method"]
-        )
-        
+        # --- Advanced Spectrum Fitting (Phase 4) ---
+        fit_success = False
+        try:
+            from .fitting_engine import AdvancedFittingEngine
+            fitter = AdvancedFittingEngine()
+            
+            # Use a slightly wider window for fitting (1.5x ROI) to constrain background
+            roi_width = roi_window[1] - roi_window[0]
+            
+            fit_result = fitter.fit_single_peak(
+                energies, 
+                counts, 
+                centroid_guess=target_energy,
+                roi_width_kev=roi_width * 1.5
+            )
+
+            # Accept fit if R-squared is decent
+            if fit_result and fit_result.r_squared > 0.7:
+                gross_counts = fit_result.net_area + fit_result.background_area
+                background_counts = fit_result.background_area
+                raw_net_counts = fit_result.net_area
+                
+                # New Metrics
+                fwhm = fit_result.fwhm
+                resolution = fit_result.resolution
+                
+                # Use rigorous uncertainty if available
+                if hasattr(fit_result, 'uncertainty') and fit_result.uncertainty > 0:
+                    uncertainty = fit_result.uncertainty
+                else:
+                    uncertainty = math.sqrt(gross_counts + background_counts) # Fallback
+                
+                fit_success = True
+                # print(f"DEBUG: Fit Success {isotope_name}: Res={resolution:.2f}%, Net={raw_net_counts:.1f}")
+
+        except Exception as e:
+            # print(f"DEBUG: Fit Error {isotope_name}: {e}")
+            pass
+
+        if not fit_success:
+            # --- Fallback: Standard ROI Integration ---
+            gross_counts = self._sum_counts_in_region(energies, counts, roi_window)
+            background_counts = self._calculate_background(
+                energies, counts, roi_window, bg_region, isotope["background_method"]
+            )
+            raw_net_counts = gross_counts - background_counts
+
         # Net counts (allow negative for diagnostic purposes, but cap at 0 for activity)
-        raw_net_counts = gross_counts - background_counts
         net_counts = max(0, raw_net_counts)
         
         # Uncertainty (counting statistics)
@@ -254,6 +299,9 @@ class ROIAnalyzer:
         if acquisition_time_s < 300 and not detected:
             recommendations.append("Consider minimum 5-10 minute acquisition for weak sources")
         
+        # DEBUG: Print advanced fitting status
+        print(f"[DEBUG] Advanced Fitting - Success: {fit_success}, Resolution: {resolution}, FWHM: {fwhm}, Error: {uncertainty}")
+
         return ROIResult(
             isotope_name=isotope_name,
             energy_keV=peak_energy,
@@ -271,6 +319,9 @@ class ROIAnalyzer:
             detected=detected,
             confidence=confidence,
             snr=snr,
+            fit_success=fit_success,
+            resolution=resolution,
+            fwhm=fwhm,
             detection_limit_counts=detection_limit_counts,
             detection_status=detection_status,
             limiting_factors=limiting_factors if limiting_factors else None,
@@ -636,6 +687,10 @@ def analyze_roi(
         "confidence": round(result.confidence, 2),
         "snr": round(result.snr, 1),
         "detection_limit_counts": round(result.detection_limit_counts, 1),
+        # Advanced Fitting Metrics (Phase 4)
+        "fit_success": result.fit_success,
+        "resolution": round(result.resolution, 2) if result.resolution else None,
+        "fwhm": round(result.fwhm, 2) if result.fwhm else None,
         # Diagnostic feedback
         "limiting_factors": result.limiting_factors,
         "recommendations": result.recommendations

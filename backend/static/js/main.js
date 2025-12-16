@@ -866,11 +866,21 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
             : '<span style="color: #ef4444;">Unable to calculate</span>';
 
         let htmlOutput = `
-                <div style="color: var(--primary-color); font-weight: 600; margin-bottom: 0.5rem;">
-                    ${data.isotope} (${data.energy_keV} keV): Net Counts ${data.net_counts.toFixed(0)} (${data.uncertainty_sigma.toFixed(1)}σ)
+                <div style="color: var(--primary-color); font-weight: 600; margin-bottom: 0.25rem;">
+                    ${data.isotope} (${data.energy_keV} keV): Net Counts ${data.net_counts.toFixed(0)} ± ${data.uncertainty_sigma.toFixed(1)}
                 </div>
-                <div>Activity: ${activityStr}</div>
             `;
+
+        // Show Advanced Fitting Metrics
+        if (data.fit_success && data.resolution) {
+            htmlOutput += `
+                <div style="margin-bottom: 0.5rem; font-size: 0.85rem; color: #10b981;">
+                   <strong>Resolution:</strong> ${data.resolution.toFixed(2)}% <span style="color:var(--text-secondary);">|</span> <strong>FWHM:</strong> ${data.fwhm.toFixed(2)} keV
+                </div>
+            `;
+        }
+
+        htmlOutput += `<div>Activity: ${activityStr}</div>`;
 
         // If U-235, automatically fetch uranium enrichment ratio
         if (isotope === 'U-235 (186 keV)') {

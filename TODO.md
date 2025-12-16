@@ -242,6 +242,12 @@
     - ✅ **Configuration Update**: Updated `ml_analysis.py` and `device.py` to enforce 3.0 keV scaling.
     - ✅ **Bug Fixes**: Resolved "Spread Syntax" chart crash and Auto-BG floating peak artifacts.
 
+- [x] **Advanced Spectrum Analysis (PyGammaSpec/GammaSpy)**:
+    - [x] **Detector Health**: Implement FWHM% and Energy Resolution calculation for every peak (from PyGammaSpec).
+    - [x] **Robust Single-Fit**: Port `curve_fit` logic for simultaneous specialized Baseline + Gaussian fit (from PyGammaSpec).
+    - [x] **Composite Fitting**: Create `FitModel` class for Multi-Peak/Multiplet analysis (from GammaSpy).
+    - [x] **Uncertainty Engine**: Implement rigorous Jacobian-based error propagation for Bq activity (from GammaSpy).
+
 ## Next Steps
 - [x] **Universal Spectrum Support**:
     - ✅ Integrated `SandiaSpecUtils` for 100+ file formats (.spc, .pcf, .dat, etc.)

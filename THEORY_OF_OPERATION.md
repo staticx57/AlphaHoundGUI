@@ -12,43 +12,86 @@ RadTrace is a web-based gamma spectroscopy analysis platform designed for educat
 
 ```mermaid
 flowchart TB
-    subgraph Frontend["Frontend (Browser)"]
+    subgraph Frontend["Frontend Client (Browser)"]
         UI[index.html]
-        Charts[charts.js]
-        MainJS[main.js]
-        API[api.js]
+        Logic[main.js]
+        Charts[Chart.js]
+        API_JS[api.js]
     end
     
-    subgraph Backend["Backend (FastAPI)"]
-        Main[main.py]
-        DeviceRouter[routers/device.py]
-        AnalysisRouter[routers/analysis.py]
-        IsotopesRouter[routers/isotopes.py]
+    subgraph Backend["FastAPI Server (Python)"]
+        Server[main.py]
+        
+        subgraph Routers["API Routers"]
+            RouteDev[routers/device.py]
+            RouteAna[routers/analysis.py]
+            RouteIso[routers/isotopes.py]
+        end
+        
+        subgraph Engines["Calculation Engines"]
+            DecayEng[decay_calculator.py]
+            ActCalc[activity_calculator.py]
+            PeakFit[peak_detection.py]
+            PyRIID[ml_analysis.py]
+        end
+        
+        subgraph Parsers["Data Ingestion"]
+            N42[n42_parser.py]
+            CSV[csv_parser.py]
+            UniLoad[specutils_parser.py]
+        end
     end
     
-    subgraph Core["Core Modules"]
-        PeakDetect[peak_detection.py]
-        IsotopeDB[isotope_database.py]
-        MLAnalysis[ml_analysis.py]
-        Parsers[n42_parser.py / csv_parser.py]
+    subgraph Hardware["Hardware Layer"]
+        Driver[alphahound_serial.py]
+        Device[AlphaHound Device]
     end
     
-    subgraph Device["Hardware Layer"]
-        AlphaHound[alphahound_serial.py]
-        SerialPort[AlphaHound Device]
+    UI --> Logic
+    Logic --> API_JS
+    API_JS --HTTP/WS--> Server
+    
+    Server --> RouteDev
+    Server --> RouteAna
+    Server --> RouteIso
+    
+    RouteDev --> Driver
+    Driver <--> Device
+    
+    RouteAna --> Parsers
+    RouteAna --> Engines
+    RouteAna --> PyRIID
+```
+
+### API Routing Architecture
+
+This diagram details how specific API endpoints route to backend modules.
+
+```mermaid
+graph LR
+    Req[Client Request] --> Main[main.py / FastAPI]
+    
+    subgraph DeviceRoutes["/device (routers/device.py)"]
+        D_Conn["/connect"] --> Serial[alphahound_serial.py]
+        D_Spec["/spectrum"] --> Serial
+        D_Dose["/dose/stream"] --> WS[WebSocket]
     end
     
-    UI --> API
-    API --> Main
-    Main --> DeviceRouter
-    Main --> AnalysisRouter
-    Main --> IsotopesRouter
-    AnalysisRouter --> PeakDetect
-    AnalysisRouter --> IsotopeDB
-    AnalysisRouter --> MLAnalysis
-    AnalysisRouter --> Parsers
-    DeviceRouter --> AlphaHound
-    AlphaHound --> SerialPort
+    subgraph AnalysisRoutes["/analyze (routers/analysis.py)"]
+        A_Up["/upload"] --> ParserLogic{Parser Selector}
+        A_ROI["/roi"] --> ActCalc[activity_calculator.py]
+        A_Decay["/decay-prediction"] --> DecayCalc[decay_calculator.py]
+        A_ML["/ml-identify"] --> ML[ml_analysis.py]
+    end
+    
+    subgraph ParserLogic["Universal Loader Strategy"]
+        P_N42[.n42] --> N42P[n42_parser]
+        P_CSV[.csv] --> CSVP[csv_parser]
+        P_Gen[Other] --> SpecU[specutils_parser]
+    end
+    
+    Main --> DeviceRoutes
+    Main --> AnalysisRoutes
 ```
 
 ### Component Responsibilities
@@ -143,6 +186,35 @@ sequenceDiagram
     Serial-->>Backend: [(count, energy), ...]
     Backend->>Backend: Analyze spectrum
     Backend-->>Frontend: Full results
+```
+
+### Universal File Parsing Strategy
+
+The system employs a cascading strategy to handle diverse spectrum formats:
+
+```mermaid
+flowchart TD
+    Start[Upload Request] --> Ext{File Extension?}
+    
+    Ext -- .n42 / .xml --> N42[Native N42 Parser]
+    Ext -- .csv --> CSV[Native CSV Parser]
+    Ext -- .chn/.spe --> Multi[CHN/SPE Parser]
+    Ext -- Other --> Fallback{SandiaSpecUtils?}
+    
+    N42 --> Success{Success?}
+    CSV --> Success
+    Multi --> Success
+    
+    Success -- Yes --> Norm[Normalize Data]
+    Success -- No --> Fallback
+    
+    Fallback -- Try Generic --> SpecU[SpecUtils Wrapper]
+    SpecU --> Found{Valid Spectrum?}
+    
+    Found -- Yes --> Norm
+    Found -- No --> Error[Return 400 Error]
+    
+    Norm --> Analyze[Analysis Pipeline]
 ```
 
 ---
@@ -517,6 +589,41 @@ Dose Rate (μSv/h) = (Activity_MBq × Γ × 1000) / Distance_mm²
 
 - **Γ (Gamma Constant)**: Specific gamma ray constant for the nuclide (mSv·cm²/MBq·h).
 - **Distance**: User-specified distance from source (default 100mm).
+
+### Decay Prediction Workflow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API
+    participant DecayEngine
+    participant CurieLib
+    participant BatemanSolver
+    
+    User->>Frontend: Open Decay Modal
+    Frontend->>Frontend: Check previous ROI Activity
+    Frontend->>User: Auto-populate "Activity" (if avail)
+    
+    User->>Frontend: Click "Calculate & Plot"
+    Frontend->>API: POST /analyze/decay-prediction
+    
+    API->>DecayEngine: predict_decay_chain(isotope, activity, time)
+    
+    alt Curie Library Available
+        DecayEngine->>CurieLib: Get Decay Data
+        CurieLib-->>DecayEngine: Half-lives & Branching
+    else Curie Unavailable
+        DecayEngine->>BatemanSolver: Use Internal Database
+    end
+    
+    DecayEngine->>DecayEngine: Solve Bateman Equations
+    DecayEngine-->>API: {time_points, activities_per_isotope}
+    
+    API-->>Frontend: JSON Response
+    Frontend->>Frontend: Render Chart.js (Log Scale)
+    Frontend-->>User: Display Decay Curves
+```
 
 ---
 
