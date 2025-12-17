@@ -203,9 +203,9 @@
     - [ ] Optimize large spectrum rendering
     - [ ] Add service worker for offline capability
 - [x] **Security**:
-    - [ ] Add CSRF protection
     - [x] Implement rate limiting for API endpoints (slowapi)
-    - [ ] Add authentication for LAN access (optional)
+    - [ ] ~~Add CSRF protection~~ (Moved to Low Priority - not relevant for local app)
+    - [ ] ~~Add authentication for LAN access~~ (Moved to Low Priority - optional)
 - [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.
 
 - [x] **v2.0 Analysis Robustness (Completed)**:
@@ -264,8 +264,21 @@
     - ✅ Refined thresholds and subtraction logic
 
 ## Next Steps
-- [ ] **Replace New Emoji Icons with SVG**: Device control buttons (📥 Get Current, 🗑️ Clear, 🌡️ Temperature, ◀▶ Display) need professional SVG icons
+- [x] **Replace New Emoji Icons with SVG**: ✅ Device control buttons replaced with inline SVGs
 - [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`)
 - [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally
 - [ ] **Temperature Compensation**: ✅ Temperature now captured from spectrum metadata - consider using for gain stabilization
+- [ ] **Validate Takumar Lens in Frontend**: Add "Takumar Lens (Th+U)" to ROI Source Type dropdown - backend signature exists but not in frontend
+
+## Advanced Mode Feature Gating
+- [ ] **Three-Tier Mode System**:
+  - **Simple Mode**: Basic spectrum display, auto-identification, peaks/isotopes only
+  - **Advanced Mode**: ROI analysis, decay chain prediction, background subtraction, calibration
+  - **Expert Mode**: Multiplet deconvolution, Voigt fitting, auto ROI, basin hopping, line search APIs
+- [ ] **Systematically identify features per mode**:
+  - Simple: Spectrum chart, peak list, isotope ID, confidence scores
+  - Advanced: + ROI panel, decay prediction, background subtraction, calibration, custom isotopes
+  - Expert: + Multiplet, Voigt fits, auto-ROI, gamma/X-ray line search, decay chain spectrum
+- [ ] **UI Toggle**: Add mode selector to settings (dropdown or tabs)
+- [ ] **Reduce clutter**: Progressively reveal panels based on mode
 

@@ -20,7 +20,8 @@ const colors = ['#38bdf8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'
 
 // Settings
 let currentSettings = {
-    mode: 'simple',
+    mode: 'simple',  // Analysis mode: simple/advanced
+    uiMode: 'simple', // UI complexity: simple/advanced/expert
     isotope_min_confidence: 40.0,
     chain_min_confidence: 30.0,
     energy_tolerance: 20.0,
@@ -28,6 +29,74 @@ let currentSettings = {
     chain_min_isotopes_high: 4,
     max_isotopes: 5
 };
+
+// UI Mode Panel Configuration
+// Maps UI complexity mode to visible panels/sections
+// Panel IDs must match actual element IDs in index.html
+const UI_MODE_CONFIG = {
+    simple: {
+        description: 'Basic spectrum analysis for hobbyists',
+        showElements: [],
+        hideElements: [
+            'roi-analysis-panel',       // ROI analysis panel
+            'advanced-settings'         // Threshold sliders
+        ]
+    },
+    advanced: {
+        description: 'Extended analysis with calibration and ROI',
+        showElements: [
+            'roi-analysis-panel'        // ROI analysis panel
+        ],
+        hideElements: []
+    },
+    expert: {
+        description: 'Full access to all analysis tools',
+        showElements: [
+            'roi-analysis-panel',       // ROI analysis panel
+            'advanced-settings'         // Threshold sliders
+        ],
+        hideElements: []
+    }
+};
+
+/**
+ * Applies UI complexity mode by showing/hiding panels.
+ * @param {string} mode - 'simple', 'advanced', or 'expert'
+ */
+function applyUIMode(mode = 'simple') {
+    const config = UI_MODE_CONFIG[mode] || UI_MODE_CONFIG.simple;
+    console.log(`[UI Mode] Applying "${mode}" mode: ${config.description}`);
+
+    // First, hide elements that should be hidden in this mode
+    if (config.hideElements && config.hideElements.length > 0) {
+        config.hideElements.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = 'none';
+                console.log(`[UI Mode] Hiding: ${id}`);
+            } else {
+                console.warn(`[UI Mode] Element not found: ${id}`);
+            }
+        });
+    }
+
+    // Then, show elements that should be visible in this mode
+    if (config.showElements && config.showElements.length > 0) {
+        config.showElements.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = 'block';
+                console.log(`[UI Mode] Showing: ${id}`);
+            } else {
+                console.warn(`[UI Mode] Element not found: ${id}`);
+            }
+        });
+    }
+
+    // Update currentSettings and persist
+    currentSettings.uiMode = mode;
+    localStorage.setItem('analysisSettings', JSON.stringify(currentSettings));
+}
 
 // [STABILITY] Visibility Handling
 let isPageVisible = true;
@@ -77,18 +146,23 @@ function loadSettings() {
 
         // Sync UI with saved settings after DOM is ready
         setTimeout(() => {
-            // Set mode radio
+            // Set analysis mode radio
             const modeRadio = document.querySelector(`input[name="analysis-mode"][value="${currentSettings.mode}"]`);
             if (modeRadio) {
                 modeRadio.checked = true;
                 // Show advanced panel if in advanced mode
                 if (currentSettings.mode === 'advanced') {
                     document.getElementById('advanced-settings').style.display = 'block';
-                    // Also show ROI Analysis panel (Advanced Mode only)
-                    const roiPanel = document.getElementById('roi-analysis-panel');
-                    if (roiPanel) roiPanel.style.display = 'block';
                 }
             }
+
+            // Set UI complexity mode radio
+            const uiMode = currentSettings.uiMode || 'simple';
+            const uiModeRadio = document.querySelector(`input[name="ui-mode"][value="${uiMode}"]`);
+            if (uiModeRadio) {
+                uiModeRadio.checked = true;
+            }
+            applyUIMode(uiMode);
 
             // Set slider values
             if (currentSettings.isotope_min_confidence !== undefined) {
@@ -103,6 +177,11 @@ function loadSettings() {
                 document.getElementById('energy-tolerance').value = currentSettings.energy_tolerance;
                 document.getElementById('energy-tol-val').textContent = currentSettings.energy_tolerance;
             }
+        }, 0);
+    } else {
+        // No saved settings - apply default UI mode after DOM ready
+        setTimeout(() => {
+            applyUIMode('simple');
         }, 0);
     }
 }
@@ -122,6 +201,15 @@ function setupEventListeners() {
         a.download = 'spectrum_data.json';
         a.click();
         URL.revokeObjectURL(url);
+    });
+
+    // UI Complexity Mode change listener
+    document.querySelectorAll('input[name="ui-mode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const newMode = e.target.value;
+            applyUIMode(newMode);
+            console.log(`[Settings] UI Mode changed to: ${newMode}`);
+        });
     });
 
     document.getElementById('btn-export-csv').addEventListener('click', () => {
@@ -273,11 +361,11 @@ function setupEventListeners() {
         // Save to localStorage
         localStorage.setItem('analysisSettings', JSON.stringify(currentSettings));
 
-        // Toggle ROI Analysis panel visibility (Advanced Mode only)
-        const roiPanel = document.getElementById('roi-analysis-panel');
-        if (roiPanel) {
-            roiPanel.style.display = (mode === 'advanced') ? 'block' : 'none';
-        }
+        // Apply UI Complexity Mode (controls panel visibility)
+        const uiModeRadio = document.querySelector('input[name="ui-mode"]:checked');
+        const uiMode = uiModeRadio ? uiModeRadio.value : 'simple';
+        currentSettings.uiMode = uiMode;
+        applyUIMode(uiMode);
 
         // Close modal
         document.getElementById('settings-modal').style.display = 'none';
@@ -1136,6 +1224,8 @@ async function handleFile(file) {
         } else {
             if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, 'linear');
         }
+        // Show zoom scrubber with mini preview
+        chartManager.showScrubber(data.energies, data.counts);
         saveToHistory(file.name, data);
     } catch (err) {
         ui.showError(err.message);

@@ -415,9 +415,9 @@ class ROIAnalyzer:
         ra226_interference = False
         
         # Check source type hinting
-        known_ra226_source = source_type in ["uranium_glass", "radium_dial", "natural_uranium"]
+        known_ra226_source = source_type in ["uranium_glass", "radium_dial", "natural_uranium", "takumar_lens"]
         
-        # Special check for Thoriated Lens
+        # Special check for Thoriated Lens (pure Th only)
         if source_type == "thoriated_lens":
             try:
                 # Check for Thorium marker (Ac-228)
@@ -430,6 +430,13 @@ class ROIAnalyzer:
             except:
                 pass
         
+        # Special handling for Takumar lens (ThO2 + trace natural U)
+        if source_type == "takumar_lens":
+            warnings.append(
+                "Takumar lens analysis: Source contains Thorium dioxide + trace natural uranium. "
+                "Ra-226 interference correction will be applied."
+            )
+        
         if has_bi214 or known_ra226_source:
             # Ra-226 is definitely present if Bi-214 is detected OR user confirmed source type
             # The 186 keV region will contain BOTH U-235 (185.7 keV) AND Ra-226 (186.2 keV)
@@ -439,7 +446,7 @@ class ROIAnalyzer:
             # Requested by user to "do our best" for Uranium Glass
             ra226_corrected = False
             
-            if source_type == "uranium_glass" and bi214_result.net_counts > 0:
+            if source_type in ["uranium_glass", "takumar_lens"] and bi214_result.net_counts > 0:
                 try:
                     # Ra-226 (186.2 keV) Yield: 3.64%
                     # Bi-214 (609.3 keV) Yield: 45.49%
@@ -649,6 +656,55 @@ class ROIAnalyzer:
             return 0
         
         return 0
+
+
+def calculate_ra226_equilibrium_correction(
+    th232_activity_bq: float,
+    u238_activity_bq: Optional[float] = None,
+    source_type: str = "thoriated_lens"
+) -> Dict:
+    """
+    Calculate Ra-226 equivalent activity for sources in secular equilibrium.
+    
+    For thoriated lenses (Takumar, etc.):
+    - Th-232 chain is in secular equilibrium (all daughters have equal activity)
+    - If natural uranium is present, U-238 daughters (including Ra-226) are also in equilibrium
+    
+    Args:
+        th232_activity_bq: Measured Th-232 chain activity (Bq)
+        u238_activity_bq: Measured U-238 chain activity (Bq), if detected
+        source_type: Type of source for correction factors
+        
+    Returns:
+        Dict with equilibrium-corrected activities and metadata
+    """
+    result = {
+        "th232_activity_bq": th232_activity_bq,
+        "u238_activity_bq": u238_activity_bq,
+        "ra226_equivalent_bq": None,
+        "total_activity_bq": th232_activity_bq,
+        "equilibrium_applied": False,
+        "notes": []
+    }
+    
+    # Th-232 chain in secular equilibrium
+    # Ra-228, Ac-228, Th-228, Ra-224, etc. all have same activity as parent
+    result["notes"].append("Th-232 chain assumed in secular equilibrium")
+    
+    # If U-238 is detected (common in Takumar lenses)
+    if u238_activity_bq and u238_activity_bq > 0:
+        # Ra-226 is a daughter of U-238 chain
+        # In secular equilibrium: Ra-226 activity = U-238 activity
+        ra226_eq = u238_activity_bq
+        result["ra226_equivalent_bq"] = ra226_eq
+        result["total_activity_bq"] = th232_activity_bq + u238_activity_bq
+        result["equilibrium_applied"] = True
+        result["notes"].append(f"Ra-226 equivalent (from U-238): {ra226_eq:.1f} Bq")
+        result["notes"].append("Natural uranium present - Ra-226 in secular equilibrium")
+    else:
+        result["notes"].append("No significant U-238 detected - pure thorium source")
+    
+    return result
 
 
 def analyze_roi(

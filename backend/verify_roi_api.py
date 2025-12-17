@@ -32,18 +32,23 @@ def verify_api():
         if response.status_code == 200:
             data = response.json()
             print("\n--- API Response Keys ---")
-            print(json.dumps(list(data.keys()), indent=2))
+            keys = list(data.keys())
+            print(f"Total keys: {len(keys)}")
+            print(f"Keys: {keys}")
             
             print("\n--- Advanced Metrics ---")
-            print(f"Fit Success: {data.get('fit_success')}")
-            print(f"Resolution: {data.get('resolution')}")
-            print(f"FWHM: {data.get('fwhm')}")
-            print(f"Uncertainty: {data.get('uncertainty_sigma')}")
+            print(f"fit_success in response: {'fit_success' in data}")
+            print(f"resolution in response: {'resolution' in data}")
+            print(f"fwhm in response: {'fwhm' in data}")
+            print(f"Fit Success value: {data.get('fit_success')}")
+            print(f"Resolution value: {data.get('resolution')}")
+            print(f"FWHM value: {data.get('fwhm')}")
+            print(f"Uncertainty value: {data.get('uncertainty_sigma')}")
             
-            if data.get('fit_success') and data.get('resolution'):
-                print("\nSUCCESS: Advanced metrics are present and populated.")
+            if 'fit_success' in data and 'resolution' in data and 'fwhm' in data:
+                print("\n✅ SUCCESS: All advanced metrics fields are present!")
             else:
-                print("\nFAILURE: Advanced metrics missing or fit failed.")
+                print("\n❌ FAILURE: Some advanced metrics fields are missing.")
         else:
             print(f"Error {response.status_code}: {response.text}")
             

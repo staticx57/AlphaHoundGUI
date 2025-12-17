@@ -11,11 +11,12 @@
     <link rel="stylesheet" href="/static/style.css?v=6">
     <link rel="stylesheet" href="/static/button-fixes.css?v=2">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-    <script
-        src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <!-- Chart.js loaded async for performance -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"
+        defer></script>
 </head>
 
 <body>
@@ -96,14 +97,26 @@
                         <button id="btn-get-current" class="btn-secondary"
                             style="padding: 0.4rem 0.8rem; font-size: 0.9rem; background: var(--card-bg); border: 1px solid var(--accent-color); color: var(--accent-color);"
                             title="Download current cumulative spectrum from device without clearing">
-                            📥 Get Current
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                style="vertical-align: middle; margin-right: 4px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg> Get Current
                         </button>
 
                         <!-- Clear Spectrum -->
                         <button id="btn-clear-spectrum" class="btn-secondary"
                             style="padding: 0.4rem 0.8rem; font-size: 0.9rem; background: var(--card-bg); border: 1px solid #f59e0b; color: #f59e0b;"
                             title="Clear/reset spectrum on device (W command)">
-                            🗑️ Clear
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                style="vertical-align: middle; margin-right: 4px;">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg> Clear
                         </button>
 
                         <!-- Display Mode Controls -->
@@ -112,14 +125,18 @@
                             <button id="btn-display-prev" class="btn-secondary"
                                 style="padding: 0.25rem 0.5rem; font-size: 0.8rem; background: var(--card-bg); border: none; border-radius: 4px;"
                                 title="Previous display mode (Q command)">
-                                ◀
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M15 18l-6-6 6-6" />
+                                </svg>
                             </button>
                             <span
                                 style="padding: 0.25rem 0.4rem; font-size: 0.75rem; color: var(--text-secondary);">Display</span>
                             <button id="btn-display-next" class="btn-secondary"
                                 style="padding: 0.25rem 0.5rem; font-size: 0.8rem; background: var(--card-bg); border: none; border-radius: 4px;"
                                 title="Next display mode (E command)">
-                                ▶
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M9 6l6 6-6 6" />
+                                </svg>
                             </button>
                         </div>
 
@@ -160,7 +177,11 @@
                                 style="font-size: 1.25rem; font-weight: 700; color: var(--accent-color);">--</span>
                             <span id="temp-display"
                                 style="font-size: 0.9rem; color: var(--text-secondary); display: none;"
-                                title="Device Temperature">🌡️ --°C</span>
+                                title="Device Temperature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" style="vertical-align: middle; margin-right: 2px;">
+                                    <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
+                                </svg> --°C</span>
                         </div>
                     </div>
                     <div class="sparkline-container" style="flex: 1; min-height: 50px; position: relative;">
@@ -248,7 +269,12 @@
                     </div>
                     <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
                         <button id="btn-snip-bg" class="btn-primary" style="font-size: 0.85rem; padding: 4px 8px;"
-                            title="Auto-remove Compton continuum using SNIP algorithm">🔻 Auto Remove BG</button>
+                            title="Auto-remove Compton continuum using SNIP algorithm"><svg width="14" height="14"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round"
+                                style="vertical-align: middle; margin-right: 4px;">
+                                <polyline points="6 9 12 15 18 9" />
+                            </svg> Auto Remove BG</button>
                         <button id="btn-load-bg" style="font-size: 0.85rem; padding: 4px 8px;">Load Background
                             File</button>
                         <button id="btn-set-current-bg" style="font-size: 0.85rem; padding: 4px 8px;">Use Current as
@@ -267,6 +293,25 @@
 
             <div class="chart-container">
                 <canvas id="spectrumChart"></canvas>
+            </div>
+
+            <!-- Scrubby Zoom Slider -->
+            <div id="zoom-scrubber" class="zoom-scrubber-container" style="display: none;">
+                <div class="zoom-scrubber-track">
+                    <canvas id="scrubber-preview" class="scrubber-preview"></canvas>
+                    <div id="scrubber-selection" class="scrubber-selection"></div>
+                </div>
+                <div class="zoom-scrubber-controls">
+                    <input type="range" id="zoom-min" class="zoom-handle zoom-handle-min" min="0" max="100" value="0"
+                        step="0.1">
+                    <input type="range" id="zoom-max" class="zoom-handle zoom-handle-max" min="0" max="100" value="100"
+                        step="0.1">
+                </div>
+                <div class="zoom-scrubber-labels">
+                    <span id="zoom-min-label">0 keV</span>
+                    <span style="flex: 1;"></span>
+                    <span id="zoom-max-label">3000 keV</span>
+                </div>
             </div>
 
             <div id="peaks-container" style="display: none;">
@@ -411,6 +456,7 @@
                             <option value="unknown">Standard Analysis (Default)</option>
                             <option value="uranium_glass">Uranium Glass (Vaseline)</option>
                             <option value="thoriated_lens">Thoriated Camera Lens</option>
+                            <option value="takumar_lens">Takumar Lens (Th + Natural U)</option>
                             <option value="radium_dial">Radium Dial (Watch/Clock)</option>
                             <option value="smoke_detector">Smoke Detector (Am-241)</option>
                             <option value="natural_background">Natural Background</option>
@@ -494,23 +540,48 @@
                 </div>
 
                 <div style="margin: 1.5rem 0;">
-                    <h4 style="margin-bottom: 1rem;">Detection Mode</h4>
+                    <h4 style="margin-bottom: 1rem;">UI Complexity Mode</h4>
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                        <label
+                            style="cursor: pointer; padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: 6px; transition: all 0.3s;">
+                            <input type="radio" name="ui-mode" value="simple" checked style="margin-right: 0.5rem;">
+                            <strong>Simple</strong>
+                        </label>
+                        <label
+                            style="cursor: pointer; padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: 6px; transition: all 0.3s;">
+                            <input type="radio" name="ui-mode" value="advanced" style="margin-right: 0.5rem;">
+                            <strong>Advanced</strong>
+                        </label>
+                        <label
+                            style="cursor: pointer; padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: 6px; transition: all 0.3s;">
+                            <input type="radio" name="ui-mode" value="expert" style="margin-right: 0.5rem;">
+                            <strong>Expert</strong>
+                        </label>
+                    </div>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">
+                        <strong>Simple:</strong> Chart + Peaks + Isotopes only |
+                        <strong>Advanced:</strong> + ROI, BG, Calibration |
+                        <strong>Expert:</strong> + All analysis tools
+                    </p>
+                </div>
+
+                <div style="margin: 1.5rem 0;">
+                    <h4 style="margin-bottom: 1rem;">Threshold Presets</h4>
                     <div style="display: flex; gap: 1rem;">
                         <label
                             style="cursor: pointer; padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: 6px; transition: all 0.3s;">
                             <input type="radio" name="analysis-mode" value="simple" checked
                                 style="margin-right: 0.5rem;">
-                            <strong>Simple Mode</strong> (Recommended)
+                            <strong>Optimized</strong> (Recommended)
                         </label>
                         <label
                             style="cursor: pointer; padding: 0.5rem 1rem; border: 2px solid var(--border-color); border-radius: 6px; transition: all 0.3s;">
                             <input type="radio" name="analysis-mode" value="advanced" style="margin-right: 0.5rem;">
-                            <strong>Advanced Mode</strong> (Customizable)
+                            <strong>Custom</strong> (Edit below)
                         </label>
                     </div>
-                    <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">Simple mode
-                        uses
-                        optimized defaults for hobby-level sources.</p>
+                    <p style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">Optimized uses
+                        tuned defaults for hobby-level sources. Custom unlocks threshold sliders.</p>
                 </div>
 
                 <div id="advanced-settings"
@@ -709,7 +780,7 @@
     </main>
 
     <!-- Main Application Logic (ES6 Modules) -->
-    <script type="module" src="/static/js/main.js?v=2.4"></script>
+    <script type="module" src="/static/js/main.js?v=2.6"></script>
 </body>
 
 </html>

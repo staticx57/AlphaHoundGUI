@@ -4,6 +4,40 @@ export class AlphaHoundChart {
         this.chart = null;
         this.primaryColor = '#38bdf8'; // Default, should read from CSS
         this.autoScale = true; // Default to auto-scale (zoom to data)
+        this.decimationThreshold = 2048; // Decimate spectra larger than this
+    }
+
+    /**
+     * Decimate large dataset to improve rendering performance.
+     * Uses LTTB (Largest-Triangle-Three-Buckets) inspired downsampling.
+     * @param {Array} data - Array of {x, y} points
+     * @param {number} targetPoints - Target number of points
+     * @returns {Array} Decimated data
+     */
+    decimateData(data, targetPoints = 1024) {
+        if (data.length <= targetPoints) return data;
+
+        const bucketSize = Math.floor(data.length / targetPoints);
+        const result = [data[0]]; // Always include first point
+
+        for (let i = 1; i < targetPoints - 1; i++) {
+            const bucketStart = i * bucketSize;
+            const bucketEnd = Math.min((i + 1) * bucketSize, data.length);
+
+            // Find point with max Y value in bucket (preserve peaks)
+            let maxY = -Infinity;
+            let maxPoint = data[bucketStart];
+            for (let j = bucketStart; j < bucketEnd; j++) {
+                if (data[j].y > maxY) {
+                    maxY = data[j].y;
+                    maxPoint = data[j];
+                }
+            }
+            result.push(maxPoint);
+        }
+
+        result.push(data[data.length - 1]); // Always include last point
+        return result;
     }
 
     render(labels, dataPoints, peaks, scaleType = 'linear') {
@@ -30,10 +64,16 @@ export class AlphaHoundChart {
         // ... rest of render ...
 
         // Convert to {x, y} format for linear x-axis
-        const chartData = labels.map((energy, idx) => ({
+        let chartData = labels.map((energy, idx) => ({
             x: parseFloat(energy),
             y: dataPoints[idx]
         }));
+
+        // Performance: Decimate large spectra (>2048 points) to improve rendering
+        if (chartData.length > this.decimationThreshold) {
+            console.log(`[Performance] Decimating ${chartData.length} points to 1024`);
+            chartData = this.decimateData(chartData, 1024);
+        }
 
         // Calculate max energy based on mode
         const fullMaxEnergy = Math.max(...labels.map(e => parseFloat(e)));
@@ -390,6 +430,171 @@ export class AlphaHoundChart {
 
         this.chart.options.plugins.annotation.annotations = annotations;
         this.chart.update();
+    }
+
+    /**
+     * Initialize the zoom scrubber with event listeners.
+     * Call this after first render.
+     */
+    initScrubber() {
+        this.scrubberContainer = document.getElementById('zoom-scrubber');
+        this.zoomMinSlider = document.getElementById('zoom-min');
+        this.zoomMaxSlider = document.getElementById('zoom-max');
+        this.selectionDiv = document.getElementById('scrubber-selection');
+        this.minLabel = document.getElementById('zoom-min-label');
+        this.maxLabel = document.getElementById('zoom-max-label');
+        this.previewCanvas = document.getElementById('scrubber-preview');
+
+        if (!this.scrubberContainer || !this.zoomMinSlider) return;
+
+        // Bind event listeners
+        this.zoomMinSlider.addEventListener('input', () => this.onScrubberChange());
+        this.zoomMaxSlider.addEventListener('input', () => this.onScrubberChange());
+
+        // Prevent min > max
+        this.zoomMinSlider.addEventListener('input', () => {
+            if (parseFloat(this.zoomMinSlider.value) >= parseFloat(this.zoomMaxSlider.value) - 2) {
+                this.zoomMinSlider.value = parseFloat(this.zoomMaxSlider.value) - 2;
+            }
+        });
+        this.zoomMaxSlider.addEventListener('input', () => {
+            if (parseFloat(this.zoomMaxSlider.value) <= parseFloat(this.zoomMinSlider.value) + 2) {
+                this.zoomMaxSlider.value = parseFloat(this.zoomMinSlider.value) + 2;
+            }
+        });
+
+        console.log('[Scrubber] Initialized');
+    }
+
+    /**
+     * Show the scrubber and draw mini preview.
+     * @param {Array} energies - Full energy array
+     * @param {Array} counts - Full counts array
+     */
+    showScrubber(energies, counts) {
+        if (!this.scrubberContainer) this.initScrubber();
+        if (!this.scrubberContainer) return;
+
+        this.fullEnergies = energies;
+        this.fullCounts = counts;
+        this.fullMaxEnergy = Math.max(...energies);
+
+        this.scrubberContainer.style.display = 'block';
+        this.drawMiniPreview();
+        this.updateScrubberFromChart();
+    }
+
+    /**
+     * Hide the scrubber.
+     */
+    hideScrubber() {
+        if (this.scrubberContainer) {
+            this.scrubberContainer.style.display = 'none';
+        }
+    }
+
+    /**
+     * Draw mini spectrum preview on scrubber canvas.
+     */
+    drawMiniPreview() {
+        if (!this.previewCanvas || !this.fullCounts) return;
+
+        const ctx = this.previewCanvas.getContext('2d');
+        const width = this.previewCanvas.clientWidth;
+        const height = this.previewCanvas.clientHeight;
+
+        this.previewCanvas.width = width;
+        this.previewCanvas.height = height;
+
+        ctx.clearRect(0, 0, width, height);
+
+        const maxCount = Math.max(...this.fullCounts);
+        const step = Math.max(1, Math.floor(this.fullCounts.length / width));
+
+        // Get accent color
+        const styles = getComputedStyle(document.documentElement);
+        const lineColor = styles.getPropertyValue('--primary-color').trim() || '#38bdf8';
+
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+
+        for (let i = 0; i < width; i++) {
+            const dataIdx = Math.floor(i * this.fullCounts.length / width);
+            const val = this.fullCounts[dataIdx] || 0;
+            const y = height - (val / maxCount) * height * 0.9;
+
+            if (i === 0) {
+                ctx.moveTo(i, y);
+            } else {
+                ctx.lineTo(i, y);
+            }
+        }
+        ctx.stroke();
+
+        // Fill
+        ctx.lineTo(width, height);
+        ctx.lineTo(0, height);
+        ctx.closePath();
+        ctx.fillStyle = lineColor + '20';
+        ctx.fill();
+    }
+
+    /**
+     * Handle scrubber slider changes and update chart zoom.
+     */
+    onScrubberChange() {
+        if (!this.chart || !this.fullMaxEnergy) return;
+
+        const minPercent = parseFloat(this.zoomMinSlider.value);
+        const maxPercent = parseFloat(this.zoomMaxSlider.value);
+
+        const minEnergy = (minPercent / 100) * this.fullMaxEnergy;
+        const maxEnergy = (maxPercent / 100) * this.fullMaxEnergy;
+
+        // Update chart scales
+        this.chart.options.scales.x.min = minEnergy;
+        this.chart.options.scales.x.max = maxEnergy;
+        this.chart.update('none');
+
+        // Update selection overlay
+        this.updateSelectionOverlay(minPercent, maxPercent);
+
+        // Update labels
+        if (this.minLabel) this.minLabel.textContent = `${Math.round(minEnergy)} keV`;
+        if (this.maxLabel) this.maxLabel.textContent = `${Math.round(maxEnergy)} keV`;
+    }
+
+    /**
+     * Update the selection overlay div position.
+     */
+    updateSelectionOverlay(minPercent, maxPercent) {
+        if (!this.selectionDiv) return;
+        this.selectionDiv.style.left = `${minPercent}%`;
+        this.selectionDiv.style.width = `${maxPercent - minPercent}%`;
+    }
+
+    /**
+     * Sync scrubber sliders from current chart zoom state.
+     * Call this after wheel zoom or pan.
+     */
+    updateScrubberFromChart() {
+        if (!this.chart || !this.fullMaxEnergy || !this.zoomMinSlider) return;
+
+        const xScale = this.chart.options.scales.x;
+        const minEnergy = xScale.min || 0;
+        const maxEnergy = xScale.max || this.fullMaxEnergy;
+
+        const minPercent = (minEnergy / this.fullMaxEnergy) * 100;
+        const maxPercent = (maxEnergy / this.fullMaxEnergy) * 100;
+
+        this.zoomMinSlider.value = Math.max(0, minPercent);
+        this.zoomMaxSlider.value = Math.min(100, maxPercent);
+
+        this.updateSelectionOverlay(minPercent, maxPercent);
+
+        if (this.minLabel) this.minLabel.textContent = `${Math.round(minEnergy)} keV`;
+        if (this.maxLabel) this.maxLabel.textContent = `${Math.round(maxEnergy)} keV`;
     }
 }
 

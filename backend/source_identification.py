@@ -91,7 +91,21 @@ SOURCE_SIGNATURES = {
         excluding_isotopes=[],
         notes="Both U-238 and Th-232 decay chains present. Common in some vintage optical equipment."
     ),
+    
+    "takumar_lens": SourceSignature(
+        name="Super Takumar Lens (ThO₂ + Natural U)",
+        description="Pentax Super Takumar 50mm f/1.4 and similar lenses containing thorium dioxide with trace natural uranium.",
+        required_isotopes=["Ac-228 (911 keV)"],
+        supporting_isotopes=["Th-234 (93 keV)", "Bi-214 (609 keV)", "Pb-214 (352 keV)"],
+        excluding_isotopes=[],
+        notes="Th-232 in secular equilibrium with daughters. Ra-226 (from U-238 decay) may be present from trace natural uranium. Apply Ra-226 equivalence for accurate activity estimation."
+    ),
 }
+
+# === Secular Equilibrium Constants ===
+# For Th-232 chain in secular equilibrium, all daughters have equal activity
+# Ra-226 equivalence factor for thoriated lenses with trace natural uranium
+RA226_EQUILIBRIUM_FACTOR = 1.0  # Activity ratio when in secular equilibrium
 
 
 def get_source_signature(source_id: str) -> Optional[SourceSignature]:

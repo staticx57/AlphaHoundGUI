@@ -1250,3 +1250,214 @@ async def get_gamma_constants():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze/multiplet")
+async def analyze_multiplet_endpoint(request: dict):
+    """
+    Deconvolve overlapping peaks using multiplet fitting.
+    
+    Fits multiple Gaussian peaks simultaneously on a linear baseline.
+    Useful for resolving overlapping peaks (e.g., U-235 + Ra-226 at 186 keV).
+    
+    Args (JSON body):
+        energies: List of energy values (keV)
+        counts: List of counts
+        centroids: List of peak centroids to fit (keV)
+        roi_width: Optional width of ROI around peaks (default: 50 keV)
+        
+    Returns:
+        Fitted peak parameters for each centroid including:
+        - amplitude, centroid, sigma, fwhm, net_area, uncertainty
+        - r_squared for overall fit quality
+    """
+    try:
+        from fitting_engine import AdvancedFittingEngine
+        import numpy as np
+        
+        energies = request.get('energies', [])
+        counts = request.get('counts', [])
+        centroids = request.get('centroids', [])
+        roi_width = request.get('roi_width', 50.0)
+        
+        if not energies or not counts or not centroids:
+            raise HTTPException(status_code=400, detail="energies, counts, and centroids are required")
+        
+        if len(centroids) < 2:
+            raise HTTPException(status_code=400, detail="At least 2 centroids required for multiplet fitting")
+        
+        engine = AdvancedFittingEngine()
+        results, r_squared = engine.fit_multiplet(
+            energies=np.array(energies),
+            counts=np.array(counts),
+            centroids=centroids,
+            roi_width_kev=roi_width
+        )
+        
+        if results is None:
+            return {
+                "success": False,
+                "error": "Multiplet fit failed",
+                "peaks": []
+            }
+        
+        # Format results
+        peaks = []
+        for i, result in enumerate(results):
+            peaks.append({
+                "centroid_requested": centroids[i],
+                "centroid_fitted": round(result.centroid, 2),
+                "amplitude": round(result.amplitude, 1),
+                "sigma": round(result.sigma, 2),
+                "fwhm": round(result.fwhm, 2),
+                "resolution_percent": round(result.resolution, 2),
+                "net_area": round(result.net_area, 1),
+                "uncertainty": round(result.uncertainty, 1),
+            })
+        
+        return {
+            "success": True,
+            "r_squared": round(r_squared, 4),
+            "peaks": peaks,
+            "notes": f"Deconvolved {len(peaks)} overlapping peaks"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Multiplet] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analyze/search-gamma")
+async def search_gamma_line_endpoint(
+    energy: float,
+    delta: float = 5.0,
+    intensity_min: Optional[float] = None
+):
+    """
+    Search for gamma-emitting isotopes near a given energy.
+    
+    Args:
+        energy: Target energy in keV
+        delta: Search window ±keV (default: 5)
+        intensity_min: Minimum intensity % to include (optional)
+        
+    Returns:
+        List of matching gamma lines sorted by proximity
+    """
+    try:
+        from nuclear_data import search_gamma_line
+        
+        results = search_gamma_line(
+            energy=energy,
+            delta=delta,
+            intensity_threshold=intensity_min
+        )
+        
+        return {
+            "query_energy_keV": energy,
+            "search_window_keV": delta,
+            "matches": results,
+            "count": len(results)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analyze/search-xray")
+async def search_xray_line_endpoint(
+    energy: float,
+    delta: float = 2.0
+):
+    """
+    Search for X-ray fluorescence lines near a given energy.
+    Useful for identifying elements in XRF analysis.
+    
+    Args:
+        energy: Target energy in keV
+        delta: Search window ±keV (default: 2)
+        
+    Returns:
+        List of matching X-ray lines sorted by proximity
+    """
+    try:
+        from nuclear_data import search_xray_line
+        
+        results = search_xray_line(energy=energy, delta=delta)
+        
+        return {
+            "query_energy_keV": energy,
+            "search_window_keV": delta,
+            "matches": results,
+            "count": len(results)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analyze/decay-chain")
+async def decay_chain_spectrum_endpoint(
+    parent: str,
+    intensity_min: float = 1.0
+):
+    """
+    Get all gamma lines from a decay chain.
+    
+    Args:
+        parent: Parent isotope (e.g., "U-238", "Th-232", "U-235")
+        intensity_min: Minimum intensity % to include (default: 1%)
+        
+    Returns:
+        Complete decay chain with all gamma-emitting daughters
+    """
+    try:
+        from nuclear_data import decay_chain_spectrum
+        
+        result = decay_chain_spectrum(
+            parent=parent,
+            intensity_threshold=intensity_min
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analyze/isotope-lines")
+async def get_isotope_lines_endpoint(
+    isotope: str,
+    intensity_min: Optional[float] = None
+):
+    """
+    Get all gamma lines for a specific isotope.
+    
+    Args:
+        isotope: Isotope name (e.g., "Cs-137", "Am-241")
+        intensity_min: Minimum intensity % to include (optional)
+        
+    Returns:
+        List of gamma lines for that isotope, sorted by intensity
+    """
+    try:
+        from nuclear_data import get_isotope_gamma_lines
+        
+        results = get_isotope_gamma_lines(
+            isotope=isotope,
+            intensity_threshold=intensity_min
+        )
+        
+        return {
+            "isotope": isotope,
+            "lines": results,
+            "count": len(results)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
