@@ -249,7 +249,8 @@
                         Area.</p>
                 </div>
 
-                <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div id="calibration-section"
+                    style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <strong>Calibration</strong>
                     </div>
@@ -260,7 +261,8 @@
                     </div>
                 </div>
 
-                <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div id="background-section"
+                    style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <strong>Background Subtraction</strong>
                         <span id="bg-active-indicator"
@@ -455,10 +457,13 @@
                         <select id="roi-source-type">
                             <option value="unknown">Standard Analysis (Default)</option>
                             <option value="uranium_glass">Uranium Glass (Vaseline)</option>
+                            <option value="uranium_ore">Uranium Ore (Natural)</option>
                             <option value="thoriated_lens">Thoriated Camera Lens</option>
                             <option value="takumar_lens">Takumar Lens (Th + Natural U)</option>
                             <option value="radium_dial">Radium Dial (Watch/Clock)</option>
                             <option value="smoke_detector">Smoke Detector (Am-241)</option>
+                            <option value="cesium_source">Cesium-137 Source</option>
+                            <option value="cobalt_source">Cobalt-60 Source</option>
                             <option value="natural_background">Natural Background</option>
                         </select>
                     </label>
@@ -472,8 +477,8 @@
                     </label>
 
                     <label class="roi-field">
-                        Acq. Time (s)
-                        <input type="number" id="roi-acq-time" value="600" min="1" max="86400">
+                        Acq. Time (min)
+                        <input type="number" id="roi-acq-time" value="10" min="0.1" max="1440" step="0.1">
                     </label>
 
                     <label class="roi-field">

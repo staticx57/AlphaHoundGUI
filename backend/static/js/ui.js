@@ -235,7 +235,12 @@ export class AlphaHoundUI {
                 "U-235", "Th-231", "Pa-231", "Ac-227", "Th-227",
                 "Ra-223", "Rn-219", "Po-215", "Pb-211", "Bi-211",
                 "Tl-207", "Pb-207"
-            ]
+            ],
+            // Man-made sources
+            "Am-241": ["Am-241"],
+            "Cs-137": ["Cs-137", "Ba-137m"],
+            "Co-60": ["Co-60"],
+            "Ra-226 (Refined)": ["Ra-226", "Rn-222", "Pb-214", "Bi-214", "Pb-210"]
         };
         return chains[chainName] || [];
     }

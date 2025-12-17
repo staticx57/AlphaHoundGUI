@@ -39,25 +39,34 @@ const UI_MODE_CONFIG = {
         showElements: [],
         hideElements: [
             'roi-analysis-panel',       // ROI analysis panel
-            'advanced-settings'         // Threshold sliders
+            'advanced-settings',        // Threshold sliders
+            'calibration-section',      // Calibration tools
+            'background-section'        // Background subtraction
         ]
     },
     advanced: {
         description: 'Extended analysis with calibration and ROI',
         showElements: [
-            'roi-analysis-panel'        // ROI analysis panel
+            'roi-analysis-panel',       // ROI analysis panel
+            'calibration-section',      // Calibration tools
+            'background-section'        // Background subtraction
         ],
-        hideElements: []
+        hideElements: [
+            'advanced-settings'         // Threshold sliders (Expert only)
+        ]
     },
     expert: {
         description: 'Full access to all analysis tools',
         showElements: [
             'roi-analysis-panel',       // ROI analysis panel
-            'advanced-settings'         // Threshold sliders
+            'advanced-settings',        // Threshold sliders
+            'calibration-section',      // Calibration tools
+            'background-section'        // Background subtraction
         ],
         hideElements: []
     }
 };
+
 
 /**
  * Applies UI complexity mode by showing/hiding panels.
@@ -891,11 +900,14 @@ if (chartCanvas) {
 // Source type descriptions for display
 const SOURCE_TYPE_INFO = {
     'uranium_glass': '🟢 Uranium Glass: Looking for U-238 decay chain (Th-234, Bi-214, Pa-234m). Ra-226 interference expected in 186 keV region.',
+    'uranium_ore': '⚛️ Uranium Ore: Full U-238 decay chain in secular equilibrium. U-235 visible at 186 keV (~0.72% natural).',
     'thoriated_lens': '🟠 Thoriated Lens: Looking for Th-232 decay chain (Ac-228, Tl-208). May also contain uranium.',
     'radium_dial': '☢️ Radium Dial: Looking for Ra-226 daughters (Bi-214, Pb-214) WITHOUT U-238 parents (Th-234).',
     'smoke_detector': '🔵 Smoke Detector: Looking for Am-241 at 60 keV.',
     'natural_background': '🌍 Natural Background: Looking for K-40 at 1461 keV.',
     'takumar_lens': '📷 Takumar Lens: ThO₂ glass with trace uranium. Analyzing Th-234 (93 keV) for thorium activity.',
+    'cesium_source': '🟡 Cesium-137: Calibration source at 662 keV. Half-life 30.17 years.',
+    'cobalt_source': '🔴 Cobalt-60: Dual peaks at 1173/1332 keV. Half-life 5.27 years.',
     'unknown': 'Standard Analysis: Detecting isotopes without specific source assumptions.',
     'auto': 'legacy' // fallback
 };
@@ -915,13 +927,21 @@ document.getElementById('roi-source-type')?.addEventListener('change', (e) => {
     }
 
     // Auto-switch isotope based on source type
-    if (sourceType === 'takumar_lens' && isotopeSelect) {
-        // For Takumar lenses, analyze Th-234 (93 keV) instead of U-235
-        isotopeSelect.value = 'Th-234 (93 keV)';
-        showToast('Switched to Th-234 analysis for thoriated lens', 'info');
-    } else if (sourceType === 'smoke_detector' && isotopeSelect) {
-        isotopeSelect.value = 'Am-241 (60 keV)';
-        showToast('Switched to Am-241 analysis for smoke detector', 'info');
+    const SOURCE_ISOTOPE_MAP = {
+        'uranium_glass': 'U-235 (186 keV)',
+        'uranium_ore': 'U-235 (186 keV)',
+        'thoriated_lens': 'Th-234 (93 keV)',
+        'takumar_lens': 'Th-234 (93 keV)',
+        'radium_dial': 'Bi-214 (609 keV)',
+        'smoke_detector': 'Am-241 (60 keV)',
+        'cesium_source': 'Cs-137 (662 keV)',
+        'cobalt_source': 'Co-60 (1173 keV)',
+        'natural_background': 'K-40 (1461 keV)'
+    };
+
+    if (isotopeSelect && SOURCE_ISOTOPE_MAP[sourceType]) {
+        isotopeSelect.value = SOURCE_ISOTOPE_MAP[sourceType];
+        showToast(`Auto-selected ${SOURCE_ISOTOPE_MAP[sourceType]} for ${sourceType.replace(/_/g, ' ')}`, 'info');
     }
 });
 
@@ -933,7 +953,9 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
 
     const isotope = document.getElementById('roi-isotope').value;
     const detector = document.getElementById('roi-detector').value;
-    const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
+    // Input is in minutes, convert to seconds for API
+    const acqTimeMinutes = parseFloat(document.getElementById('roi-acq-time').value) || 10;
+    const acqTime = acqTimeMinutes * 60;
 
     // Safely get source type (handle missing element for older cached HTML)
     const sourceTypeElement = document.getElementById('roi-source-type');
@@ -1034,6 +1056,23 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
                 </div>
             `;
 
+        // Render enhanced analysis if present
+        if (data.enhanced_analysis && data.enhanced_analysis.insights) {
+            htmlOutput += `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                    <div style="font-weight: 600; color: #10b981; margin-bottom: 0.5rem;">📊 Source-Specific Insights</div>
+            `;
+            for (const insight of data.enhanced_analysis.insights) {
+                const warningStyle = insight.warning ? 'color: #f59e0b;' : '';
+                htmlOutput += `
+                    <div style="margin-bottom: 0.3rem; ${warningStyle}">
+                        ${insight.icon || '•'} <strong>${insight.label}:</strong> ${insight.value}
+                    </div>
+                `;
+            }
+            htmlOutput += `</div>`;
+        }
+
         resultsDiv.innerHTML = htmlOutput;
 
         // Store last ROI for highlighting and Decay Tool
@@ -1052,7 +1091,9 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
     }
 
     const detector = document.getElementById('roi-detector').value;
-    const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
+    // Input is in minutes, convert to seconds for API
+    const acqTimeMinutes = parseFloat(document.getElementById('roi-acq-time').value) || 10;
+    const acqTime = acqTimeMinutes * 60;
 
     const resultsDiv = document.getElementById('roi-results');
     resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing uranium ratio...</p>';
@@ -1231,6 +1272,9 @@ async function handleFile(file) {
         ui.resetDropZone();
         ui.renderDashboard(data);
 
+        // Auto-populate ROI acquisition time from metadata (if available)
+        autoPopulateROITime(data);
+
         if (backgroundData) {
             await refreshChartWithBackground();
         } else {
@@ -1241,6 +1285,40 @@ async function handleFile(file) {
         saveToHistory(file.name, data);
     } catch (err) {
         ui.showError(err.message);
+    }
+}
+
+/**
+ * Auto-populates ROI acquisition time input from spectrum metadata.
+ * Looks for live_time, real_time, or acquisition_time in metadata.
+ * Converts seconds to minutes for the UI.
+ * @param {Object} data - The spectrum data object with metadata
+ */
+function autoPopulateROITime(data) {
+    if (!data || !data.metadata) return;
+
+    const input = document.getElementById('roi-acq-time');
+    if (!input) return;
+
+    // Try to get acquisition time from various metadata fields (in seconds)
+    let timeSeconds = null;
+    const m = data.metadata;
+
+    if (m.live_time && m.live_time > 0) {
+        timeSeconds = m.live_time;
+    } else if (m.real_time && m.real_time > 0) {
+        timeSeconds = m.real_time;
+    } else if (m.acquisition_time && m.acquisition_time > 0) {
+        timeSeconds = m.acquisition_time;
+    } else if (m.count_time && m.count_time > 0) {
+        timeSeconds = m.count_time;
+    }
+
+    if (timeSeconds && timeSeconds > 0) {
+        // Convert to minutes and set with 1 decimal place
+        const timeMinutes = (timeSeconds / 60).toFixed(1);
+        input.value = timeMinutes;
+        console.log(`[ROI] Auto-populated acquisition time: ${timeSeconds}s → ${timeMinutes} min`);
     }
 }
 

@@ -1,324 +1,145 @@
 # TODO
 
-## Completed ✅
-- [x] **Advanced Analysis**:
-    - ✅ Use `scipy.signal.find_peaks` for automatic peak detection and labeling.
-    - ✅ Isotope identification database with 100+ isotopes (Simple: 30, Advanced: 100+)
-    - ✅ Decay chain detection (U-238, U-235, Th-232 series)
-    - ✅ Confidence scoring with natural abundance weighting
-    - ✅ **Graphical Decay Chain Visualization**: Visual flow diagrams showing parent→daughter→stable sequences with detected members highlighted
-- [x] **Export Options**:
-    - ✅ Allow exporting parsed data to JSON or CSV from the UI.
-    - ✅ Generate PDF reports with spectrum plot, peaks, isotopes, and decay chains
-- [x] **UI Improvements**:
-    - ✅ Add zoom/pan capabilities to the chart (using `chartjs-plugin-zoom`).
-    - ✅ Light/Dark mode toggle with localStorage + Nuclear/Toxic bonus themes
-    - ✅ Multi-file comparison (overlay multiple spectra)
-    - ✅ **Dual Isotope Detection Panel**: Side-by-side Peak Matching (Legacy) vs AI Identification (ML)
-    - ✅ **Graphical Confidence Bars**: Animated progress bars with color-coded confidence levels
-    - ✅ **Professional Icon System**: SVG icons replacing all emojis with consistent styling
-- [x] **Data Management**:
-    - ✅ Save upload history to local storage
-- [x] **AlphaHound Device Integration**:
-    - ✅ Serial communication with RadView Detection AlphaHound™
-    - ✅ Live dose rate monitoring via WebSocket
-    - ✅ Real-time spectrum acquisition (Live Building) with timed/interruptible counts
-    - ✅ Non-blocking Sidebar UI for device control
-    - ✅ Integrated device control panel
-    - ✅ **Device Panel Enhancement**:
-        - ✅ Split layout (Controls Left / Data Right)
-        - ✅ Consolidated inline controls for cleaner UI
-        - ✅ Live 5-minute sparkline chart for dose rate history
-- [x] **Advanced/Simple Mode Toggle**:
-    - ✅ **Simple Mode** (default): Optimized thresholds (40% isotope, 30% chain) with hobby-focused library (uranium glass, mantles, radium watches, etc.)
-    - ✅ **Advanced Mode**: User-adjustable confidence thresholds, energy tolerance settings, and expanded isotope library including:
-        - ✅ Additional fission products (Ru-103, Zr-95, Ce-144, Mo-99, etc.)
-        - ✅ Activation products (Sc-46, Cr-51, Ag-110m, Sb-124, etc.)
-        - ✅ Rare earth isotopes (Eu-152/154/155, Gd-153, Tb-160, etc.)
-        - ✅ Extended medical isotopes (Ga-67, In-111, Sm-153, Lu-177, etc.)
-        - ✅ Nuclear reactor/waste products
-        - ✅ Transuranics (Pu-238/239/240, Np-237, Am-243, Cm-244)
-    - ✅ Settings panel (⚙️) for threshold customization (isotope min confidence, chain min confidence, peak matching tolerance)
-    - ✅ localStorage persistence across sessions
-- [x] **Decay Chain Detection**:
-    - ✅ Identify typical radioactive decay chains in detected spectra
-    - ✅ When daughter products are detected, suggest likely parent isotopes
-    - ✅ U-238 chain (Pa-234m, Th-234, Ra-226, Pb-214, Bi-214, etc.)
-    - ✅ U-235 chain (Actinium series with abundance weighting)
-    - ✅ Th-232 chain (Tl-208, Ac-228, Pb-212, etc.)
-    - ✅ Visual display of detected chain members with confidence levels
-    - ✅ Authoritative source links (NNDC, IAEA, LBNL, USGS, NRC)
-    - ✅ **Graphical flow diagrams** with color-coded detection status
-- [x] **Natural Abundance Weighting**:
-    - ✅ Research-based isotopic abundance from LBNL/NRC
-    - ✅ U-238 (99.3%) correctly ranks above U-235 (0.72%) in natural samples
-    - ✅ Intermediate filtering layer between detection and thresholding
-- [x] **Stability Fixes**:
-    - ✅ Fix persistent serial disconnection issues (killed zombie processes, simplified serial loop).
-    - ✅ Fixed real-time acquisition timer overshoot (300/300 exact)
-    - ✅ Fixed PDF export Content-Disposition header for proper downloads
-    - ✅ **Auto-Reconnect**: Automatically recovers WebSocket connection causing dose rate display to resume after network/server interruption.
-    - ✅ **Visibility Optimization**: Pauses chart rendering when tab is hidden to reduce CPU usage.
-    - ✅ **Unload Safeguards**: Prompts user before closing tab if recording is in progress.
-    - ✅ **Memory Protection**: Caps comparison mode to 8 spectra to prevent browser crashes.
-    - ⚠️ **COUNT TIME (Partial)**: Fixed metadata display formatting (`replaceAll()` for proper key formatting) - **Still needs**: Backend must capture/store actual acquisition duration
-- [x] **Deployment Improvements**:
-    - ✅ Remove virtual environment requirement
-    - ✅ Create simplified one-click launch process
-    - ✅ Support running without AlphaHound device connected
-    - ✅ **LAN Access**: Configured server for network access (host="0.0.0.0", port 3200)
-- [x] **Refactor threshold filtering to application layer**:
-    - ✅ Moved confidence threshold filtering from `isotope_database.py` to `main.py`
-    - ✅ `identify_isotopes()` and `identify_decay_chains()` return ALL matches
-    - ✅ Application layer applies filtering based on Simple/Advanced mode
-    - ✅ Runtime threshold adjustment without modifying core detection logic
-- [x] **ML Integration (PyRIID)**:
-    - ✅ PyRIID 2.2.0 integration with MLPClassifier
-    - ✅ Training on 90+ isotopes from IAEA/NNDC authoritative database
-    - ✅ Multi-isotope mixture support (7 realistic sources):
-        - ✅ UraniumGlass, ThoriumMantle, MedicalWaste, IndustrialGauge, CalibrationSource, NaturalBackground
-    - ✅ `/analyze/ml-identify` API endpoint
-    - ✅ Frontend "AI Identify" button with loading states
-    - ✅ ~2168 training samples (1782 single + 386 mixtures) with abundance weighting
-    - ✅ **AlphaHound Detector Tuning**: Energy-dependent FWHM (10% at 662 keV) matching CsI(Tl) resolution
-    - ✅ **IAEA Intensity Data**: 49 isotopes with 2,499 gamma lines from IAEA LiveChart API
-    - ✅ **Intensity-Weighted Training**: Synthetic peaks scaled by IAEA gamma intensities
-    - ✅ **Comprehensive Documentation**: See [PYRIID_GUIDE.md](PYRIID_GUIDE.md) and [PYRIID_ENHANCEMENT_PLAN.md](PYRIID_ENHANCEMENT_PLAN.md)
-    - ⚠️ **Note**: ML marked as WIP - Peak Matching is currently more accurate for uranium detection
-- [x] **Peak Detection Enhancement**:
-    - ✅ Fixed overly strict threshold (was 5% of max, now max(5, 0.3% of max))
-    - ✅ Now detects 20+ peaks (was only 3)
-    - ✅ Pb-214, Bi-214, Th-234 now visible in UI
-- [x] **U-235/U-238 Prioritization**:
-    - ✅ U-238 now ranks #2 at 100% confidence
-    - ✅ U-235 suppressed to #26 at 0.1% when U-238 chain detected
-    - ✅ Abundance weighting in `isotope_database.py`
-- [x] **Auto-Save CSV on Acquisition**:
-    - ✅ Automatically saves spectrum to CSV upon acquisition completion
-   - ✅ Saves to `data/acquisitions/` directory
-    - ✅ Filename format: `spectrum_YYYY-MM-DD_HH-MM-SS.csv`
-    - ✅ Toast notification shows saved filename
-
-## Future Enhancements
-
-### Bugs\n- [x] ✅ **Missing Advanced Controls**: Settings modal now has working Simple/Advanced toggle, slider handlers, Apply/Reset buttons
+## Open Tasks
 
 ### High Priority
-- [x] ✅ **Energy Calibration Verified**:
-    - ✅ **Device sends 1024 channels @ ~7.39 keV/channel** (15-7572 keV range)
-    - ✅ **Tested with 6-hour uranium glass spectrum** (190,623 counts)
-    - ✅ **Device calibration is CORRECT** - accurately identifies U-238, Th-234 without false U-235 detection
-    - ✅ **3 keV/channel assumption was WRONG** - would cause false U-235 identification (75% confidence)
-    - ✅ **No changes needed** - keep existing device calibration as-is
-- [x] ✅ **Application Rebranding (SpecTrek → RadTrace)**:
-    - [x] ✅ Bulk find/replace "SpecTrek" with "RadTrace" across all files
-    - [x] ✅ Find and replace remaining emoji in UI with CSS/SVG
-    - [x] ✅ Update README.md with new name
-    - [x] ✅ Update page title and meta tags
-- [ ] **Premium Branding Assets**:
+- [ ] **Premium Branding Assets** *(Deferred - waiting for transparency support)*:
     - [ ] Create and integrate transparent PNG logo to replace rocket.svg
     - [ ] Create and integrate transparent PNG favicon
     - [ ] Create and integrate transparent PNG upload icon
     - [ ] Create and integrate transparent PNG banner
-- [x] ✅ **COUNT TIME Fix (Complete)**:
-    - [x] Backend: Capture actual acquisition duration from frontend
-    - [x] Backend: Pass duration to `count_time_minutes` in metadata
-    - [x] ✅ Frontend: Display formatting fixed (`replaceAll()`)
-- [x] ✅ **Mobile/Responsive UI**:
-    - [x] ✅ Rework layout for phone screen widths (responsive breakpoints)
-    - [x] ✅ Collapsible panels for small screens
-    - [x] ✅ Touch-optimized controls for device acquisition
-    - [x] ✅ Simplified navigation for mobile browsers
-- [x] ✅ **Premium Icon System v2**:
-    - [x] ✅ Professional SVG icons already implemented
-- [x] ✅ **Blue/Purple Sci-Fi Theme**:
-    - [x] ✅ Design and implement additional theme option
-    - [x] ✅ Futuristic color palette with blue/purple gradients
-    - [x] ✅ Glowing effects and tech-inspired UI elements
-    - [x] ✅ Update theme selector to include new option
-- [x] ✅ **Cyberpunk 2077 Theme**:
-    - [x] ✅ Neon yellow/cyan color palette with dark backgrounds
-    - [x] ✅ Glitch effects and holographic UI elements
-    - [x] ✅ Pink/magenta accent colors
-    - [x] ✅ Retro-futuristic typography and styling
-- [x] ✅ **Theme-Aware Toast Notifications**:
-    - [x] ✅ Update toast colors to match current theme (Dark/Light/Nuclear/Toxic/Sci-Fi/Cyberpunk)
-    - [x] ✅ Add theme-specific styling for success/warning/info toasts
-    - [x] ✅ Ensure proper contrast in all theme modes
 
 ### ML & Analysis
-- [x] **ML Improvements**:
-    - [x] Confidence thresholding (5%+ minimum to display)
-    - [x] Hybrid filtering (suppress ML conflicts with Peak Matching HIGH confidence)
-    - [x] Quality badges (good/moderate/low_confidence/no_match)
-    - [ ] Collect real detector data for ML fine-tuning
-    - [ ] Update synthetic demo files to use realistic Poisson noise
-    - [ ] Train on weak source scenarios (low count rates)
-    - [ ] Add background-dominated mixture training
+- [ ] Collect real detector data for ML fine-tuning
+- [ ] Update synthetic demo files to use realistic Poisson noise
+- [ ] Train on weak source scenarios (low count rates)
+- [ ] Add background-dominated mixture training
 
-### Features
-- [x] **Custom Isotope Definitions**:
-    - [x] Allow users to add custom isotopes to the database via UI
-    - [x] Import/export custom isotope libraries (bulk JSON)
-- [x] **Energy Calibration UI**:
-    - ✅ Interactive peak marking for calibration
-    - ✅ Linear calibration (Slope/Intercept)
-- [x] **Background Subtraction**:
-    - ✅ Load background spectrum and subtract from samples
-    - ✅ Real-time net counts display
-- [x] **UI Icon Polish**:
-    - ✅ Replace all emoji icons with professional SVG/PNG assets
-    - ✅ Icons needed: 📜 History, ⚙️ Settings, 🌓 Theme, 🔌 Device, 🔄 Refresh, ▶️ Play, ⏹️ Stop, 📂 Upload, 📄 PDF, 📊 Compare, 🔬 Analysis, 🚀 Rocket, 📥 Import, 📤 Export
-    - ✅ Add favicon to browser tab
-    - ✅ Consistent icon styling across all buttons
-    - ✅ Custom Isotopes modal: SVG icons for Import/Export
-- [x] **ROI Analysis (Advanced Mode)**:
-    - ✅ ROI Analysis with activity calculation (Bq/μCi)
-    - ✅ Uranium enrichment ratio analysis (Natural/Depleted/Enriched)
-    - ✅ **Source Identification** (NEW):
-      - ✅ Auto-detect common sources (Uranium Glass, Thoriated Lenses, Radium Dials)
-      - ✅ User-driven assumption handling ("Source Type" dropdown)
-      - ✅ Systematic validation of detected isotopes against source profile
-    - ✅ **Ra-226 Interference Handling**:
-      - ✅ Explicit warnings for overlapping 186 keV peaks (U-235 vs Ra-226)
-      - ✅ Context-aware "Indeterminate" classification when appropriate
-    - [x] Isotope ROI database with NNDC/IAEA branching ratios
-    
+### Technical Debt
+- [ ] Add unit tests for frontend JavaScript modules
+- [ ] Add unit tests for backend API endpoints
+- [ ] Implement TypeScript for type safety
 
-## Technical Debt
-- [x] **Code Quality**:
-    - [x] Add JSDoc comments for main.js and api.js functions
-    - [x] Refactor `main.js` to use ES6 modules
-    - [ ] Add unit tests for frontend JavaScript modules
-    - [ ] Add unit tests for backend API endpoints
-    - [ ] Implement TypeScript for type safety
-- [x] **Input Validation**:
-    - [x] Add Pydantic Field validators with type hints
-    - [x] Add file size and extension validation
-    - [x] Add port sanitization for device connection
-    - [x] Add range checks for acquisition duration
-- [ ] **Performance Optimization**:
-    - [ ] Lazy load Chart.js and other heavy libraries
-    - [ ] Implement WebWorkers for ML training
-    - [ ] Optimize large spectrum rendering
-    - [ ] Add service worker for offline capability
-- [x] **Security**:
-    - [x] Implement rate limiting for API endpoints (slowapi)
-    - [ ] ~~Add CSRF protection~~ (Moved to Low Priority - not relevant for local app)
-    - [ ] ~~Add authentication for LAN access~~ (Moved to Low Priority - optional)
-- [x] ✅ Refactor `main.py` to move CSV handling logic into its own module `csv_parser.py` or similar.
+### Performance Optimization
+- [ ] Lazy load Chart.js and other heavy libraries
+- [ ] Implement WebWorkers for ML training
+- [ ] Optimize large spectrum rendering
+- [ ] Add service worker for offline capability
 
-- [x] **v2.0 Analysis Robustness (Completed)**:
-    - ✅ **Robust Upload Support**: Implemented `UPLOAD_SETTINGS` (1% confidence, 30keV tolerance) for CSV/N42 uploads.
-    - ✅ **Dual-Mode Engine**: Live Acquisition uses Strict settings (30%) to filter U-235; Uploads use Robust settings.
-    - ✅ **UI Fixes**: Resolved metadata text overlap with CSS `word-break`.
-    - ✅ **Verified**: Confirmed correct filtering of U-235 (7% weighted) vs U-238 (53% weighted) in live data.
-
-## Low Priority / Future
-
-- [ ] **Radiacode Device Integration** (10-15 hours):
-    - [ ] Add `radiacode` Python library dependency
-    - [ ] Create `radiacode_driver.py` with USB/Bluetooth support
-    - [ ] Add Radiacode 103/103G/110 to detector efficiency database
-    - [ ] Create `/radiacode/*` API endpoints (connect, dose, spectrum)
-    - [ ] Add device selector UI (AlphaHound vs Radiacode)
-    - [ ] Tune ML for Radiacode FWHM profiles (7.4%-8.4%)
-    - **Reference**: See [RADIACODE_INTEGRATION_PLAN.md](RADIACODE_INTEGRATION_PLAN.md)
-
-- [x] ✅ **N42 File Format Support (Complete)**:
-    - [x] ✅ Research N42 (ANSI N42.42) file format specification
-    - [x] ✅ Document N42 XML schema and required elements
-    - [x] ✅ Implement N42 exporter for acquired spectra (`backend/n42_exporter.py`)
-    - [x] ✅ Add N42 export button to UI with theme-aware styling
-    - [x] ✅ Enhanced N42 parser with multi-namespace and graceful fallbacks
-    - [x] ✅ Extract instrument info (SOURCE shows "RadView Detection AlphaHound")
-    - [x] ✅ ISO 8601 duration parsing for LiveTime/RealTime
-    - [x] ✅ Standards-compliant output verified against N42.42-2006 schema
-
-- [x] **Tuning & Calibration (Dec 2025)**:
-    - ✅ **Intensity-Weighted Scoring**: Solved misidentification of Thorium (Pb-212) as Uranium (Pb-214) by penalizing missing diagnostic peaks.
-    - ✅ **Strict Chain Triggers**: Enforced >40% confidence threshold for flagging Uranium/Thorium chains.
-    - ✅ **Calibration Correction**: Validated that 3.0 keV/channel provides correct peak alignment (overriding device's 7.4 default).
-    - ✅ **Configuration Update**: Updated `ml_analysis.py` and `device.py` to enforce 3.0 keV scaling.
-    - ✅ **Bug Fixes**: Resolved "Spread Syntax" chart crash and Auto-BG floating peak artifacts.
-
-- [x] **Advanced Spectrum Analysis (PyGammaSpec/GammaSpy)**:
-    - [x] **Detector Health**: Implement FWHM% and Energy Resolution calculation for every peak (from PyGammaSpec).
-    - [x] **Robust Single-Fit**: Port `curve_fit` logic for simultaneous specialized Baseline + Gaussian fit (from PyGammaSpec).
-    - [x] **Composite Fitting**: Create `FitModel` class for Multi-Peak/Multiplet analysis (from GammaSpy).
-    - [x] **Uncertainty Engine**: Implement rigorous Jacobian-based error propagation for Bq activity (from GammaSpy).
-
-## Next Steps
-- [x] **Universal Spectrum Support**:
-    - ✅ Integrated `SandiaSpecUtils` for 100+ file formats (.spc, .pcf, .dat, etc.)
-- [x] **Activity & Dose Calculator**:
-    - ✅ Implemented Bq/μCi conversion (backend + frontend display fixed)
-    - ✅ Added Gamma Dose Rate estimation in μSv/h
-    - ✅ Fixed Ra-226 interference with "Forced Subtraction" for Uranium Glass
-- [x] **Decay Prediction Engine**:
-    - ✅ Hybrid backend: `curie` authoritative data + Custom Bateman Solver fallback
-    - ✅ Interactive UI: Log-scale Chart.js visualization of daughter buildup
-    - ✅ Smart Workflow: Auto-populates activity from ROI analysis results
-- [x] **ROI Analysis Tuning**: 
-    - ✅ Fixed activity unit conversion (1000x error)
-    - ✅ Refined thresholds and subtraction logic
-
-## Next Steps
-- [x] **Replace New Emoji Icons with SVG**: ✅ Device control buttons replaced with inline SVGs
+### Device & Calibration
 - [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`)
 - [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally
-- [ ] **Temperature Compensation**: ✅ Temperature now captured from spectrum metadata - consider using for gain stabilization
-- [x] **Validate Takumar Lens in Frontend**: ✅ Added "Takumar Lens (Th+U)" to ROI Source Type dropdown and backend
+- [ ] **Temperature Compensation**: Temperature captured - consider using for gain stabilization
 
-## Advanced Mode Feature Gating (2025-12-16)
-- [x] **Three-Tier Mode System**: ✅ Implemented in `main.js`
-  - **Simple Mode**: Chart, peaks, isotopes, decay chains
-  - **Advanced Mode**: + ROI Analysis panel
-  - **Expert Mode**: + Threshold sliders
-- [x] **UI Toggle**: ✅ Added mode selector in Settings modal (Simple/Advanced/Expert radios)
-- [x] **Reduce clutter**: ✅ `applyUIMode()` toggles panel visibility based on mode
-- [ ] **Add wrapper IDs for BG/Calibration sections**: Currently always visible, need IDs to gate
+### ROI Enhancements ✅
+- [x] **Auto-populate ROI acquisition time**: Pulls from N42/CSV metadata (live_time/real_time/acquisition_time)
+- [x] **Change ROI time unit to minutes**: Accepts fractional minutes (e.g., 1.5) for consistency with acquisition UI
 
-## Session 2025-12-16 Remaining
-- [x] **FIX: Takumar source_type passing bug**: Added `source_type` field to `UraniumRatioRequest` model
-- [x] **Auto-switch isotope for Takumar**: Frontend now switches to Th-234 (93 keV) when Takumar lens selected
-- [x] **Sanity check for enrichment ratio**: Flag ratios >150% as "Source Type Mismatch"
-- [ ] **Auto-populate ROI acquisition time**: Pull from N42 metadata when available (leave as 1 if unknown)
-- [ ] **Change ROI time unit to minutes**: Accept fractional minutes (e.g., 1.5) instead of seconds for consistency with acquisition UI
+### Source-Specific Analysis Enhancements
 
-- [ ] **Test UI modes end-to-end**: Confirm all three modes work correctly
-- [ ] **Consider gating more panels**: Background subtraction, Calibration currently ungated
+#### Thoriated Lens (Th-232)
+- [ ] ThO₂ mass estimation from Th-234 activity
+- [ ] Secular equilibrium check (Pb-212/Th-234 ratio)
+- [ ] Add Pb-212 (239 keV), Tl-208 (583 keV) to isotope database
 
+#### Smoke Detector (Am-241)
+- [ ] Compare to standard detector activity (~37 kBq)
+- [ ] Age estimation from Pu-241 ingrowth
 
-## Source-Specific Analysis Enhancements
+#### Radium Dial (Ra-226)
+- [ ] Dose rate estimation (μSv/hr at contact and distance)
+- [ ] Radium mass estimation from Bi-214 activity
+- [ ] Age verification via Pb-210 equilibrium
 
-### Thoriated Lens (Th-232)
-- [ ] **ThO₂ mass estimation**: Back-calculate thorium dioxide mass (mg) from Th-234 activity
-- [ ] **Secular equilibrium check**: Compare Pb-212/Th-234 ratio to verify Th-232 chain equilibrium
-- [ ] **Better Th-232 markers**: Add Pb-212 (239 keV), Tl-208 (583 keV) to isotope database for CsI
+#### Cesium-137
+- [ ] Decay-corrected activity estimation
+- [ ] Half-life remaining display
 
-### Smoke Detector (Am-241)
-- [ ] **Typical activity comparison**: Compare to standard detector (~37 kBq)
-- [ ] **Age estimation**: Estimate age from Pu-241 ingrowth (if detectable)
+#### Potassium-40 (Natural Background)
+- [ ] Potassium mass estimation from K-40 activity
+- [ ] Compare to human body K-40 content (~4,400 Bq)
 
-### Radium Dial (Ra-226)
-- [ ] **Dose rate estimation**: Calculate μSv/hr at contact and at distance
-- [ ] **Radium mass estimation**: Back-calculate Ra-226 mass from Bi-214 activity
-- [ ] **Age verification**: Check Pb-210 equilibrium for dial authenticity
+#### Cobalt-60
+- [ ] Age/decay estimation (5.27 yr half-life)
+- [ ] Original source strength calculation
 
-### Cesium-137
-- [ ] **Decay-corrected activity**: Estimate original activity given manufacture date
-- [ ] **Half-life remaining**: Show years since manufacture and expected decay
+#### Universal
+- [ ] Dose rate estimation for all source types
 
-### Potassium-40 (Natural Background)
-- [ ] **Potassium mass estimation**: Calculate grams of potassium from K-40 activity
-- [ ] **Compare to body burden**: Show equivalent to human body K-40 content (~4,400 Bq)
+### New Source Types ✅ (2025-12-17)
+- [x] **Uranium Ore** - Full U-238 chain + U-235 detection
+- [x] **Cesium-137 Source** - 662 keV calibration source
+- [x] **Cobalt-60 Source** - 1173/1332 keV dual peaks
+- [x] **Synthetic Test Spectra** - 6 N42 files in `backend/data/test_spectra/`
 
-### Cobalt-60
-- [ ] **Age/decay estimation**: Important due to short half-life (5.27 yr)
-- [ ] **Original source strength**: Back-calculate from current activity
+### Low Priority / Future
+- [ ] **Radiacode Device Integration** (10-15 hours) - See [RADIACODE_INTEGRATION_PLAN.md](RADIACODE_INTEGRATION_PLAN.md)
 
-### Universal Enhancements
-- [ ] **Dose rate estimation**: Calculate expected μSv/hr for all source types
-- [x] **Sanity check for enrichment ratio**: Flag ratios >150% as source type mismatch
+---
 
+## Completed ✅
+
+### Core Features
+- [x] **Advanced Analysis**: Peak detection, isotope identification (100+ isotopes), decay chain detection, confidence scoring, graphical decay chain visualization
+- [x] **Export Options**: JSON, CSV, PDF reports, N42 format
+- [x] **UI Improvements**: Zoom/pan, themes (Light/Dark/Nuclear/Toxic/Sci-Fi/Cyberpunk), multi-file comparison, dual isotope detection panel, graphical confidence bars, professional SVG icons
+- [x] **Data Management**: Upload history in localStorage
+- [x] **AlphaHound Device Integration**: Serial communication, live dose rate, real-time spectrum acquisition, device control panel with sparkline chart
+- [x] **Advanced/Simple Mode Toggle**: Three-tier system (Simple/Advanced/Expert) with threshold customization
+- [x] **Decay Chain Detection**: U-238, U-235, Th-232 chains with graphical flow diagrams
+- [x] **Natural Abundance Weighting**: U-238 correctly ranks above U-235 in natural samples
+
+### Stability & Deployment
+- [x] **Stability Fixes**: Serial disconnection fixes, acquisition timer, PDF headers, auto-reconnect, visibility optimization, unload safeguards, memory protection
+- [x] **Deployment Improvements**: One-click launch, LAN access (0.0.0.0:3200), no device required
+- [x] **Input Validation**: Pydantic validators, file validation, port sanitization
+- [x] **Security**: Rate limiting with slowapi
+
+### ML Integration
+- [x] **PyRIID Integration**: MLPClassifier, 90+ isotopes, IAEA intensity data, 2168+ training samples
+- [x] **Peak Detection Enhancement**: Improved threshold, 20+ peaks detected
+- [x] **U-235/U-238 Prioritization**: Abundance weighting in isotope_database.py
+
+### UI Features
+- [x] **Custom Isotope Definitions**: Add via UI, import/export JSON
+- [x] **Energy Calibration UI**: Interactive peak marking, linear calibration
+- [x] **Background Subtraction**: Load/subtract background, SNIP auto-removal
+- [x] **ROI Analysis**: Activity calculation (Bq/μCi), enrichment ratio, source identification, Ra-226 interference handling
+- [x] **Theme-Aware Toast Notifications**: Match current theme colors
+- [x] **Mobile/Responsive UI**: Responsive breakpoints, collapsible panels, touch-optimized controls
+
+### Branding & Polish
+- [x] **Application Rebranding**: SpecTrek → RadTrace
+- [x] **Premium Icon System**: SVG icons replacing all emojis
+- [x] **Blue/Purple Sci-Fi Theme**: Futuristic color palette, glowing effects
+- [x] **Cyberpunk 2077 Theme**: Neon yellow/cyan, glitch effects
+
+### Analysis & Calibration
+- [x] **Energy Calibration Verified**: Device 7.39 keV/channel confirmed correct
+- [x] **Tuning & Calibration**: Intensity-weighted scoring, strict chain triggers
+- [x] **Advanced Spectrum Analysis**: FWHM%, Gaussian fitting, multiplet analysis, uncertainty engine
+- [x] **v2.0 Analysis Robustness**: Dual-mode engine (Strict for live, Robust for uploads)
+
+### Code Quality
+- [x] **Refactoring**: Application layer threshold filtering, CSV parser module, ES6 modules, JSDoc comments
+- [x] **COUNT TIME Fix**: Backend capture + frontend display
+- [x] **Auto-Save CSV**: Automatic saves to `data/acquisitions/`
+
+### Advanced Mode Feature Gating (2025-12-16)
+- [x] **Three-Tier Mode System**: Simple/Advanced/Expert in `main.js`
+- [x] **UI Toggle**: Mode selector in Settings modal
+- [x] **Wrapper IDs for BG/Calibration**: `calibration-section` and `background-section` IDs added
+
+### Session 2025-12-16
+- [x] **Takumar source_type passing**: Added field to `UraniumRatioRequest` model
+- [x] **Auto-switch isotope for Takumar**: Frontend switches to Th-234 (93 keV)
+- [x] **Sanity check for enrichment ratio**: Flag ratios >150% as mismatch
+- [x] **Validate Takumar Lens in Frontend**: Added to ROI Source Type dropdown
+
+### File Format Support
+- [x] **N42 File Format**: Exporter, enhanced parser, ISO 8601 duration parsing
+- [x] **Universal Spectrum Support**: SandiaSpecUtils for 100+ formats
+
+### Activity & Decay
+- [x] **Activity & Dose Calculator**: Bq/μCi conversion, γ dose rate (μSv/h)
+- [x] **Decay Prediction Engine**: Curie + Bateman solver, interactive Chart.js visualization

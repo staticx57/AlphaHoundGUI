@@ -704,6 +704,7 @@ async def analyze_roi_endpoint(request: ROIAnalysisRequest):
     try:
         from roi_analysis import analyze_roi
         from isotope_roi_database import get_roi_isotope_names
+        from source_analysis import get_enhanced_analysis
         
         # Validate isotope exists
         valid_isotopes = get_roi_isotope_names()
@@ -726,8 +727,21 @@ async def analyze_roi_endpoint(request: ROIAnalysisRequest):
         print(f"[DEBUG] Analyze ROI Result Type: {type(result)}")
         # If it's already a dict, just return it. If dataclass, convert.
         if isinstance(result, dict):
-             return result
-        return asdict(result)
+            response = result
+        else:
+            response = asdict(result)
+        
+        # Add enhanced analysis if source type specified
+        source_type = request.source_type
+        if source_type and source_type not in ["auto", "unknown"]:
+            activity_bq = response.get("activity_bq", 0)
+            if activity_bq and activity_bq > 0:
+                enhanced = get_enhanced_analysis(source_type, activity_bq)
+                if enhanced:
+                    response["enhanced_analysis"] = enhanced
+                    print(f"[ROI] Added enhanced analysis for {source_type}")
+        
+        return response
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

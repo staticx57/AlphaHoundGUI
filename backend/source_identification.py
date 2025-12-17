@@ -100,6 +100,33 @@ SOURCE_SIGNATURES = {
         excluding_isotopes=[],
         notes="Th-232 in secular equilibrium with daughters. Ra-226 (from U-238 decay) may be present from trace natural uranium. Apply Ra-226 equivalence for accurate activity estimation."
     ),
+    
+    "uranium_ore": SourceSignature(
+        name="Uranium Ore (Natural Uranium)",
+        description="Natural uranium ore containing U-238 and U-235 in secular equilibrium with all daughter products.",
+        required_isotopes=["Th-234 (93 keV)", "Bi-214 (609 keV)", "Pb-214 (352 keV)"],
+        supporting_isotopes=["Pa-234m (1001 keV)", "U-235 (186 keV)"],
+        excluding_isotopes=["Am-241 (60 keV)", "Cs-137 (662 keV)"],
+        notes="Contains full U-238 decay chain in secular equilibrium. U-235 visible at 186 keV (~0.72% natural abundance). Higher activity than uranium glass."
+    ),
+    
+    "cesium_source": SourceSignature(
+        name="Cesium-137 Source",
+        description="Cs-137 calibration source, check source, or environmental contamination.",
+        required_isotopes=["Cs-137 (662 keV)"],
+        supporting_isotopes=[],
+        excluding_isotopes=["Bi-214 (609 keV)", "Ac-228 (911 keV)", "Th-234 (93 keV)"],
+        notes="Cs-137 emits 662 keV gamma (85% branching ratio). Half-life 30.17 years. Common calibration source."
+    ),
+    
+    "cobalt_source": SourceSignature(
+        name="Cobalt-60 Source",
+        description="Co-60 calibration source or industrial radiography source.",
+        required_isotopes=["Co-60 (1173 keV)", "Co-60 (1332 keV)"],
+        supporting_isotopes=[],
+        excluding_isotopes=["Bi-214 (609 keV)", "Cs-137 (662 keV)"],
+        notes="Co-60 emits two gammas at 1173 keV and 1332 keV (both ~100% BR). Half-life 5.27 years."
+    ),
 }
 
 # === Secular Equilibrium Constants ===
@@ -151,6 +178,8 @@ def identify_source_type(
         "K-40 (1461 keV)",
         "U-235 (186 keV)",
         "Cs-137 (662 keV)",
+        "Co-60 (1173 keV)",
+        "Co-60 (1332 keV)",
     ]
     
     detected_isotopes = []

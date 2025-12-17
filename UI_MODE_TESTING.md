@@ -62,8 +62,15 @@ location.reload()
 ## Panel ID Reference
 
 ```javascript
-// Simplified config:
-// Simple:   hides roi-analysis-panel, advanced-settings
-// Advanced: shows roi-analysis-panel
-// Expert:   shows roi-analysis-panel, advanced-settings
+// Complete UI_MODE_CONFIG section IDs:
+// - roi-analysis-panel     : ROI Analysis panel
+// - advanced-settings      : Threshold sliders (Expert only)
+// - calibration-section    : Calibration tools
+// - background-section     : Background subtraction
+
+// Mode behavior:
+// Simple:   hides roi-analysis-panel, advanced-settings, calibration-section, background-section
+// Advanced: shows roi-analysis-panel, calibration-section, background-section; hides advanced-settings
+// Expert:   shows all panels
 ```
+
