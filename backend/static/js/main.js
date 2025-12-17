@@ -895,6 +895,7 @@ const SOURCE_TYPE_INFO = {
     'radium_dial': '☢️ Radium Dial: Looking for Ra-226 daughters (Bi-214, Pb-214) WITHOUT U-238 parents (Th-234).',
     'smoke_detector': '🔵 Smoke Detector: Looking for Am-241 at 60 keV.',
     'natural_background': '🌍 Natural Background: Looking for K-40 at 1461 keV.',
+    'takumar_lens': '📷 Takumar Lens: ThO₂ glass with trace uranium. Analyzing Th-234 (93 keV) for thorium activity.',
     'unknown': 'Standard Analysis: Detecting isotopes without specific source assumptions.',
     'auto': 'legacy' // fallback
 };
@@ -904,12 +905,23 @@ document.getElementById('roi-source-type')?.addEventListener('change', (e) => {
     const sourceType = e.target.value;
     const infoDiv = document.getElementById('roi-source-info');
     const infoText = document.getElementById('roi-source-info-text');
+    const isotopeSelect = document.getElementById('roi-isotope');
 
     if (sourceType !== 'auto') {
         infoText.textContent = SOURCE_TYPE_INFO[sourceType] || '';
         infoDiv.style.display = 'block';
     } else {
         infoDiv.style.display = 'none';
+    }
+
+    // Auto-switch isotope based on source type
+    if (sourceType === 'takumar_lens' && isotopeSelect) {
+        // For Takumar lenses, analyze Th-234 (93 keV) instead of U-235
+        isotopeSelect.value = 'Th-234 (93 keV)';
+        showToast('Switched to Th-234 analysis for thoriated lens', 'info');
+    } else if (sourceType === 'smoke_detector' && isotopeSelect) {
+        isotopeSelect.value = 'Am-241 (60 keV)';
+        showToast('Switched to Am-241 analysis for smoke detector', 'info');
     }
 });
 

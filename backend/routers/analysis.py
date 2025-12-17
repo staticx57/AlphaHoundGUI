@@ -163,6 +163,8 @@ class UraniumRatioRequest(BaseModel):
     counts: List[float] = Field(..., min_length=10)
     detector: str = Field(default="AlphaHound CsI(Tl)")
     acquisition_time_s: float = Field(..., ge=1, le=86400)
+    source_type: Optional[str] = Field(default="auto")  # User-specified source type
+
 
 @router.get("/settings")
 async def get_settings():

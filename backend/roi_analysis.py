@@ -401,6 +401,29 @@ class ROIAnalyzer:
                 "threshold_natural": 30
             }
         
+        # === SPECIAL CASE: Takumar Lens ===
+        # Thoriated lenses contain ThO2 with trace natural uranium
+        # Skip enrichment ratio (meaningless) and report Th-234 activity instead
+        print(f"[DEBUG] Takumar check: source_type={source_type}, has_th234={has_th234}")
+        if source_type == "takumar_lens" and has_th234:
+            return {
+                "can_analyze": True,
+                "category": "Thoriated Lens (Mixed Th/U)",
+                "description": "Super Takumar lens containing thorium dioxide with trace natural uranium. Enrichment ratio not applicable.",
+                "ratio_percent": 0,
+                "threshold_natural": 30,
+                "confidence": 0.9,  # High confidence since we detected Th-234
+                "ra226_interference": False,  # Not an error for this source type
+                "u235_net_counts": 0,
+                "u235_uncertainty": 0,
+                "th234_net_counts": th234_result.net_counts if th234_result else 0,
+                "th234_uncertainty": th234_result.uncertainty_sigma if th234_result else 0,
+                "bi214_net_counts": bi214_result.net_counts if bi214_result else 0,
+                "diagnostics": diagnostics,
+                "warnings": ["Takumar lens: Activity reported from Th-234 (93 keV) peak. Contains both Th-232 and trace natural U-238."],
+                "confidence_factors": ["Th-234 detected", "Known thoriated lens source type"]
+            }
+        
         # === STEP 2: Analyze U-235 (186 keV) region ===
         try:
             u235_result = self.analyze(energies, counts, "U-235 (186 keV)", acquisition_time_s)
@@ -570,6 +593,22 @@ class ROIAnalyzer:
                 f"Calculated ratio ({ratio:.0f}%) is unreliable due to Ra-226 interference. "
                 f"The true enrichment could be natural (~0.7%), depleted (<0.3%), or enriched (>0.7%). "
                 f"Sample age, equilibrium state, and detector resolution prevent accurate determination."
+            )
+        elif ratio >= 150:
+            # SANITY CHECK: Ratios above 150% are physically impossible
+            # This indicates the user selected the wrong source type
+            # (e.g., analyzing a thoriated lens as uranium glass)
+            category = "Source Type Mismatch"
+            description = (
+                f"Ratio of {ratio:.0f}% is physically impossible for uranium. "
+                "This likely indicates a thoriated source (Th-232) being analyzed with uranium assumptions. "
+                "Try selecting 'Takumar Lens' or 'Thoriated Lens' as source type instead."
+            )
+            confidence = 0.1  # Very low confidence
+            confidence_factors.append("Implausible ratio detected - likely source mismatch")
+            warnings.append(
+                "SANITY CHECK FAILED: U-235/Th-234 ratio exceeds 150%, which is physically impossible. "
+                "This source is likely thoriated (Th-232) rather than uranium-based."
             )
         elif ratio >= 100:
             category = "Enriched Uranium"

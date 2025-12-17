@@ -268,17 +268,57 @@
 - [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`)
 - [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally
 - [ ] **Temperature Compensation**: ✅ Temperature now captured from spectrum metadata - consider using for gain stabilization
-- [ ] **Validate Takumar Lens in Frontend**: Add "Takumar Lens (Th+U)" to ROI Source Type dropdown - backend signature exists but not in frontend
+- [x] **Validate Takumar Lens in Frontend**: ✅ Added "Takumar Lens (Th+U)" to ROI Source Type dropdown and backend
 
-## Advanced Mode Feature Gating
-- [ ] **Three-Tier Mode System**:
-  - **Simple Mode**: Basic spectrum display, auto-identification, peaks/isotopes only
-  - **Advanced Mode**: ROI analysis, decay chain prediction, background subtraction, calibration
-  - **Expert Mode**: Multiplet deconvolution, Voigt fitting, auto ROI, basin hopping, line search APIs
-- [ ] **Systematically identify features per mode**:
-  - Simple: Spectrum chart, peak list, isotope ID, confidence scores
-  - Advanced: + ROI panel, decay prediction, background subtraction, calibration, custom isotopes
-  - Expert: + Multiplet, Voigt fits, auto-ROI, gamma/X-ray line search, decay chain spectrum
-- [ ] **UI Toggle**: Add mode selector to settings (dropdown or tabs)
-- [ ] **Reduce clutter**: Progressively reveal panels based on mode
+## Advanced Mode Feature Gating (2025-12-16)
+- [x] **Three-Tier Mode System**: ✅ Implemented in `main.js`
+  - **Simple Mode**: Chart, peaks, isotopes, decay chains
+  - **Advanced Mode**: + ROI Analysis panel
+  - **Expert Mode**: + Threshold sliders
+- [x] **UI Toggle**: ✅ Added mode selector in Settings modal (Simple/Advanced/Expert radios)
+- [x] **Reduce clutter**: ✅ `applyUIMode()` toggles panel visibility based on mode
+- [ ] **Add wrapper IDs for BG/Calibration sections**: Currently always visible, need IDs to gate
+
+## Session 2025-12-16 Remaining
+- [x] **FIX: Takumar source_type passing bug**: Added `source_type` field to `UraniumRatioRequest` model
+- [x] **Auto-switch isotope for Takumar**: Frontend now switches to Th-234 (93 keV) when Takumar lens selected
+- [x] **Sanity check for enrichment ratio**: Flag ratios >150% as "Source Type Mismatch"
+- [ ] **Auto-populate ROI acquisition time**: Pull from N42 metadata when available (leave as 1 if unknown)
+- [ ] **Change ROI time unit to minutes**: Accept fractional minutes (e.g., 1.5) instead of seconds for consistency with acquisition UI
+
+- [ ] **Test UI modes end-to-end**: Confirm all three modes work correctly
+- [ ] **Consider gating more panels**: Background subtraction, Calibration currently ungated
+
+
+## Source-Specific Analysis Enhancements
+
+### Thoriated Lens (Th-232)
+- [ ] **ThO₂ mass estimation**: Back-calculate thorium dioxide mass (mg) from Th-234 activity
+- [ ] **Secular equilibrium check**: Compare Pb-212/Th-234 ratio to verify Th-232 chain equilibrium
+- [ ] **Better Th-232 markers**: Add Pb-212 (239 keV), Tl-208 (583 keV) to isotope database for CsI
+
+### Smoke Detector (Am-241)
+- [ ] **Typical activity comparison**: Compare to standard detector (~37 kBq)
+- [ ] **Age estimation**: Estimate age from Pu-241 ingrowth (if detectable)
+
+### Radium Dial (Ra-226)
+- [ ] **Dose rate estimation**: Calculate μSv/hr at contact and at distance
+- [ ] **Radium mass estimation**: Back-calculate Ra-226 mass from Bi-214 activity
+- [ ] **Age verification**: Check Pb-210 equilibrium for dial authenticity
+
+### Cesium-137
+- [ ] **Decay-corrected activity**: Estimate original activity given manufacture date
+- [ ] **Half-life remaining**: Show years since manufacture and expected decay
+
+### Potassium-40 (Natural Background)
+- [ ] **Potassium mass estimation**: Calculate grams of potassium from K-40 activity
+- [ ] **Compare to body burden**: Show equivalent to human body K-40 content (~4,400 Bq)
+
+### Cobalt-60
+- [ ] **Age/decay estimation**: Important due to short half-life (5.27 yr)
+- [ ] **Original source strength**: Back-calculate from current activity
+
+### Universal Enhancements
+- [ ] **Dose rate estimation**: Calculate expected μSv/hr for all source types
+- [x] **Sanity check for enrichment ratio**: Flag ratios >150% as source type mismatch
 
