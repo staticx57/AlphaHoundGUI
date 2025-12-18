@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, WebSocket
+from .analysis import sanitize_for_json
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import asyncio
@@ -7,6 +8,15 @@ from alphahound_serial import device as alphahound_device
 from peak_detection import detect_peaks
 from isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
+
+# Enhanced analysis modules (with fallback)
+try:
+    from peak_detection_enhanced import detect_peaks_enhanced
+    from chain_detection_enhanced import identify_decay_chains_enhanced
+    from confidence_scoring import enhance_isotope_identifications
+    HAS_ENHANCED_ANALYSIS = True
+except ImportError:
+    HAS_ENHANCED_ANALYSIS = False
 
 router = APIRouter(prefix="/device", tags=["device"])
 
@@ -133,14 +143,32 @@ async def acquire_spectrum(request: SpectrumRequest):
     # energies = [energy for count, energy in spectrum]  # OLD
     energies = [i * 3.0 for i in range(len(counts))]     # NEW (Forced 3.0 keV)
     
-    peaks = detect_peaks(energies, counts)
+    # Use enhanced peak detection if available
+    if HAS_ENHANCED_ANALYSIS:
+        try:
+            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
+        except:
+            peaks = detect_peaks(energies, counts)
+    else:
+        peaks = detect_peaks(energies, counts)
+    
     if peaks:
         all_isotopes = identify_isotopes(
             peaks, 
             energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'],
             mode=DEFAULT_SETTINGS.get('mode', 'simple')
         )
-        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        
+        # Use enhanced chain detection if available
+        if HAS_ENHANCED_ANALYSIS:
+            try:
+                all_chains = identify_decay_chains_enhanced(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+                all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
+            except:
+                all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        else:
+            all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        
         weighted_chains = apply_abundance_weighting(all_chains)
         isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
     else:
@@ -157,7 +185,7 @@ async def acquire_spectrum(request: SpectrumRequest):
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(seconds=actual_duration_seconds)
     
-    return {
+    return sanitize_for_json({
         "counts": counts,
         "energies": energies,
         "peaks": peaks,
@@ -174,7 +202,7 @@ async def acquire_spectrum(request: SpectrumRequest):
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat()
         }
-    }
+    })
 
 @router.post("/clear")
 async def clear_device_spectrum():
@@ -227,21 +255,39 @@ async def get_current_spectrum():
     counts = [count for count, energy in spectrum]
     energies = [i * 3.0 for i in range(len(counts))]
     
-    peaks = detect_peaks(energies, counts)
+    # Use enhanced peak detection if available
+    if HAS_ENHANCED_ANALYSIS:
+        try:
+            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
+        except:
+            peaks = detect_peaks(energies, counts)
+    else:
+        peaks = detect_peaks(energies, counts)
+    
     if peaks:
         all_isotopes = identify_isotopes(
             peaks, 
             energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'],
             mode=DEFAULT_SETTINGS.get('mode', 'simple')
         )
-        all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        
+        # Use enhanced chain detection if available
+        if HAS_ENHANCED_ANALYSIS:
+            try:
+                all_chains = identify_decay_chains_enhanced(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+                all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
+            except:
+                all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        else:
+            all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        
         weighted_chains = apply_abundance_weighting(all_chains)
         isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
     else:
         isotopes = []
         decay_chains = []
     
-    return {
+    return sanitize_for_json({
         "counts": counts,
         "energies": energies,
         "peaks": peaks,
@@ -252,7 +298,7 @@ async def get_current_spectrum():
             "channels": len(counts),
             "note": "This is the device's internal accumulation - not time-stamped"
         }
-    }
+    })
 
 
 @router.post("/acquisition/start")

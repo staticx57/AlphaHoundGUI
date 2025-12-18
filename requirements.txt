@@ -22,3 +22,4 @@ SandiaSpecUtils      # 100+ spectrum file formats (Sandia National Labs)
 curie                # Decay chain Bateman solver, nuclear data
 becquerel            # Spectrum analysis (already in backend/requirements.txt)
 slowapi              # Rate limiting
+radioactivedecay     # Dynamic decay chain computation

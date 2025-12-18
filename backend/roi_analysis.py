@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from detector_efficiency import get_detector, interpolate_efficiency
 from isotope_roi_database import get_roi_isotope, get_roi_window, get_background_region
-from activity_calculator import calculate_activity_bq, bq_to_uci
+from activity_calculator import calculate_activity_bq, bq_to_uci, calculate_mda_bq
 
 
 @dataclass
@@ -55,6 +55,10 @@ class ROIResult:
     detection_status: str = "Not Detected"    # Status message
     limiting_factors: List[str] = None        # Why confidence is low
     recommendations: List[str] = None         # What would improve results
+    
+    # Optional MDA for non-detects
+    mda_bq: Optional[float] = None
+    mda_uci: Optional[float] = None
     
     # Optional ratio analysis
     ratio_analysis: Optional[Dict] = None
@@ -225,6 +229,17 @@ class ROIAnalyzer:
         
         confidence = min(1.0, max(0.0, confidence))
         
+        # Penalize confidence for very short acquisition times (< 60s)
+        # Reflects higher risk of transient noise or insufficient background averaging
+        if acquisition_time_s < 60:
+            confidence *= 0.8
+            if detected:
+                # Add this to limiting factors later if detected
+                # (Need to store it temporarily or append directly)
+                pass # Will handle in limiting factors section
+        
+        confidence = min(1.0, max(0.0, confidence))
+        
         # Get detector efficiency at peak energy
         efficiency = interpolate_efficiency(self.detector_name, peak_energy)
         efficiency_percent = efficiency * 100
@@ -232,11 +247,20 @@ class ROIAnalyzer:
         # Calculate activity (only if detected)
         activity_bq = None
         activity_uci = None
+        mda_bq = None
+        mda_uci = None
         
-        if detected and efficiency > 0 and acquisition_time_s > 0 and branching_ratio > 0:
+        # Calculate MDA always as a reference
+        if efficiency > 0 and acquisition_time_s > 0 and branching_ratio > 0:
+            mda_bq = calculate_mda_bq(background_counts, acquisition_time_s, efficiency, branching_ratio)
+            mda_uci = bq_to_uci(mda_bq)
+        
+        if (detected or net_counts > 0) and efficiency > 0 and acquisition_time_s > 0 and branching_ratio > 0:
             # Calculate Activity using centralized engine
             activity_bq = calculate_activity_bq(net_counts, acquisition_time_s, efficiency, branching_ratio)
             activity_uci = bq_to_uci(activity_bq)
+        else:
+            pass
         
         # === LIMITING FACTORS AND RECOMMENDATIONS ===
         limiting_factors = []
@@ -298,6 +322,10 @@ class ROIAnalyzer:
         # Acquisition time feedback
         if acquisition_time_s < 300 and not detected:
             recommendations.append("Consider minimum 5-10 minute acquisition for weak sources")
+
+        if acquisition_time_s < 60:
+            limiting_factors.append(f"Short acquisition time ({acquisition_time_s:.0f}s < 60s) limits reliability")
+            recommendations.append("Acquire for > 1 minute to improve confidence")
         
         # DEBUG: Print advanced fitting status
         print(f"[DEBUG] Advanced Fitting - Success: {fit_success}, Resolution: {resolution}, FWHM: {fwhm}, Error: {uncertainty}")
@@ -312,6 +340,8 @@ class ROIAnalyzer:
             uncertainty_sigma=uncertainty,
             activity_bq=activity_bq,
             activity_uci=activity_uci,
+            mda_bq=mda_bq,
+            mda_uci=mda_uci,
             detector=self.detector_name,
             acquisition_time_s=acquisition_time_s,
             efficiency_percent=efficiency_percent,
@@ -770,8 +800,10 @@ def analyze_roi(
         "background_counts": round(result.background_counts, 1),
         "net_counts": round(result.net_counts, 1),
         "uncertainty_sigma": round(result.uncertainty_sigma, 1),
+        "uncertainty_sigma": round(result.uncertainty_sigma, 1),
         "activity_bq": round(result.activity_bq, 2) if result.activity_bq else None,
         "activity_uci": round(result.activity_uci, 6) if result.activity_uci else None,
+        "mda_bq": round(result.mda_bq, 2) if result.mda_bq else None,
         "detector": result.detector,
         "acquisition_time_s": result.acquisition_time_s,
         "efficiency_percent": round(result.efficiency_percent, 2),

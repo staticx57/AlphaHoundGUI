@@ -15,6 +15,15 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
+# Enhanced analysis modules (loaded once at module level)
+try:
+    from peak_detection_enhanced import detect_peaks_enhanced
+    from chain_detection_enhanced import identify_decay_chains_enhanced
+    from confidence_scoring import enhance_isotope_identifications
+    HAS_ENHANCED_ANALYSIS = True
+except ImportError:
+    HAS_ENHANCED_ANALYSIS = False
+
 
 class AcquisitionStatus(str, Enum):
     """Acquisition lifecycle states"""
@@ -219,6 +228,47 @@ class AcquisitionManager:
         except Exception as e:
             print(f"[AcquisitionManager] Poll error: {e}")
     
+    def _analyze_spectrum(self, energies, counts):
+        """
+        Analyze spectrum using enhanced modules when available.
+        
+        Returns:
+            Tuple of (peaks, isotopes, decay_chains)
+        """
+        from peak_detection import detect_peaks
+        from isotope_database import identify_isotopes, identify_decay_chains
+        from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
+        
+        # Use enhanced peak detection if available
+        if HAS_ENHANCED_ANALYSIS:
+            try:
+                peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
+            except:
+                peaks = detect_peaks(energies, counts)
+        else:
+            peaks = detect_peaks(energies, counts)
+        
+        if not peaks:
+            return [], [], []
+        
+        all_isotopes = identify_isotopes(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        
+        # Use enhanced chain detection if available
+        if HAS_ENHANCED_ANALYSIS:
+            try:
+                all_chains = identify_decay_chains_enhanced(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+                all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
+            except:
+                all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        else:
+            all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
+        
+        weighted_chains = apply_abundance_weighting(all_chains)
+        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
+        
+        return peaks, isotopes, decay_chains
+
+    
     async def _save_checkpoint(self):
         """Save checkpoint to acquisition_in_progress.n42"""
         if not self.state.last_spectrum_counts:
@@ -226,19 +276,12 @@ class AcquisitionManager:
         
         try:
             from n42_exporter import generate_n42_xml
-            from peak_detection import detect_peaks
-            from isotope_database import identify_isotopes, identify_decay_chains
-            from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
             
-            # Run analysis
-            peaks = detect_peaks(self.state.last_spectrum_energies, self.state.last_spectrum_counts)
-            if peaks:
-                all_isotopes = identify_isotopes(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-                all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-                weighted_chains = apply_abundance_weighting(all_chains)
-                isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
-            else:
-                isotopes = []
+            # Run analysis using enhanced or standard modules
+            peaks, isotopes, decay_chains = self._analyze_spectrum(
+                self.state.last_spectrum_energies,
+                self.state.last_spectrum_counts
+            )
             
             # Build N42 data
             n42_data = {
@@ -281,20 +324,12 @@ class AcquisitionManager:
         
         try:
             from n42_exporter import generate_n42_xml
-            from peak_detection import detect_peaks
-            from isotope_database import identify_isotopes, identify_decay_chains
-            from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
             
-            # Run analysis
-            peaks = detect_peaks(self.state.last_spectrum_energies, self.state.last_spectrum_counts)
-            if peaks:
-                all_isotopes = identify_isotopes(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-                all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-                weighted_chains = apply_abundance_weighting(all_chains)
-                isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
-            else:
-                isotopes = []
-                decay_chains = []
+            # Run analysis using enhanced or standard modules
+            peaks, isotopes, decay_chains = self._analyze_spectrum(
+                self.state.last_spectrum_energies,
+                self.state.last_spectrum_counts
+            )
             
             # Build N42 data
             n42_data = {
@@ -342,19 +377,10 @@ class AcquisitionManager:
         if not self.state.last_spectrum_counts:
             return None
         
-        from peak_detection import detect_peaks
-        from isotope_database import identify_isotopes, identify_decay_chains
-        from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
-        
-        peaks = detect_peaks(self.state.last_spectrum_energies, self.state.last_spectrum_counts)
-        if peaks:
-            all_isotopes = identify_isotopes(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-            all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-            weighted_chains = apply_abundance_weighting(all_chains)
-            isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
-        else:
-            isotopes = []
-            decay_chains = []
+        peaks, isotopes, decay_chains = self._analyze_spectrum(
+            self.state.last_spectrum_energies,
+            self.state.last_spectrum_counts
+        )
         
         return {
             'counts': self.state.last_spectrum_counts,

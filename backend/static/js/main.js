@@ -983,9 +983,15 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
 
 
         // Format results
-        const activityStr = data.activity_bq
-            ? `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${data.activity_uci.toFixed(6)} μCi)`
-            : '<span style="color: #ef4444;">Unable to calculate</span>';
+        // Format results
+        let activityStr;
+        if (data.activity_bq) {
+            activityStr = `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${data.activity_uci.toFixed(6)} μCi)`;
+        } else if (data.mda_bq) {
+            activityStr = `<span style="color: var(--text-secondary);">&lt; ${data.mda_bq.toFixed(1)} Bq (Limit)</span>`;
+        } else {
+            activityStr = '<span style="color: var(--text-secondary);">Not Detected</span>';
+        }
 
         let htmlOutput = `
                 <div style="color: var(--primary-color); font-weight: 600; margin-bottom: 0.25rem;">
@@ -1003,6 +1009,25 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
         }
 
         htmlOutput += `<div>Activity: ${activityStr}</div>`;
+
+        // Confidence Bar
+        if (data.confidence !== undefined) {
+            const confPercent = Math.round(data.confidence * 100);
+            const confColor = data.confidence > 0.7 ? '#10b981' :
+                data.confidence > 0.4 ? '#f59e0b' : '#ef4444';
+
+            htmlOutput += `
+                <div style="margin-top: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 2px;">
+                        <span>Confidence</span>
+                        <span style="color: ${confColor}; font-weight: bold;">${confPercent}%</span>
+                    </div>
+                    <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                        <div style="width: ${confPercent}%; height: 100%; background: ${confColor}; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+             `;
+        }
 
         // If U-235, automatically fetch uranium enrichment ratio
         if (isotope === 'U-235 (186 keV)') {
@@ -1471,6 +1496,8 @@ async function startAcquisition() {
                     ui.renderDashboard(currentData);
                     if (isPageVisible) {
                         chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
+                        // Ensure scrubber is visible and updated
+                        chartManager.showScrubber(currentData.energies, currentData.counts);
                     }
                 }
 
@@ -1491,6 +1518,8 @@ async function startAcquisition() {
                         ui.renderDashboard(currentData);
                         if (isPageVisible) {
                             chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
+                            // Ensure scrubber is visible and updated
+                            chartManager.showScrubber(currentData.energies, currentData.counts);
                         }
                     }
                     return;
@@ -1592,6 +1621,8 @@ async function getCurrentSpectrum() {
         ui.renderDashboard(data);
         if (isPageVisible) {
             chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
+            // Show zoom scrubber
+            chartManager.showScrubber(data.energies, data.counts);
         }
 
         showToast('Current spectrum loaded (cumulative from device)', 'success');

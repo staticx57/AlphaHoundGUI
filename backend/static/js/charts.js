@@ -194,11 +194,15 @@ export class AlphaHoundChart {
                 scales: {
                     x: {
                         type: 'linear',
-                        min: minEnergy,
+                        min: 0,  // Always start at 0 keV - no negative energy
                         max: maxEnergy,
+                        bounds: 'data',  // Prevent Chart.js from adding padding
                         title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
+                        ticks: {
+                            color: '#94a3b8',
+                            includeBounds: true
+                        }
                     },
                     y: {
                         type: scaleType,

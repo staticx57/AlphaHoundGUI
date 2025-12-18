@@ -43,9 +43,47 @@ export class AlphaHoundUI {
     renderDashboard(data) {
         this.elements.dashboard.style.display = 'block';
         this.renderMetadata(data.metadata);
+        this.renderDataQualityWarning(data.data_quality);
         this.renderPeaks(data.peaks);
         this.renderIsotopes(data.isotopes);
         this.renderDecayChains(data.decay_chains);
+    }
+
+    renderDataQualityWarning(dataQuality) {
+        // Remove existing warning if present
+        const existingWarning = document.getElementById('data-quality-warning');
+        if (existingWarning) existingWarning.remove();
+
+        if (!dataQuality || !dataQuality.warnings || dataQuality.warnings.length === 0) {
+            return;
+        }
+
+        const warningHTML = `
+            <div id="data-quality-warning" style="
+                background: rgba(245, 158, 11, 0.15);
+                border: 1px solid #f59e0b;
+                border-radius: 8px;
+                padding: 0.75rem 1rem;
+                margin-bottom: 1rem;
+                color: #fbbf24;
+            ">
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; margin-bottom: 0.5rem;">
+                    <span style="font-size: 1.2rem;">⚠️</span>
+                    <span>Data Quality Warning</span>
+                    <span style="margin-left: auto; font-size: 0.75rem; color: var(--text-secondary);">
+                        Max peak: ${dataQuality.max_peak_counts || 0} counts
+                    </span>
+                </div>
+                <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    ${dataQuality.warnings.map(w => `<li>${w}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+
+        // Insert before isotopes container
+        if (this.elements.isotopesContainer) {
+            this.elements.isotopesContainer.insertAdjacentHTML('beforebegin', warningHTML);
+        }
     }
 
     renderMetadata(metadata) {
@@ -89,23 +127,59 @@ export class AlphaHoundUI {
         if (isotopes && isotopes.length > 0) {
             this.elements.isotopesContainer.style.display = 'block';
 
-            // Render legacy peak-matching results with confidence bars
+            // Render legacy peak-matching results with confidence bars and factor breakdown
             legacyList.innerHTML = isotopes.map(iso => {
                 const confidence = iso.confidence;
                 const barColor = confidence > 70 ? '#10b981' :
                     confidence > 40 ? '#f59e0b' : '#ef4444';
-                const confidenceLabel = confidence > 70 ? 'HIGH' :
-                    confidence > 40 ? 'MEDIUM' : 'LOW';
+                const confidenceLabel = iso.confidence_label || (confidence > 70 ? 'HIGH' :
+                    confidence > 40 ? 'MEDIUM' : 'LOW');
 
                 // Generate NNDC reference link
-                // Format isotope name for NNDC URL: "Cs-137" -> "137Cs"
                 const nndcUrl = this.getNNDCUrl(iso.isotope);
 
+                // Build confidence factors tooltip if available
+                let factorsHTML = '';
+                if (iso.confidence_factors) {
+                    const factors = iso.confidence_factors;
+                    factorsHTML = `
+                        <div class="confidence-factors" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.7rem;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span>Energy Match:</span>
+                                <span style="color: #3b82f6;">${(factors.energy_match * 100 / 0.25).toFixed(0)}%</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span>Intensity Weight:</span>
+                                <span style="color: #8b5cf6;">${(factors.intensity_weight * 100 / 0.25).toFixed(0)}%</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span>Fit Quality:</span>
+                                <span style="color: #10b981;">${(factors.fit_quality * 100 / 0.20).toFixed(0)}%</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span>Signal/Noise:</span>
+                                <span style="color: #f59e0b;">${(factors.snr_factor * 100 / 0.15).toFixed(0)}%</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Multi-Peak:</span>
+                                <span style="color: #ec4899;">${(factors.consistency * 100 / 0.15).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Show analysis mode badge if available
+                const modeBadge = iso.analysis_mode === 'enhanced' ?
+                    '<span style="font-size: 0.6rem; background: #3b82f680; padding: 1px 4px; border-radius: 2px; margin-left: 4px;">Enhanced</span>' : '';
+
                 return `
-                    <div class="isotope-result-item">
+                    <div class="isotope-result-item" data-isotope="${iso.isotope}">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
-                            <strong style="color: var(--text-primary);">${iso.isotope}</strong>
-                            <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600;">${confidenceLabel}</span>
+                            <strong style="color: var(--text-primary);">${iso.isotope}${modeBadge}</strong>
+                            <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600; cursor: ${iso.confidence_factors ? 'pointer' : 'default'};" 
+                                  ${iso.confidence_factors ? 'onclick="this.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display = this.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display === \'none\' ? \'block\' : \'none\'"' : ''}>
+                                ${confidenceLabel} ${iso.confidence_factors ? '▼' : ''}
+                            </span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <div class="confidence-track">
@@ -113,6 +187,7 @@ export class AlphaHoundUI {
                             </div>
                             <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 45px;">${confidence.toFixed(0)}%</span>
                         </div>
+                        ${factorsHTML}
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                             <span>${iso.matches}/${iso.total_lines} peaks matched</span>
                             <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat">📚 NNDC</a>
@@ -142,7 +217,11 @@ export class AlphaHoundUI {
                 }).join('');
 
                 // Create graphical decay chain visualization
-                const chainMembers = this.getChainMembers(chain.chain_name);
+                // Use chain_sequence from enhanced detection if available
+                const chainSequence = chain.chain_sequence || [];
+                const chainMembers = chainSequence.length > 0
+                    ? chainSequence.map(s => s.nuclide)
+                    : this.getChainMembers(chain.chain_name);
                 const detectedSet = new Set(Object.keys(chain.detected_members));
 
                 const chainGraphic = chainMembers.map((member, idx) => {
@@ -150,10 +229,28 @@ export class AlphaHoundUI {
                     const isParent = idx === 0;
                     const isStable = idx === chainMembers.length - 1;
 
+                    // Get half-life and branching from sequence data
+                    const seqInfo = chainSequence[idx] || {};
+                    const halfLife = seqInfo.half_life || '';
+                    const branchingToNext = seqInfo.branching_to_next;
+
                     const statusClass = isDetected ? 'detected' : (isStable ? 'stable' : '');
 
-                    const arrow = idx < chainMembers.length - 1 ?
-                        `<div style="color: var(--text-secondary); font-size: 1.2rem; padding: 0 0.25rem;">→</div>` : '';
+                    // Arrow with branching ratio if < 100%
+                    let arrow = '';
+                    if (idx < chainMembers.length - 1) {
+                        const branchLabel = branchingToNext && branchingToNext < 0.99
+                            ? `<div title="Branching Ratio: Probability of this decay mode" style="display:flex; flex-direction:column; align-items:center; cursor: help;">
+                                 <span style="font-size: 0.5rem; color: var(--text-secondary); line-height: 1;">BRANCH</span>
+                                 <span style="font-size: 0.65rem; color: #f59e0b; font-weight:bold;">${(branchingToNext * 100).toFixed(1)}%</span>
+                               </div>`
+                            : '';
+
+                        arrow = `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.2rem; padding: 0 0.25rem; min-width: 24px;">
+                            ${branchLabel}
+                            <span style="margin-top: -2px;">→</span>
+                        </div>`;
+                    }
 
                     return `
                         <div style="display: flex; align-items: center;">
@@ -161,6 +258,7 @@ export class AlphaHoundUI {
                                 <div style="font-weight: ${isDetected ? '700' : '500'}; font-size: 0.85rem;">
                                     ${member}
                                 </div>
+                                ${halfLife ? `<div style="font-size: 0.55rem; color: var(--text-secondary); margin-top: 1px;">${halfLife}</div>` : ''}
                                 ${isDetected ? '<div style="font-size: 0.65rem; margin-top: 2px;"><span style="font-size: 10px;">✓</span> DETECTED</div>' : ''}
                                 ${isStable ? '<div style="font-size: 0.65rem; margin-top: 2px;">STABLE</div>' : ''}
                             </div>
@@ -221,17 +319,17 @@ export class AlphaHoundUI {
     // Helper to get decay chain members based on chain name
     getChainMembers(chainName) {
         const chains = {
-            "U-238 Chain": [
+            "U-238": [
                 "U-238", "Th-234", "Pa-234m", "U-234", "Th-230",
                 "Ra-226", "Rn-222", "Po-218", "Pb-214", "Bi-214",
                 "Po-214", "Pb-210", "Bi-210", "Po-210", "Pb-206"
             ],
-            "Th-232 Chain": [
+            "Th-232": [
                 "Th-232", "Ra-228", "Ac-228", "Th-228", "Ra-224",
                 "Rn-220", "Po-216", "Pb-212", "Bi-212", "Tl-208",
                 "Po-212", "Pb-208"
             ],
-            "U-235 Chain": [
+            "U-235": [
                 "U-235", "Th-231", "Pa-231", "Ac-227", "Th-227",
                 "Ra-223", "Rn-219", "Po-215", "Pb-211", "Bi-211",
                 "Tl-207", "Pb-207"
@@ -240,9 +338,19 @@ export class AlphaHoundUI {
             "Am-241": ["Am-241"],
             "Cs-137": ["Cs-137", "Ba-137m"],
             "Co-60": ["Co-60"],
-            "Ra-226 (Refined)": ["Ra-226", "Rn-222", "Pb-214", "Bi-214", "Pb-210"]
+            "Ra-226": ["Ra-226", "Rn-222", "Pb-214", "Bi-214", "Pb-210"]
         };
-        return chains[chainName] || [];
+
+        // Try exact match first
+        if (chains[chainName]) return chains[chainName];
+
+        // Extract parent isotope from names like "U-238 Decay Chain" or "Th-232 Chain"
+        const match = chainName.match(/^([A-Za-z]+-\d+)/);
+        if (match && chains[match[1]]) {
+            return chains[match[1]];
+        }
+
+        return [];
     }
 
     /**

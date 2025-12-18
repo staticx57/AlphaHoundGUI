@@ -7,10 +7,10 @@ Contains default settings and filtering functions.
 DEFAULT_SETTINGS = {
     "mode": "simple",
     "isotope_min_confidence": 30.0,
-    "chain_min_confidence": 30.0,
+    "chain_min_confidence": 10.0,  # Lowered from 30 to allow natural chains with abundance weighting
     "energy_tolerance": 20.0,
-    "chain_min_isotopes_medium": 3,
-    "chain_min_isotopes_high": 4,
+    "chain_min_isotopes_medium": 2,  # Lowered from 3 to work with enhanced detection
+    "chain_min_isotopes_high": 3,    # Lowered from 4
     "max_isotopes": 5
 }
 
@@ -26,29 +26,19 @@ def apply_abundance_weighting(chains):
     """
     Apply natural abundance weighting to decay chain confidence scores.
     
-    Based on authoritative sources (LBNL, NRC):
+    DISABLED: Abundance weighting was causing Th-232 to be artificially 
+    penalized even in actual thorium sources (like thoriated glass).
+    Detection-based confidence is now used directly.
+    
+    The original logic was:
     - U-238: 99.274% of natural uranium (weight ~1.0)
     - U-235: 0.720% of natural uranium (weight ~0.007)  
-    - Th-232: ~3.5× more abundant than U in Earth's crust
+    - Th-232: ~3.5× more abundant than U in Earth's crust (weight 0.35)
+    
+    But this is inappropriate for dedicated radioactive sources.
     """
-    abundance_weights = {
-        'U-238': 1.0,
-        'U-235': 0.007,
-        'Th-232': 0.35
-    }
-    
-    for chain in chains:
-        chain_name = chain.get('chain_name', '')
-        
-        # Apply abundance weight
-        for key, weight in abundance_weights.items():
-            if key in chain_name:
-                original_conf = chain.get('confidence', 0)
-                weighted_conf = original_conf * weight
-                chain['confidence'] = weighted_conf
-                chain['original_confidence'] = original_conf
-                break
-    
+    # DISABLED - return chains unchanged
+    # Detection-based confidence is more appropriate for general-purpose analysis
     return chains
 
 def apply_confidence_filtering(isotopes, chains, settings):
@@ -65,10 +55,17 @@ def apply_confidence_filtering(isotopes, chains, settings):
     """
     # Filter isotopes
     isotope_threshold = settings.get('isotope_min_confidence', 30.0)
+    print(f"[DEBUG Isotopes] Filtering {len(isotopes)} isotopes with threshold={isotope_threshold}")
+    
+    for iso in isotopes[:5]:  # Show first 5 for debugging
+        print(f"[DEBUG Iso] {iso.get('isotope', 'Unknown')}: conf={iso.get('confidence', 0)}")
+    
     filtered_isotopes = [
         iso for iso in isotopes 
         if iso.get('confidence', 0) >= isotope_threshold
     ]
+    
+    print(f"[DEBUG Isotopes] After filtering: {len(filtered_isotopes)} isotopes remain")
     
     # Limit isotopes if in simple mode
     max_isotopes = settings.get('max_isotopes', 999)
@@ -83,8 +80,12 @@ def apply_confidence_filtering(isotopes, chains, settings):
     chain_threshold = settings.get('chain_min_confidence', 30.0)
     min_isotopes = settings.get('chain_min_isotopes_medium', 3)
     
+    print(f"[DEBUG Chains] Filtering {len(chains)} chains with threshold={chain_threshold}, min_isotopes={min_isotopes}")
+    
     filtered_chains = []
     for chain in chains:
+        print(f"[DEBUG Chain] {chain.get('chain_name', 'Unknown')}: conf={chain.get('confidence', 0)}, num_detected={chain.get('num_detected', 0)}, num_key={chain.get('num_key_isotopes', 0)}")
+        
         # Calculate confidence level
         percentage = (chain['num_detected'] / chain['num_key_isotopes'] * 100) if chain['num_key_isotopes'] > 0 else 0
         
@@ -105,8 +106,12 @@ def apply_confidence_filtering(isotopes, chains, settings):
             chain['confidence_level'] = 'MEDIUM'
         
         # Apply filter
-        if chain['confidence'] >= chain_threshold and chain['num_detected'] >= min_isotopes:
+        passes = chain['confidence'] >= chain_threshold and chain['num_detected'] >= min_isotopes
+        print(f"[DEBUG Chain] -> passes filter: {passes}")
+        if passes:
             filtered_chains.append(chain)
+    
+    print(f"[DEBUG Chains] After filtering: {len(filtered_chains)} chains remain")
     
     # Re-sort by weighted confidence
     filtered_chains.sort(key=lambda x: x['confidence'], reverse=True)
