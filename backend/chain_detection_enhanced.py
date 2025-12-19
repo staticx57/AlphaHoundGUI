@@ -35,14 +35,14 @@ except ImportError:
 
 
 # Known decay chain parents for quick lookup
+# NOTE: Only TRUE decay chains belong here. Single isotopes like Cs-137, Co-60, Am-241
+# are NOT chains and should be handled via isotope identification, not chain detection
 KNOWN_CHAINS = {
     'U-238': {'name': 'U-238 Decay Chain', 'type': 'natural', 'color': '#22c55e'},
     'U-235': {'name': 'U-235 (Actinium) Chain', 'type': 'natural', 'color': '#3b82f6'},
     'Th-232': {'name': 'Th-232 Decay Chain', 'type': 'natural', 'color': '#f59e0b'},
     'Ra-226': {'name': 'Ra-226 (Radium) Chain', 'type': 'natural', 'color': '#ef4444'},
-    'Cs-137': {'name': 'Cs-137', 'type': 'manmade', 'color': '#8b5cf6'},
-    'Co-60': {'name': 'Co-60', 'type': 'manmade', 'color': '#ec4899'},
-    'Am-241': {'name': 'Am-241', 'type': 'manmade', 'color': '#06b6d4'},
+    # Removed: Cs-137, Co-60, Am-241 - these are single isotopes, NOT decay chains
 }
 
 # Gamma lines database (fallback when IAEA data not available)
@@ -277,6 +277,81 @@ def get_chain_sequence_info(parent: str) -> List[Dict]:
     return sequence
 
 
+def check_secular_equilibrium(detected_members: Dict[str, List[Dict]], parent: str) -> Dict:
+    """
+    Check if a decay chain appears to be in secular equilibrium.
+    
+    In secular equilibrium, daughter activities equal parent activity.
+    We can check this by comparing measured peak intensity ratios.
+    
+    Args:
+        detected_members: Dict mapping isotope -> list of detected peaks with counts
+        parent: Parent nuclide name (e.g., 'U-238')
+        
+    Returns:
+        Dict with 'in_equilibrium', 'confidence', 'details'
+    """
+    result = {
+        'in_equilibrium': None,  # True/False/None (unknown)
+        'confidence': 'UNKNOWN',
+        'details': '',
+        'ratio_check': None
+    }
+    
+    # Define key isotope pairs to check for equilibrium
+    # These pairs should have ~1:1 activity ratio in equilibrium
+    equilibrium_pairs = {
+        'U-238': [
+            ('Bi-214', 'Pb-214'),  # Both in Rn-222 sub-chain
+        ],
+        'Th-232': [
+            ('Ac-228', 'Pb-212'),  # Detectable gamma emitters
+            ('Bi-212', 'Tl-208'),  # Branch products
+        ],
+    }
+    
+    pairs_to_check = equilibrium_pairs.get(parent, [])
+    if not pairs_to_check:
+        result['details'] = 'No equilibrium check defined for this chain'
+        return result
+    
+    checked_pairs = []
+    for iso1, iso2 in pairs_to_check:
+        if iso1 in detected_members and iso2 in detected_members:
+            # Get strongest peak counts for each
+            counts1 = max((p.get('counts', 0) for p in detected_members[iso1]), default=0)
+            counts2 = max((p.get('counts', 0) for p in detected_members[iso2]), default=0)
+            
+            if counts1 > 100 and counts2 > 100:  # Need significant counts
+                # Account for branching ratios (approximate)
+                # Bi-214/Pb-214 should be ~1:1, Ac-228/Pb-212 ~1:1
+                ratio = counts1 / counts2 if counts2 > 0 else 0
+                # Allow 0.3-3.0 range for "equilibrium" (broad due to efficiency variations)
+                in_range = 0.3 <= ratio <= 3.0
+                checked_pairs.append({
+                    'pair': f'{iso1}/{iso2}',
+                    'ratio': float(ratio),
+                    'in_range': in_range
+                })
+    
+    if not checked_pairs:
+        result['details'] = 'Insufficient peak counts for equilibrium check'
+        return result
+    
+    # Determine overall equilibrium status
+    all_in_range = all(p['in_range'] for p in checked_pairs)
+    result['in_equilibrium'] = all_in_range
+    result['confidence'] = 'HIGH' if len(checked_pairs) >= 2 else 'MEDIUM'
+    result['ratio_check'] = checked_pairs
+    
+    if all_in_range:
+        result['details'] = 'Peak ratios consistent with secular equilibrium'
+    else:
+        result['details'] = 'Peak ratios suggest chain may not be in equilibrium'
+    
+    return result
+
+
 def get_expected_spectrum(parent: str, intensity_threshold: float = 1.0) -> Dict[str, List[Tuple[float, float]]]:
     """
     Get the expected gamma spectrum for a decay chain.
@@ -324,6 +399,16 @@ def match_peaks_to_chain(
     peak_energies = [p.get('energy', 0) for p in peaks]
     peak_areas = [p.get('area', p.get('counts', 1)) for p in peaks]
     
+    # Dynamic tolerance: use wider tolerance for high-count spectra
+    # because peaks overlap and shift in strong scintillator spectra
+    max_counts = max((p.get('counts', 0) for p in peaks), default=0)
+    if max_counts > 10000:
+        # Strong spectrum: use 60 keV tolerance (matches ~10% resolution at 600 keV)
+        effective_tolerance = max(energy_tolerance, 60.0)
+        print(f"[DEBUG Chain Match] High-count spectrum ({max_counts:.0f}), using tolerance={effective_tolerance}")
+    else:
+        effective_tolerance = energy_tolerance
+    
     detected_nuclides = []
     matches = {}  # nuclide -> [matched_energies]
     
@@ -339,7 +424,7 @@ def match_peaks_to_chain(
             
             # Check if any peak matches this gamma line
             for i, peak_energy in enumerate(peak_energies):
-                if abs(peak_energy - gamma_energy) <= energy_tolerance:
+                if abs(peak_energy - gamma_energy) <= effective_tolerance:
                     total_detected += 1
                     nuclide_matched = True
                     matched_energies.append(peak_energy)
@@ -348,6 +433,11 @@ def match_peaks_to_chain(
         if nuclide_matched:
             detected_nuclides.append(nuclide)
             matches[nuclide] = matched_energies
+    
+    # Debug logging for chain matching
+    if parent in ['Th-232', 'U-238']:
+        print(f"[DEBUG Chain Match] {parent}: detected={total_detected}/{total_expected}, nuclides={detected_nuclides}")
+        print(f"[DEBUG Chain Match] {parent}: Peak energies searched: {peak_energies[:15]}...")
     
     return total_detected, total_expected, detected_nuclides, matches
 
@@ -431,10 +521,10 @@ def identify_decay_chains_enhanced(
     """
     detected_chains = []
     
-    # Chains to check
+    # Only check TRUE decay chains - not single-isotope sources
+    # Am-241, Cs-137, Co-60 are handled via isotope identification, not chain detection
     chains_to_check = ['U-238', 'Th-232']
-    if include_manmade:
-        chains_to_check.extend(['Cs-137', 'Co-60', 'Am-241'])
+    # NOTE: include_manmade parameter is now IGNORED - single isotopes are NOT chains
     
     for parent in chains_to_check:
         detected_count, expected_count, detected_nuclides, matches = match_peaks_to_chain(
@@ -507,7 +597,10 @@ def identify_decay_chains_enhanced(
             'enhanced': True,  # Flag to indicate enhanced detection was used
             
             # NEW: Chain sequence with half-lives and branching ratios
-            'chain_sequence': get_chain_sequence_info(parent)
+            'chain_sequence': get_chain_sequence_info(parent),
+            
+            # NEW: Secular equilibrium check
+            'equilibrium_status': check_secular_equilibrium(detected_members, parent)
         })
     
     # Sort by confidence (highest first)

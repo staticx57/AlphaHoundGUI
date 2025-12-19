@@ -169,6 +169,65 @@ def search_xray_line(
     return results
 
 
+def detect_xrf_peaks(peak_energies: List[float], tolerance_keV: float = 3.0) -> List[Dict]:
+    """
+    Detect X-ray fluorescence signatures in a list of peak energies.
+    
+    Useful for identifying:
+    - Lead shielding (Pb Kα at 75 keV, Kβ at 85 keV)
+    - Uranium L-shell X-rays (13.6, 17.2, 20.2 keV)
+    - Thorium L-shell X-rays (13.0, 16.2, 19.0 keV)
+    
+    Args:
+        peak_energies: List of detected peak energies in keV
+        tolerance_keV: Matching tolerance (default 3 keV)
+        
+    Returns:
+        List of detected XRF signatures with element and shell info
+    """
+    detected_xrf = []
+    
+    for energy in peak_energies:
+        matches = search_xray_line(energy, delta=tolerance_keV)
+        if matches:
+            best_match = matches[0]  # Closest match
+            detected_xrf.append({
+                'peak_energy': energy,
+                'element': best_match['element'],
+                'shell': best_match['shell'],
+                'xrf_energy': best_match['energy_keV'],
+                'delta_keV': best_match['delta_keV']
+            })
+    
+    # Group by element
+    elements = {}
+    for xrf in detected_xrf:
+        elem = xrf['element']
+        if elem not in elements:
+            elements[elem] = {'element': elem, 'lines': [], 'confidence': 'LOW'}
+        elements[elem]['lines'].append(xrf)
+    
+    # Calculate confidence based on number of lines matched
+    for elem, data in elements.items():
+        n_lines = len(data['lines'])
+        if n_lines >= 3:
+            data['confidence'] = 'HIGH'
+        elif n_lines >= 2:
+            data['confidence'] = 'MEDIUM'
+        else:
+            data['confidence'] = 'LOW'
+        
+        # Special annotations
+        if elem == 'Pb':
+            data['interpretation'] = 'Lead shielding or leaded glass detected'
+        elif elem == 'U':
+            data['interpretation'] = 'Uranium L-shell X-rays - indicates uranium presence'
+        elif elem == 'Th':
+            data['interpretation'] = 'Thorium L-shell X-rays - indicates thorium presence'
+    
+    return list(elements.values())
+
+
 def get_isotope_gamma_lines(
     isotope: str,
     intensity_threshold: Optional[float] = None

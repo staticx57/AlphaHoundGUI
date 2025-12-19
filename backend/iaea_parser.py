@@ -11,12 +11,13 @@ from typing import Dict, List, Tuple, Optional
 IAEA_DATA_DIR = os.path.join(os.path.dirname(__file__), 'data', 'idb', 'isotopes')
 
 
-def parse_iaea_csv(filepath: str, min_intensity: float = 0.01) -> Dict:
+def parse_iaea_csv(filepath: str, min_intensity: float = 0.01, min_energy: float = 20.0) -> Dict:
     """Parse an IAEA gamma radiation CSV file.
     
     Args:
         filepath: Path to the CSV file
         min_intensity: Minimum intensity threshold (%) to include
+        min_energy: Minimum energy threshold (keV) - filters out X-ray lines
         
     Returns:
         Dict with 'gammas' list of (energy, intensity) tuples,
@@ -44,6 +45,11 @@ def parse_iaea_csv(filepath: str, min_intensity: float = 0.01) -> Dict:
                     
                     # Filter by minimum intensity
                     if intensity < min_intensity:
+                        continue
+                    
+                    # Filter by minimum energy - excludes X-ray fluorescence lines
+                    # that cause false positive matches (e.g., Co-60's 7-18 keV X-rays)
+                    if energy < min_energy:
                         continue
                     
                     # Extract half-life (same for all rows of an isotope)

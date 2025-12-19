@@ -258,6 +258,22 @@ export class AlphaHoundAPI {
         return await response.json();
     }
 
+    // Estimator / Detectors
+    async getDetectors() {
+        const response = await fetch('/detectors');
+        return await response.json();
+    }
+
+    async estimateMDA(params) {
+        const response = await fetch('/analyze/mda', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+        if (!response.ok) throw new Error('MDA Analysis failed');
+        return await response.json();
+    }
+
     // WebSocket Logic
     setupDoseWebSocket(onDoseRate, onConnectionStatus) {
         this.listeners.onDoseRate = onDoseRate;

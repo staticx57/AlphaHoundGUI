@@ -3,15 +3,30 @@ Core settings and utilities for analysis routers.
 Contains default settings and filtering functions.
 """
 
+# Import detector profiles from centralized validation module
+# This is the SINGLE SOURCE OF TRUTH for detector capabilities
+try:
+    from isotope_validation import DETECTOR_PROFILES, get_detector_min_energy
+except ImportError:
+    # Fallback for backwards compatibility
+    DETECTOR_PROFILES = {
+        "AlphaHound CsI(Tl)": {"min_energy_keV": 30.0, "energy_resolution_pct": 7.0, "xrf_capable": False},
+    }
+    def get_detector_min_energy(detector_name: str = "AlphaHound CsI(Tl)") -> float:
+        return DETECTOR_PROFILES.get(detector_name, DETECTOR_PROFILES["AlphaHound CsI(Tl)"])["min_energy_keV"]
+
 # Default settings for Simple mode
 DEFAULT_SETTINGS = {
     "mode": "simple",
+    "detector_type": "AlphaHound CsI(Tl)",
+    "min_energy_keV": 30.0,  # From detector profile
     "isotope_min_confidence": 30.0,
     "chain_min_confidence": 10.0,  # Lowered from 30 to allow natural chains with abundance weighting
     "energy_tolerance": 20.0,
     "chain_min_isotopes_medium": 2,  # Lowered from 3 to work with enhanced detection
     "chain_min_isotopes_high": 3,    # Lowered from 4
-    "max_isotopes": 5
+    "max_isotopes": 5,
+    "enable_xrf_detection": False   # Disabled for AlphaHound
 }
 
 # Settings for generic File Uploads (often uncalibrated/noisy)

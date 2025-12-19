@@ -207,11 +207,14 @@ def detect_peaks_enhanced(
     min_energy: float = 30.0,
     max_energy: float = 3000.0,
     validate_fits: bool = True,
-    min_r_squared: float = 0.7
+    min_r_squared: float = 0.7,
+    apply_snip: bool = True,
+    snip_iterations: int = 24
 ) -> List[Dict]:
     """
     Enhanced two-stage peak detection.
     
+    Stage 0 (optional): SNIP background removal for high-count spectra
     Stage 1: CWT-based candidate detection (with prominence fallback)
     Stage 2: Gaussian fit validation for each candidate
     
@@ -222,6 +225,8 @@ def detect_peaks_enhanced(
         max_energy: Maximum energy to consider (keV)
         validate_fits: If True, validate each candidate with Gaussian fit
         min_r_squared: Minimum R² for fit validation
+        apply_snip: If True, remove Compton continuum before peak finding
+        snip_iterations: SNIP iterations (higher = smoother background)
         
     Returns:
         List of validated peak dictionaries
@@ -229,25 +234,58 @@ def detect_peaks_enhanced(
     energies = np.array(energies)
     counts = np.array(counts)
     
-    # Stage 1: Candidate detection
+    # Stage 0: Apply SNIP background removal for better peak detection
+    # This removes the Compton continuum, making peaks stand out at true energies
+    # Only for high-count spectra where Compton continuum distorts peak finding
+    if apply_snip and np.max(counts) > 10000:
+        try:
+            from spectral_analysis import snip_background
+            background = snip_background(counts, iterations=snip_iterations)
+            net_counts = np.maximum(counts - background, 0)
+            print(f"[DEBUG Peak] Applied SNIP: max counts {np.max(counts):.0f} -> net {np.max(net_counts):.0f}")
+            counts_for_detection = net_counts
+        except Exception as e:
+            print(f"[DEBUG Peak] SNIP failed, using raw counts: {e}")
+            counts_for_detection = counts
+    else:
+        counts_for_detection = counts
+    
+    # Stage 1: Candidate detection (use SNIP-processed counts)
     # Try CWT first, fall back to prominence
-    candidates = detect_peaks_cwt(energies, counts, min_energy, max_energy)
+    candidates = detect_peaks_cwt(energies, counts_for_detection, min_energy, max_energy)
     
     if len(candidates) == 0:
         # Fallback to prominence-based detection
-        candidates = detect_peaks_prominence(energies, counts, 0.02, min_energy, max_energy)
+        candidates = detect_peaks_prominence(energies, counts_for_detection, 0.02, min_energy, max_energy)
     
     if not validate_fits:
         # Return simple peak list without validation
         return [{'energy': e, 'fit_valid': False} for e in candidates]
     
-    # Stage 2: Fit validation
+    # Stage 2: Fit validation (use SNIP-processed counts if available)
     validated_peaks = []
     
+    # Debug: show candidates before fitting
+    print(f"[DEBUG Peak] Candidates BEFORE fitting: {[f'{e:.1f}' for e in candidates[:15]]}")
+    
     for candidate_energy in candidates:
-        fit_result = fit_single_peak(energies, counts, candidate_energy)
+        # Use SNIP-processed counts for fitting if SNIP was applied
+        fit_result = fit_single_peak(energies, counts_for_detection, candidate_energy)
         
         if fit_result is not None:
+            # Store original candidate for chain detection (uses fitted center)
+            # Also add display_energy at actual local maximum for chart markers
+            # Find the actual peak position in raw counts for display
+            window_mask = np.abs(energies - candidate_energy) <= 40  # Wide window to catch visual peaks
+            if np.any(window_mask):
+                window_idx = np.where(window_mask)[0]
+                local_max_idx = window_idx[np.argmax(counts[window_idx])]
+                fit_result['display_energy'] = float(energies[local_max_idx])
+                # IMPORTANT: Also update counts to match the local max, so marker sits on tip
+                fit_result['counts'] = float(counts[local_max_idx])
+            else:
+                fit_result['display_energy'] = candidate_energy
+            
             # Accept if fit quality is good
             if fit_result['r_squared'] >= min_r_squared:
                 validated_peaks.append(fit_result)

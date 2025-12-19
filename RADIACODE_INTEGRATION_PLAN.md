@@ -371,6 +371,7 @@ DETECTOR_PROFILES = {
 - **PyPI Package**: [pypi.org/project/radiacode](https://pypi.org/project/radiacode/)
 - **Radiacode Official**: [radiacode.com](https://radiacode.com/)
 - **Device Specs**: [radiacode.com/products](https://radiacode.com/products)
+- **EDA Blog Post**: [Exploratory Data Analysis - Gamma Spectroscopy in Python](https://towardsdatascience.com/exploratory-data-analysis-gamma-spectroscopy-in-python/)
 
 ---
 

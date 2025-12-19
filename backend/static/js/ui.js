@@ -26,18 +26,33 @@ export class AlphaHoundUI {
     }
 
     showLoading(message = 'Processing...') {
-        this.elements.dropZone.innerHTML = `<div class="upload-icon">⏳</div><h2>${message}</h2>`;
+        this.elements.dropZone.innerHTML = `
+            <div class="upload-icon">⏳</div>
+            <h2>${message}</h2>
+            <p>Please wait while we parse the spectrum...</p>
+        `;
     }
 
     resetDropZone() {
         setTimeout(() => {
-            this.elements.dropZone.innerHTML = '<div class="upload-icon"><img src="/static/icons/upload.svg" style="width: 64px; height: 64px;"></div><h2>Drop new file to replace</h2><input type="file" id="file-input" accept=".n42,.xml,.csv">';
+            this.elements.dropZone.innerHTML = `
+                <div class="upload-icon">
+                    <img src="/static/icons/upload.svg" style="width: 48px; height: 48px;">
+                </div>
+                <h2>Drop new file to replace</h2>
+                <p>or click to browse local files</p>
+                <input type="file" id="file-input" accept=".n42,.xml,.csv">
+            `;
         }, 1000);
     }
 
     showError(message) {
-        alert(message);
-        this.elements.dropZone.innerHTML = '<div class="upload-icon">❌</div><h2>Error. Try again.</h2><p>' + message + '</p><input type="file" id="file-input" accept=".n42,.xml,.csv">';
+        this.elements.dropZone.innerHTML = `
+            <div class="upload-icon">❌</div>
+            <h2>Error. Try again.</h2>
+            <p style="color: #ef4444; font-size: 0.8rem; margin-top: 0.5rem;">${message}</p>
+            <input type="file" id="file-input" accept=".n42,.xml,.csv">
+        `;
     }
 
     renderDashboard(data) {
@@ -47,7 +62,164 @@ export class AlphaHoundUI {
         this.renderPeaks(data.peaks);
         this.renderIsotopes(data.isotopes);
         this.renderDecayChains(data.decay_chains);
+        if (data.xrf_detections) {
+            this.renderXRF(data.xrf_detections);
+        }
     }
+
+    renderXRF(xrfData) {
+        // Remove existing XRF container if any
+        const existing = document.getElementById('xrf-container');
+        if (existing) existing.remove();
+
+        if (!xrfData || xrfData.length === 0) return;
+
+        // Build HTML for each detected element
+        const elementsHTML = xrfData.map((item, idx) => {
+            const confidenceColor = item.confidence === 'HIGH' ? '#22c55e' :
+                item.confidence === 'MEDIUM' ? '#f59e0b' : '#94a3b8';
+            const confidenceLabel = item.confidence || 'LOW';
+
+            // Build energy table rows
+            const energyRows = (item.lines || []).map(line => `
+                <tr style="font-size: 0.75rem; color: #93c5fd;">
+                    <td style="padding: 2px 6px;">${line.shell}</td>
+                    <td style="padding: 2px 6px; text-align: right;">${line.peak_energy?.toFixed(1) || '-'} keV</td>
+                    <td style="padding: 2px 6px; text-align: right;">${line.xrf_energy?.toFixed(1) || '-'} keV</td>
+                    <td style="padding: 2px 6px; text-align: center;">${line.delta_keV?.toFixed(1) || '-'}</td>
+                </tr>
+            `).join('');
+
+            const interpretation = item.interpretation ?
+                `<div style="font-size: 0.75rem; color: #93c5fd; font-style: italic; margin-top: 0.5rem;">${item.interpretation}</div>` : '';
+
+            return `
+                <div class="xrf-element" data-xrf-index="${idx}" style="
+                    background: rgba(59, 130, 246, 0.15);
+                    border: 1px solid #3b82f6;
+                    border-radius: 8px;
+                    padding: 0.75rem;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="color: #60a5fa; font-size: 1rem;">${item.element}</strong>
+                        <span style="
+                            background: ${confidenceColor}20;
+                            color: ${confidenceColor};
+                            padding: 2px 8px;
+                            border-radius: 4px;
+                            font-size: 0.65rem;
+                            font-weight: 700;
+                            text-transform: uppercase;
+                        ">${confidenceLabel}</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #93c5fd; margin-top: 0.25rem;">
+                        ${(item.lines || []).map(l => l.shell).join(', ')}
+                    </div>
+                    ${interpretation}
+                    <div class="xrf-details" style="display: none; margin-top: 0.75rem; border-top: 1px solid rgba(59, 130, 246, 0.3); padding-top: 0.5rem;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="font-size: 0.65rem; color: #60a5fa; text-transform: uppercase;">
+                                    <th style="padding: 2px 6px; text-align: left;">Shell</th>
+                                    <th style="padding: 2px 6px; text-align: right;">Detected</th>
+                                    <th style="padding: 2px 6px; text-align: right;">Reference</th>
+                                    <th style="padding: 2px 6px; text-align: center;">Δ keV</th>
+                                </tr>
+                            </thead>
+                            <tbody>${energyRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const xrfHTML = `
+            <div id="xrf-container" style="
+                background: rgba(59, 130, 246, 0.1);
+                border: 1px solid #3b82f6;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-top: 1rem;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #60a5fa;">
+                        <span>⚡</span> XRF / Fluorescence Detected
+                    </div>
+                    <button id="btn-clear-xrf-highlight" style="
+                        background: transparent;
+                        border: 1px solid #3b82f6;
+                        color: #60a5fa;
+                        padding: 2px 8px;
+                        border-radius: 4px;
+                        font-size: 0.7rem;
+                        cursor: pointer;
+                        display: none;
+                    ">Clear Highlights</button>
+                </div>
+                <div style="font-size: 0.75rem; color: #93c5fd; opacity: 0.8; margin-bottom: 0.75rem; font-style: italic;">
+                    Click an element to highlight its peaks on the chart.
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+                    ${elementsHTML}
+                </div>
+            </div>
+        `;
+
+        // Insert after decay chains
+        if (this.elements.decayChainsContainer) {
+            this.elements.decayChainsContainer.insertAdjacentHTML('afterend', xrfHTML);
+        }
+
+        // Restore clear button visibility if we had an active highlight
+        if (window._selectedXRFIndex !== undefined && window._selectedXRFIndex !== null) {
+            const btn = document.getElementById('btn-clear-xrf-highlight');
+            if (btn) btn.style.display = 'inline-block';
+        }
+
+        // Store XRF data for click handlers
+        window._xrfData = xrfData;
+
+        // Add click handlers for each element
+        document.querySelectorAll('.xrf-element').forEach(el => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.dataset.xrfIndex);
+                const item = xrfData[idx];
+
+                // Toggle details visibility
+                const details = el.querySelector('.xrf-details');
+                const isExpanded = details.style.display !== 'none';
+                details.style.display = isExpanded ? 'none' : 'block';
+
+                // Highlight peaks on chart (use global chartManager)
+                if (!isExpanded && item.lines && item.lines.length > 0 && window.chartManager) {
+                    const peaks = item.lines.map(l => ({
+                        energy: l.peak_energy,
+                        element: item.element,
+                        shell: l.shell
+                    }));
+
+                    window._selectedXRFIndex = idx; // Track for persistence
+                    window.chartManager.highlightXRFPeaks(peaks);
+                    document.getElementById('btn-clear-xrf-highlight').style.display = 'inline-block';
+                }
+            });
+        });
+
+        // Clear highlights button
+        document.getElementById('btn-clear-xrf-highlight')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window._selectedXRFIndex = null; // Clear persistence
+            if (window.chartManager) {
+                window.chartManager.clearXRFHighlights();
+            }
+            document.getElementById('btn-clear-xrf-highlight').style.display = 'none';
+        });
+    }
+
+
+
 
     renderDataQualityWarning(dataQuality) {
         // Remove existing warning if present
@@ -77,6 +249,14 @@ export class AlphaHoundUI {
                 <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.85rem; color: var(--text-secondary);">
                     ${dataQuality.warnings.map(w => `<li>${w}</li>`).join('')}
                 </ul>
+                ${dataQuality.mda_cs137 ? `
+                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.8rem;">
+                    <span style="color: #10b981;">📊 Detection Sensitivity (MDA):</span>
+                    <span style="margin-left: 0.5rem;" title="Minimum Detectable Activity for Cs-137 at 95% confidence">
+                        Cs-137: ${dataQuality.mda_cs137.readable}
+                    </span>
+                </div>
+                ` : ''}
             </div>
         `;
 
@@ -87,20 +267,29 @@ export class AlphaHoundUI {
     }
 
     renderMetadata(metadata) {
-        const metaHtml = Object.entries(metadata || {}).map(([key, value]) => {
-            // Format the key: replace underscores with spaces and convert to uppercase
-            let displayKey = key.toUpperCase().replaceAll('_', ' ');
+        const keyMap = {
+            'count_time_minutes': 'Collection Time',
+            'start_time': 'Start Time',
+            'live_time_s': 'Live Time',
+            'real_time_s': 'Real Time',
+            'energy_calibration_slope': 'Cal Slope',
+            'energy_calibration_offset': 'Cal Offset'
+        };
 
-            // Format the value based on the key
+        const metaHtml = Object.entries(metadata || {}).map(([key, value]) => {
+            let displayKey = keyMap[key] || key.toUpperCase().replaceAll('_', ' ');
             let displayValue = value || '-';
+
             if (key === 'count_time_minutes' && value > 0) {
                 displayValue = `${parseFloat(value).toFixed(2)} min`;
+            } else if (key.includes('time') && !isNaN(value) && typeof value === 'number') {
+                displayValue = `${value.toFixed(1)}s`;
             }
 
             return `
                 <div class="stat-card">
                     <div class="stat-label">${displayKey}</div>
-                    <div class="stat-value">${displayValue}</div>
+                    <div class="stat-value" title="${value}">${displayValue}</div>
                 </div>
             `;
         }).join('');
@@ -127,8 +316,11 @@ export class AlphaHoundUI {
         if (isotopes && isotopes.length > 0) {
             this.elements.isotopesContainer.style.display = 'block';
 
+            // Store isotopes for click handlers
+            window._isotopeData = isotopes;
+
             // Render legacy peak-matching results with confidence bars and factor breakdown
-            legacyList.innerHTML = isotopes.map(iso => {
+            legacyList.innerHTML = isotopes.map((iso, idx) => {
                 const confidence = iso.confidence;
                 const barColor = confidence > 70 ? '#10b981' :
                     confidence > 40 ? '#f59e0b' : '#ef4444';
@@ -173,13 +365,24 @@ export class AlphaHoundUI {
                     '<span style="font-size: 0.6rem; background: #3b82f680; padding: 1px 4px; border-radius: 2px; margin-left: 4px;">Enhanced</span>' : '';
 
                 return `
-                    <div class="isotope-result-item" data-isotope="${iso.isotope}">
+                    <div class="isotope-result-item" data-isotope="${iso.isotope}" data-iso-index="${idx}" style="cursor: pointer; transition: background 0.2s;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
                             <strong style="color: var(--text-primary);">${iso.isotope}${modeBadge}</strong>
-                            <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600; cursor: ${iso.confidence_factors ? 'pointer' : 'default'};" 
-                                  ${iso.confidence_factors ? 'onclick="this.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display = this.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display === \'none\' ? \'block\' : \'none\'"' : ''}>
-                                ${confidenceLabel} ${iso.confidence_factors ? '▼' : ''}
-                            </span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <button class="btn-highlight-isotope" data-iso-idx="${idx}" style="
+                                    background: rgba(245, 158, 11, 0.2);
+                                    border: 1px solid #f59e0b;
+                                    color: #f59e0b;
+                                    padding: 2px 6px;
+                                    border-radius: 4px;
+                                    font-size: 0.6rem;
+                                    cursor: pointer;
+                                " title="Highlight peaks on chart">📍</button>
+                                <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600; cursor: ${iso.confidence_factors ? 'pointer' : 'default'};" 
+                                      ${iso.confidence_factors ? 'onclick="event.stopPropagation(); this.parentElement.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display = this.parentElement.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display === \'none\' ? \'block\' : \'none\'"' : ''}>
+                                    ${confidenceLabel} ${iso.confidence_factors ? '▼' : ''}
+                                </span>
+                            </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <div class="confidence-track">
@@ -188,18 +391,80 @@ export class AlphaHoundUI {
                             <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 45px;">${confidence.toFixed(0)}%</span>
                         </div>
                         ${factorsHTML}
+                        ${iso.activity_estimate ? `
+                        <div style="font-size: 0.7rem; color: #10b981; margin-top: 0.25rem; padding: 3px 6px; background: rgba(16, 185, 129, 0.1); border-radius: 4px; display: inline-block;" 
+                             title="Estimated activity (±${iso.activity_estimate.uncertainty_pct?.toFixed(0) || '?'}% uncertainty)">
+                            ⚛️ Est. Activity: ${iso.activity_estimate.readable}
+                        </div>
+                        ` : ''}
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                             <span>${iso.matches}/${iso.total_lines} peaks matched</span>
-                            <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat">📚 NNDC</a>
+                            <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat" onclick="event.stopPropagation();">📚 NNDC</a>
                         </div>
                     </div>
                 `;
             }).join('');
+
+            // Add click handlers for isotope highlighting
+            this._setupIsotopeHighlightHandlers(isotopes);
         } else {
             this.elements.isotopesContainer.style.display = 'none';
             legacyList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem; font-style: italic;">No isotopes identified</p>';
         }
     }
+
+    /**
+     * Setup click handlers for isotope peak highlighting with multi-select support
+     */
+    _setupIsotopeHighlightHandlers(isotopes) {
+        // Track selected isotopes
+        if (!window._selectedIsotopes) {
+            window._selectedIsotopes = new Set();
+        }
+
+        // Color palette
+        const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6'];
+
+        document.querySelectorAll('.btn-highlight-isotope').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(btn.dataset.isoIdx);
+                const iso = isotopes[idx];
+                if (!iso) return;
+
+                const isoName = iso.isotope;
+                const safeKey = isoName.replace(/[^a-zA-Z0-9]/g, '_');
+                const chart = window.chartManager?.chart;
+
+                if (!chart) {
+                    console.error('[Isotope] No chart');
+                    return;
+                }
+
+                // Toggle using centralized chartManager methods
+                if (window._selectedIsotopes.has(isoName)) {
+                    // Deselect
+                    window._selectedIsotopes.delete(isoName);
+                    window.chartManager.removeIsotopeHighlight(isoName);
+                    btn.style.background = 'rgba(245, 158, 11, 0.2)';
+                    btn.style.borderColor = '#f59e0b';
+                    btn.textContent = '📍';
+                } else {
+                    // Select
+                    window._selectedIsotopes.add(isoName);
+                    const colorIdx = (window._selectedIsotopes.size - 1) % colors.length;
+                    const color = colors[colorIdx];
+
+                    window.chartManager.addIsotopeHighlight(isoName, iso.matched_peaks, iso.expected_peaks, color);
+
+                    btn.style.background = color + '30';
+                    btn.style.borderColor = color;
+                    btn.textContent = '✓';
+                }
+            });
+        });
+    }
+
 
     renderDecayChains(chains) {
         if (chains && chains.length > 0) {
@@ -291,6 +556,17 @@ export class AlphaHoundUI {
                             </div>
                         </div>
                         
+                        ${chain.equilibrium_status && chain.equilibrium_status.in_equilibrium !== null ? `
+                        <div style="margin: 0.5rem 0; padding: 0.5rem; background: ${chain.equilibrium_status.in_equilibrium ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; border-radius: 6px; font-size: 0.8rem;">
+                            <span style="color: ${chain.equilibrium_status.in_equilibrium ? '#10b981' : '#f59e0b'}; font-weight: 600;">
+                                ${chain.equilibrium_status.in_equilibrium ? '⚖️ SECULAR EQUILIBRIUM' : '⚠️ DISEQUILIBRIUM'}
+                            </span>
+                            <span style="color: var(--text-secondary); margin-left: 0.5rem;" title="${chain.equilibrium_status.details}">
+                                ${chain.equilibrium_status.details}
+                            </span>
+                        </div>
+                        ` : ''}
+                        
                         <div class="chain-details" style="font-size: 0.9rem; color: var(--text-secondary);">
                             <div style="margin-bottom: 0.5rem;">
                                 <strong>Detected Members:</strong> ${chain.num_detected}/${chain.num_key_isotopes} key indicators
@@ -371,6 +647,36 @@ export class AlphaHoundUI {
     updateDoseDisplay(doseRate) {
         if (doseRate !== null && doseRate !== undefined) {
             this.elements.doseDisplay.textContent = `${doseRate.toFixed(2)} µRem/hr`;
+
+            // Safety Warning / Distance Estimation
+            // Limit: 2000 µRem/hr (2 mRem/hr)
+            if (doseRate > 2000) {
+                this.elements.doseDisplay.style.color = '#ef4444';
+                // Estimate distance to drop to 2000 assuming point source Inverse Square Law
+                // D_safe = D_current * sqrt(Rate_current / Limit)
+                // Assuming current distance is ~10cm (handheld)
+                const safeDistCm = 10 * Math.sqrt(doseRate / 2000);
+
+                // Update or create alert
+                let safetyAlert = document.getElementById('safety-alert');
+                if (!safetyAlert) {
+                    safetyAlert = document.createElement('div');
+                    safetyAlert.id = 'safety-alert';
+                    safetyAlert.style.cssText = 'position: fixed; top: 80px; right: 20px; background: #ef4444; color: white; padding: 10px; border-radius: 8px; font-weight: bold; z-index: 2000; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: pulse 2s infinite;';
+                    document.body.appendChild(safetyAlert);
+
+                    // Add pulse animation
+                    const style = document.createElement('style');
+                    style.innerHTML = `@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }`;
+                    document.head.appendChild(style);
+                }
+                safetyAlert.innerHTML = `⚠️ HIGH RADIATION<br><div style="font-size:0.8em; font-weight:normal; margin-top:4px;">Safe Distance (2 mR/hr):<br>Approx. ${(safeDistCm / 100).toFixed(1)} meters</div>`;
+                safetyAlert.style.display = 'block';
+            } else {
+                this.elements.doseDisplay.style.color = '';
+                const safetyAlert = document.getElementById('safety-alert');
+                if (safetyAlert) safetyAlert.style.display = 'none';
+            }
         } else {
             this.elements.doseDisplay.textContent = '-- µRem/hr';
         }

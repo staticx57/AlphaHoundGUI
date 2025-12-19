@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Response
 from pydantic import BaseModel, field_validator, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 import math
 from n42_parser import parse_n42
 from csv_parser import parse_csv_spectrum
@@ -9,8 +9,10 @@ from isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
 from spectral_analysis import fit_gaussian, calibrate_energy, subtract_background
 from chn_spe_parser import parse_chn_file, parse_spe_file
-from report_generator import generate_pdf_report
-# NOTE: ml_analysis is imported lazily in the endpoint to avoid TensorFlow loading at startup
+import math
+from typing import List, Optional, Dict
+from detector_efficiency import get_detector_names, calculate_mda, DETECTOR_DATABASE
+from decay_calculator import predict_decay_chain
 
 # Enhanced analysis modules (with fallback)
 try:
@@ -69,11 +71,20 @@ def _analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float 
     energies = result["energies"]
     counts = result["counts"]
     
+    # Preserve any peaks already detected by the parser
+    parser_peaks = result.get("peaks", [])
+    
     # Use enhanced peak detection if available
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
         try:
             peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
             result["analysis_mode"] = "enhanced"
+            
+            # If enhanced returns 0 but parser found peaks, fall back to basic
+            if not peaks and parser_peaks:
+                print(f"[Analysis] Enhanced found 0 peaks but parser found {len(parser_peaks)}, falling back to basic")
+                peaks = detect_peaks(energies, counts)
+                result["analysis_mode"] = "standard_fallback"
         except Exception as e:
             print(f"[Analysis] Enhanced detection failed, falling back: {e}")
             peaks = detect_peaks(energies, counts)
@@ -81,6 +92,12 @@ def _analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float 
     else:
         peaks = detect_peaks(energies, counts)
         result["analysis_mode"] = "standard"
+    
+    # Final fallback: if still no peaks but parser had some, use parser peaks
+    if not peaks and parser_peaks:
+        print(f"[Analysis] Using {len(parser_peaks)} peaks from original parser")
+        peaks = parser_peaks
+        result["analysis_mode"] = "parser_preserved"
     
     result["peaks"] = peaks
     
@@ -112,6 +129,9 @@ def _analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float 
                 min_score=0.25
             )
             print(f"[DEBUG] Enhanced chains found: {len(all_chains)}")
+            # Log ALL peak energies for debugging
+            peak_energies = sorted([p.get('energy', 0) for p in peaks])
+            print(f"[DEBUG] All {len(peaks)} peak energies: {peak_energies}")
             # Also enhance isotope confidence scores
             all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
             print(f"[DEBUG] Enhanced isotopes: {len(all_isotopes)}")
@@ -143,6 +163,18 @@ def _analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float 
     result["isotopes"] = isotopes
     result["decay_chains"] = decay_chains
     
+    # Add XRF detection for low-energy peaks
+    try:
+        from nuclear_data import detect_xrf_peaks
+        peak_energies = [p.get('energy', 0) for p in peaks if p.get('energy', 0) < 100]
+        if peak_energies:
+            xrf_results = detect_xrf_peaks(peak_energies)
+            if xrf_results:
+                result["xrf_detections"] = xrf_results
+                print(f"[Analysis] Detected XRF: {[x['element'] for x in xrf_results]}")
+    except Exception as e:
+        print(f"[Analysis] XRF detection failed: {e}")
+    
     result["isotopes"] = isotopes
     result["decay_chains"] = decay_chains
     
@@ -169,6 +201,33 @@ def _analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float 
             f"Short acquisition time ({live_time:.0f}s). "
             "Longer measurement improves identification confidence."
         )
+    
+    # Calculate MDA for key isotopes (Cs-137 as reference)
+    try:
+        from detector_efficiency import calculate_mda
+        
+        # Estimate background at 662 keV (Cs-137 region)
+        # Use counts in the 650-680 keV range
+        background_counts = 0
+        for i, e in enumerate(energies):
+            if 650 <= e <= 680 and i < len(counts):
+                background_counts += counts[i]
+        
+        if live_time > 1.0 and background_counts >= 0:
+            cs137_mda = calculate_mda(
+                background_counts=background_counts,
+                energy_keV=662,
+                branching_ratio=0.851,  # 85.1% gamma yield
+                live_time_s=live_time
+            )
+            if cs137_mda.get('valid'):
+                data_quality["mda_cs137"] = {
+                    "value_bq": cs137_mda['mda_bq'],
+                    "readable": cs137_mda['mda_readable'],
+                    "detection_limit_counts": cs137_mda['detection_limit_counts']
+                }
+    except Exception as e:
+        pass  # MDA calculation is optional
     
     result["data_quality"] = data_quality
     
@@ -264,7 +323,7 @@ class ROIAnalysisRequest(BaseModel):
     counts: List[float] = Field(..., min_length=10)
     isotope: str = Field(..., min_length=1)
     detector: str = Field(default="AlphaHound CsI(Tl)")
-    acquisition_time_s: float = Field(..., ge=1, le=86400)  # 1 sec to 24 hours
+    acquisition_time_s: float = Field(..., ge=1, le=36000000)  # 1 sec to 10,000 hours
     source_type: Optional[str] = Field(default="auto")  # User-specified source type
 
 
@@ -273,13 +332,42 @@ class UraniumRatioRequest(BaseModel):
     energies: List[float] = Field(..., min_length=10)
     counts: List[float] = Field(..., min_length=10)
     detector: str = Field(default="AlphaHound CsI(Tl)")
-    acquisition_time_s: float = Field(..., ge=1, le=86400)
+    acquisition_time_s: float = Field(..., ge=1, le=36000000)
     source_type: Optional[str] = Field(default="auto")  # User-specified source type
 
 
 @router.get("/settings")
 async def get_settings():
     return DEFAULT_SETTINGS
+
+@router.get("/detectors")
+async def get_detectors():
+    """Get list of available detector profiles."""
+    return {"detectors": get_detector_names()}
+
+@router.post("/analyze/mda")
+async def analyze_mda(request: dict):
+    """
+    Calculate Minimum Detectable Activity (MDA) for a specific ROI.
+    """
+    try:
+        # Extract params
+        bg_counts = float(request.get('background_counts', 0))
+        energy = float(request.get('energy_keV', 662))
+        branching = float(request.get('branching_ratio', 0.85))
+        live_time = float(request.get('live_time_s', 60))
+        detector = request.get('detector', 'AlphaHound CsI(Tl)')
+        
+        result = calculate_mda(
+            background_counts=bg_counts,
+            energy_keV=energy,
+            branching_ratio=branching,
+            live_time_s=live_time,
+            detector_name=detector
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -322,11 +410,23 @@ async def upload_file(file: UploadFile = File(...)):
     elif filename.endswith('.csv'):
         try:
             result = parse_csv_spectrum(content, filename)
+            print(f"[CSV Upload] Parsed: {len(result.get('counts', []))} counts, {len(result.get('energies', []))} energies")
+            print(f"[CSV Upload] Parser peaks: {len(result.get('peaks', []))}, isotopes: {len(result.get('isotopes', []))}")
+            print(f"[CSV Upload] is_calibrated: {result.get('is_calibrated', False)}")
+            
             # Use common analysis pipeline
             is_calibrated = result.get("is_calibrated", False)
             result = _analyze_spectrum_peaks(result, is_calibrated)
+            
+            print(f"[CSV Upload] After analysis: peaks={len(result.get('peaks', []))}, isotopes={len(result.get('isotopes', []))}")
+            if result.get('peaks'):
+                peak_energies = [p.get('energy', 0) for p in result['peaks'][:5]]
+                print(f"[CSV Upload] First 5 peak energies: {peak_energies}")
             return result
         except Exception as e:
+            print(f"[CSV Upload] Error: {e}")
+            import traceback
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail=str(e))
     elif filename.endswith('.chn') or filename.endswith('.spe'):
         try:
@@ -1585,6 +1685,152 @@ async def get_isotope_lines_endpoint(
             "count": len(results)
         }
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === N42 Metadata Editor Endpoints ===
+
+class N42MetadataRequest(BaseModel):
+    xml_content: str
+    metadata: Dict = None
+
+@router.post("/n42/metadata")
+async def get_n42_metadata(request: N42MetadataRequest):
+    """Get current metadata from an N42 file."""
+    try:
+        from n42_metadata_editor import N42MetadataEditor
+        editor = N42MetadataEditor(request.xml_content)
+        return {"metadata": editor.get_current_metadata()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class N42UpdateRequest(BaseModel):
+    xml_content: str
+    start_time: Optional[str] = None
+    live_time_s: Optional[float] = None
+    real_time_s: Optional[float] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    sample_description: Optional[str] = None
+    remarks: Optional[List[str]] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+@router.post("/n42/update-metadata")
+async def update_n42_metadata(request: N42UpdateRequest):
+    """Update metadata in an N42 file and return modified XML."""
+    try:
+        from n42_metadata_editor import N42MetadataEditor
+        from datetime import datetime
+        
+        editor = N42MetadataEditor(request.xml_content)
+        
+        if request.start_time:
+            try:
+                ts = datetime.fromisoformat(request.start_time.replace('Z', '+00:00'))
+                editor.set_timestamp(ts)
+            except:
+                editor.set_timestamp(datetime.now())
+        
+        if request.live_time_s:
+            editor.set_live_time(request.live_time_s)
+        
+        if request.real_time_s:
+            editor.set_real_time(request.real_time_s)
+            
+        if request.manufacturer or request.model or request.serial_number:
+            editor.set_instrument_info(
+                manufacturer=request.manufacturer,
+                model=request.model,
+                serial_number=request.serial_number
+            )
+        
+        if request.sample_description:
+            editor.set_sample_description(request.sample_description)
+        
+        if request.remarks:
+            for remark in request.remarks:
+                editor.add_remark(remark)
+        
+        if request.latitude is not None and request.longitude is not None:
+            editor.set_geolocation(request.latitude, request.longitude)
+        
+        return {"xml_content": editor.to_xml()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Acquisition Time Estimator ===
+
+class TimeEstimatorRequest(BaseModel):
+    counts: List[float]
+    source_type: Optional[str] = None
+
+@router.post("/analyze/estimate-time")
+async def estimate_acquisition_time_endpoint(request: TimeEstimatorRequest):
+    """Estimate acquisition time from spectrum counts."""
+    try:
+        from time_estimator import estimate_time_from_spectrum
+        result = estimate_time_from_spectrum(
+            counts=[int(c) for c in request.counts],
+            source_type=request.source_type
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Dose Rate Calculator ===
+
+class DoseRateRequest(BaseModel):
+    activity_bq: float
+    isotope: str
+    distance_m: float = 1.0
+
+@router.post("/analyze/dose-rate")
+async def calculate_dose_rate_endpoint(request: DoseRateRequest):
+    """Calculate gamma dose rate at specified distance."""
+    try:
+        from activity_calculator import calculate_dose_rate
+        result = calculate_dose_rate(
+            activity_bq=request.activity_bq,
+            isotope=request.isotope,
+            distance_m=request.distance_m
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Decay Prediction ===
+
+class DecayPredictionRequest(BaseModel):
+    isotope: str
+    initial_activity_bq: float
+    duration_days: float
+
+@router.post("/analyze/decay-prediction")
+async def decay_prediction_endpoint(request: DecayPredictionRequest):
+    """
+    Predict radioactive decay chain evolution.
+    Delegates to decay_calculator (Bateman equations).
+    """
+    try:
+        result = predict_decay_chain(
+            parent_isotope=request.isotope,
+            initial_activity_bq=request.initial_activity_bq,
+            duration_days=request.duration_days
+        )
+        
+        if result is None:
+             raise HTTPException(status_code=400, detail=f"Chain prediction not supported for {request.isotope}. Only U-238/Th-232 supported.")
+            
+        return result
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

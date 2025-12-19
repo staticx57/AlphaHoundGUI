@@ -15,6 +15,13 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 import math
 
+# Import activity estimation
+try:
+    from detector_efficiency import estimate_activity
+    HAS_ACTIVITY_ESTIMATION = True
+except ImportError:
+    HAS_ACTIVITY_ESTIMATION = False
+
 
 # Half-lives in hours (for plausibility check)
 # Short-lived isotopes cannot exist in aged environmental samples
@@ -530,6 +537,28 @@ def enhance_isotope_identifications(
             'consistency': round(factors.consistency, 3)
         }
         enhanced_ident['analysis_mode'] = 'enhanced'
+        
+        # Add activity estimation if available
+        if HAS_ACTIVITY_ESTIMATION and peak_data:
+            # Get branching ratio from IAEA data
+            branching_ratio = ident.get('branching_ratio', 0.5)  # Default 50% if unknown
+            peak_counts = peak_data.get('area', peak_data.get('counts', 0))
+            # Use a default live_time of 60s if not provided
+            live_time = peak_data.get('live_time', 60)
+            
+            if peak_counts > 0:
+                activity = estimate_activity(
+                    peak_counts=peak_counts,
+                    energy_keV=matched_energy,
+                    branching_ratio=branching_ratio,
+                    live_time_s=live_time
+                )
+                if activity.get('valid'):
+                    enhanced_ident['activity_estimate'] = {
+                        'value_bq': activity['activity_bq'],
+                        'readable': activity['activity_readable'],
+                        'uncertainty_pct': activity['uncertainty_pct']
+                    }
         
         enhanced.append(enhanced_ident)
     

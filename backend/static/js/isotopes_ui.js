@@ -35,7 +35,7 @@ export const isotopeUI = {
     },
 
     async open() {
-        this.modal.style.display = 'block';
+        this.modal.style.display = 'flex';
         await this.renderList();
     },
 

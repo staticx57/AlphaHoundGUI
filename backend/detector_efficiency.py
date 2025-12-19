@@ -154,3 +154,150 @@ def interpolate_efficiency(detector_name: str, energy_keV: float) -> float:
             return efficiency / 100.0
     
     return 0.0
+
+
+def estimate_activity(
+    peak_counts: float,
+    energy_keV: float,
+    branching_ratio: float,
+    live_time_s: float,
+    detector_name: str = "AlphaHound CsI(Tl)"
+) -> dict:
+    """
+    Estimate source activity from peak counts.
+    
+    Formula: Activity (Bq) = Counts / (Efficiency × BranchingRatio × LiveTime)
+    
+    Args:
+        peak_counts: Net counts in the peak (background subtracted)
+        energy_keV: Gamma energy in keV
+        branching_ratio: Gamma emission probability (0.0-1.0)
+        live_time_s: Measurement live time in seconds
+        detector_name: Name of detector for efficiency lookup
+        
+    Returns:
+        Dict with 'activity_bq', 'activity_readable', 'uncertainty_pct', 'method'
+    """
+    result = {
+        'activity_bq': None,
+        'activity_readable': None,
+        'uncertainty_pct': None,
+        'method': 'peak_area',
+        'valid': False
+    }
+    
+    # Validate inputs
+    if peak_counts <= 0 or live_time_s <= 0 or branching_ratio <= 0:
+        result['method'] = 'invalid_input'
+        return result
+    
+    # Get detector efficiency at this energy
+    efficiency = interpolate_efficiency(detector_name, energy_keV)
+    if efficiency <= 0:
+        result['method'] = 'no_efficiency_data'
+        return result
+    
+    # Calculate activity: A = N / (ε × γ × t)
+    # where N = counts, ε = efficiency, γ = branching ratio, t = time
+    activity_bq = peak_counts / (efficiency * branching_ratio * live_time_s)
+    
+    # Poisson uncertainty on counts propagates to activity
+    # σ_A/A = σ_N/N = 1/√N
+    uncertainty_pct = 100.0 / math.sqrt(peak_counts) if peak_counts > 0 else 100.0
+    
+    result['activity_bq'] = float(activity_bq)
+    result['uncertainty_pct'] = float(uncertainty_pct)
+    result['valid'] = True
+    
+    # Format readable activity string
+    if activity_bq >= 1e6:
+        result['activity_readable'] = f"{activity_bq/1e6:.1f} MBq"
+    elif activity_bq >= 1e3:
+        result['activity_readable'] = f"{activity_bq/1e3:.1f} kBq"
+    elif activity_bq >= 1:
+        result['activity_readable'] = f"{activity_bq:.1f} Bq"
+    else:
+        result['activity_readable'] = f"{activity_bq*1e3:.2f} mBq"
+    
+    return result
+
+
+def calculate_mda(
+    background_counts: float,
+    energy_keV: float,
+    branching_ratio: float,
+    live_time_s: float,
+    detector_name: str = "AlphaHound CsI(Tl)",
+    confidence_level: float = 0.95
+) -> dict:
+    """
+    Calculate Minimum Detectable Activity (MDA) using Currie's formula.
+    
+    MDA represents the smallest activity that can be detected with statistical
+    confidence. Uses the widely accepted Currie (1968) formula:
+    
+    L_D = 2.71 + 4.65 × √B  (for 95% confidence)
+    MDA = L_D / (ε × γ × t)
+    
+    Args:
+        background_counts: Background counts in the ROI
+        energy_keV: Gamma energy in keV (for efficiency lookup)
+        branching_ratio: Gamma emission probability (0.0-1.0)
+        live_time_s: Measurement live time in seconds
+        detector_name: Name of detector for efficiency lookup
+        confidence_level: Confidence level (default 0.95 for 95%)
+        
+    Returns:
+        Dict with 'mda_bq', 'mda_readable', 'detection_limit_counts', 'valid'
+    """
+    result = {
+        'mda_bq': None,
+        'mda_readable': None,
+        'detection_limit_counts': None,
+        'valid': False,
+        'confidence_level': confidence_level
+    }
+    
+    # Validate inputs
+    if background_counts < 0 or live_time_s <= 0 or branching_ratio <= 0:
+        return result
+    
+    # Get detector efficiency at this energy
+    efficiency = interpolate_efficiency(detector_name, energy_keV)
+    if efficiency <= 0:
+        return result
+    
+    # Currie's formula for detection limit (95% confidence)
+    # L_D = 2.71 + 4.65 × √B
+    # For different confidence levels, constants change slightly
+    if confidence_level >= 0.99:
+        k_alpha = 2.33
+        k_beta = 2.33
+    else:  # 95% default
+        k_alpha = 1.645
+        k_beta = 1.645
+    
+    # Detection limit in counts
+    # L_D = k_alpha^2 + 2*k_beta*sqrt(B) for paired blank
+    # Simplified Currie: L_D ≈ 2.71 + 4.65*sqrt(B) for k=1.645
+    L_D = 2.71 + 4.65 * math.sqrt(max(0, background_counts))
+    
+    result['detection_limit_counts'] = float(L_D)
+    
+    # Convert to activity: MDA = L_D / (ε × γ × t)
+    mda_bq = L_D / (efficiency * branching_ratio * live_time_s)
+    
+    result['mda_bq'] = float(mda_bq)
+    result['valid'] = True
+    
+    # Format readable MDA string
+    if mda_bq >= 1e6:
+        result['mda_readable'] = f"{mda_bq/1e6:.2f} MBq"
+    elif mda_bq >= 1e3:
+        result['mda_readable'] = f"{mda_bq/1e3:.2f} kBq"
+    elif mda_bq >= 1:
+        result['mda_readable'] = f"{mda_bq:.2f} Bq"
+    else:
+        result['mda_readable'] = f"{mda_bq*1e3:.2f} mBq"
+    
+    return result

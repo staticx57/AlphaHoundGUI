@@ -8,6 +8,7 @@
     - [ ] Create and integrate transparent PNG favicon
     - [ ] Create and integrate transparent PNG upload icon
     - [ ] Create and integrate transparent PNG banner
+- [ ] **Isotope Peak Visualization**: When user clicks a detected isotope (e.g., U-238), draw vertical reference lines on the chart at the isotope's database peak energies. This allows visual confirmation that detected peaks align with expected gamma lines.
 
 ### ML & Analysis
 - [ ] Collect real detector data for ML fine-tuning
@@ -19,6 +20,7 @@
 - [ ] Add unit tests for frontend JavaScript modules
 - [ ] Add unit tests for backend API endpoints
 - [ ] Implement TypeScript for type safety
+- [ ] **Centralize Peak Detection**: Remove `detect_peaks()` calls from individual parsers (csv_parser.py, etc.) and have all peak detection happen in `_analyze_spectrum_peaks()` in `analysis.py`. This ensures consistent detection across all file formats (N42, CSV, CHN, SPE, SPC, PCF, etc.) and simplifies threshold tuning.
 
 ### Performance Optimization
 - [ ] Lazy load Chart.js and other heavy libraries
@@ -30,6 +32,7 @@
 - [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`)
 - [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally
 - [ ] **Temperature Compensation**: Temperature captured - consider using for gain stabilization
+- [ ] **CSV/XML Energy Interpolation**: Implement energy-per-channel interpolation for imported CSV and XML files lacking energy data (e.g., legacy formats with only channel numbers). Support presets for known detectors (Radiacode models, AlphaHound profiles), custom detector coefficients, or manual keV/channel entry.
 
 ### ROI Enhancements ✅
 - [x] **Auto-populate ROI acquisition time**: Pulls from N42/CSV metadata (live_time/real_time/acquisition_time)
@@ -73,7 +76,7 @@
 - [x] **Synthetic Test Spectra** - 6 N42 files in `backend/data/test_spectra/`
 
 ### Low Priority / Future
-- [ ] **Radiacode Device Integration** (10-15 hours) - See [RADIACODE_INTEGRATION_PLAN.md](RADIACODE_INTEGRATION_PLAN.md)
+- [ ] **Radiacode Device Integration** (10-15 hours) - See [RADIACODE_INTEGRATION_PLAN.md](RADIACODE_INTEGRATION_PLAN.md) [(EDA Reference)](https://towardsdatascience.com/exploratory-data-analysis-gamma-spectroscopy-in-python/)
 
 ---
 

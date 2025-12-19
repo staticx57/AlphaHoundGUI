@@ -1,14 +1,9 @@
 // Updated: 2024-12-14 17:00 - N42 Export Fixed
 import { api } from './api.js';
-import { ui } from './ui.js?v=2.6';
-import { chartManager, DoseRateChart } from './charts.js?v=3.3';
+import { ui } from './ui.js';
+import { chartManager, DoseRateChart } from './charts.js?v=2.3';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
-import { n42MetadataEditor } from './n42_editor.js';
-import { estimatorUI } from './estimator_ui.js';
-
-// Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
-window.chartManager = chartManager;
 
 // Global State
 let currentData = null;
@@ -35,49 +30,6 @@ let currentSettings = {
     max_isotopes: 5
 };
 
-/**
- * Re-apply isotope highlights after chart re-renders (e.g., theme change)
- * Uses the cached isotope data stored during isotope detection
- */
-function reapplyIsotopeHighlights() {
-    if (!window._selectedIsotopes || window._selectedIsotopes.size === 0) return;
-    if (!window._isotopeData || !window.chartManager?.chart) return;
-
-    const chart = window.chartManager.chart;
-    const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6'];
-    let colorIdx = 0;
-
-    window._selectedIsotopes.forEach(isoName => {
-        const iso = window._isotopeData.find(i => i.isotope === isoName);
-        if (!iso) return;
-
-        const color = colors[colorIdx % colors.length];
-        colorIdx++;
-
-        // Use skipUpdate=true for everything except the last isotope if we wanted to be efficient,
-        // but since we call chart.update('none') at the end anyway, we can just pass skipUpdate=true to all.
-        window.chartManager.addIsotopeHighlight(isoName, iso.matched_peaks, iso.expected_peaks, color, true);
-    });
-
-    chart.update('none');
-    console.log('[Theme] Re-applied isotope highlights for', window._selectedIsotopes.size, 'isotopes');
-
-    // Also re-apply XRF highlights if active
-    if (window._selectedXRFIndex !== undefined && window._selectedXRFIndex !== null && window._xrfData && window.chartManager) {
-        const item = window._xrfData[window._selectedXRFIndex];
-        if (item && item.lines) {
-            const peaks = item.lines.map(l => ({
-                energy: l.peak_energy,
-                element: item.element,
-                shell: l.shell
-            }));
-            window.chartManager.highlightXRFPeaks(peaks, null, true);
-            const clearBtn = document.getElementById('btn-clear-xrf-highlight');
-            if (clearBtn) clearBtn.style.display = 'inline-block';
-        }
-    }
-}
-
 // UI Mode Panel Configuration
 // Maps UI complexity mode to visible panels/sections
 // Panel IDs must match actual element IDs in index.html
@@ -86,41 +38,26 @@ const UI_MODE_CONFIG = {
         description: 'Basic spectrum analysis for hobbyists',
         showElements: [],
         hideElements: [
-            'roi-analysis-panel',
-            'advanced-settings',
-            'calibration-section',
-            'background-section',
-            'btn-edit-n42',
-            'btn-estimator-tool'
+            'roi-analysis-panel',       // ROI analysis panel
+            'advanced-settings'         // Threshold sliders
         ]
     },
     advanced: {
         description: 'Extended analysis with calibration and ROI',
         showElements: [
-            'roi-analysis-panel',
-            'calibration-section',
-            'background-section',
-            'btn-edit-n42'
+            'roi-analysis-panel'        // ROI analysis panel
         ],
-        hideElements: [
-            'advanced-settings',
-            'btn-estimator-tool'
-        ]
+        hideElements: []
     },
     expert: {
         description: 'Full access to all analysis tools',
         showElements: [
-            'roi-analysis-panel',
-            'advanced-settings',
-            'calibration-section',
-            'background-section',
-            'btn-edit-n42',
-            'btn-estimator-tool'
+            'roi-analysis-panel',       // ROI analysis panel
+            'advanced-settings'         // Threshold sliders
         ],
         hideElements: []
     }
 };
-
 
 /**
  * Applies UI complexity mode by showing/hiding panels.
@@ -148,7 +85,7 @@ function applyUIMode(mode = 'simple') {
         config.showElements.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
-                el.style.display = ''; // Reset to default/CSS
+                el.style.display = 'block';
                 console.log(`[UI Mode] Showing: ${id}`);
             } else {
                 console.warn(`[UI Mode] Element not found: ${id}`);
@@ -194,26 +131,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkDeviceStatus();
     // Duplicate check removed
     setupEventListeners();
-    // Decay Tool Logic Inlined
-    const decayModal = document.getElementById('decay-modal');
-    if (decayModal && document.getElementById('btn-decay-tool')) {
-        document.getElementById('btn-decay-tool').addEventListener('click', () => {
-            // Close other modals
-            if (estimatorUI && estimatorUI.modal) estimatorUI.modal.style.display = 'none';
-
-            decayModal.style.display = 'flex';
-            if (window.lastROIResult && window.lastROIResult.activity_bq) {
-                document.getElementById('decay-activity').value = window.lastROIResult.activity_bq.toFixed(2);
-                try { showToast('Loaded ' + window.lastROIResult.activity_bq.toFixed(1) + ' Bq', 'info'); } catch (e) { }
-            }
-            runDecayPrediction();
-        });
-        document.getElementById('close-decay').addEventListener('click', () => decayModal.style.display = 'none');
-        decayModal.addEventListener('click', (e) => { if (e.target === decayModal) decayModal.style.display = 'none'; });
-    }
-    if (document.getElementById('btn-run-decay')) {
-        document.getElementById('btn-run-decay').addEventListener('click', runDecayPrediction);
-    }
     isotopeUI.init();
 });
 
@@ -270,46 +187,9 @@ function loadSettings() {
 }
 
 function setupEventListeners() {
-    // File Upload & Drag-and-Drop
-    const dropZone = document.getElementById('drop-zone');
-    const fileInput = document.getElementById('file-input');
-
-    if (dropZone) {
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        });
-
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-            if (e.dataTransfer.files.length) {
-                handleFile(e.dataTransfer.files[0]);
-            }
-        });
-
-        // Delegate click to file input - only if clicking on drop zone itself or allowed children
-        dropZone.addEventListener('click', (e) => {
-            // Get the current file input (may have been recreated)
-            const currentFileInput = document.getElementById('file-input');
-            // Only trigger if not clicking directly on the input itself
-            if (currentFileInput && e.target !== currentFileInput && !e.target.closest('input[type="file"]')) {
-                currentFileInput.click();
-            }
-        });
-    }
-
-    // Use event delegation for file input since it may be recreated
-    document.addEventListener('change', (e) => {
-        if (e.target && e.target.id === 'file-input') {
-            if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
-                // Reset the input value so the same file can be selected again
-                e.target.value = '';
-            }
-        }
+    // File Upload
+    document.getElementById('drop-zone').addEventListener('change', (e) => {
+        if (e.target.id === 'file-input') handleFile(e.target.files[0]);
     });
 
     document.getElementById('btn-export-json').addEventListener('click', () => {
@@ -398,105 +278,36 @@ function setupEventListeners() {
 
         try {
             const response = await api.exportN42({
-                ...currentData,
-                // Ensure we use the best metadata available (including potential edits)
+                counts: currentData.counts,
+                energies: currentData.energies,
                 metadata: {
-                    ...currentData.metadata,
-                    // Ensure critical fields are set if missing
                     live_time: currentData.metadata?.live_time || currentData.metadata?.acquisition_time || 1.0,
                     real_time: currentData.metadata?.real_time || currentData.metadata?.acquisition_time || 1.0,
                     start_time: currentData.metadata?.start_time || new Date().toISOString(),
                     source: currentData.metadata?.source || 'AlphaHound Device',
                     channels: currentData.counts.length
-                }
+                },
+                peaks: currentData.peaks || [],
+                isotopes: currentData.isotopes || [],
+                filename: currentData.metadata?.filename || 'spectrum'
             });
+
+            if (!response.ok) throw new Error('N42 export failed');
 
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // Use existing filename or generate one
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            a.download = (currentData.metadata?.filename || `spectrum_export_${timestamp}`).replace('.n42', '') + '.n42';
-            document.body.appendChild(a);
+            a.download = `${currentData.metadata?.filename || 'spectrum'}.n42`;
             a.click();
             window.URL.revokeObjectURL(url);
-            a.remove();
-
-            // Revert button
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
         } catch (err) {
             alert('Error exporting N42: ' + err.message);
+        } finally {
             btn.innerHTML = originalHTML;
             btn.disabled = false;
         }
     });
-
-    // Edit N42 Metadata Button
-    const btnEditN42 = document.getElementById('btn-edit-n42');
-    btnEditN42?.addEventListener('click', async () => {
-        if (!currentData) return ui.showError('No spectrum loaded to edit');
-
-        // Prevent multiple simultaneous clicks
-        if (btnEditN42.disabled) return;
-
-        // Use stored raw XML or generate it
-        let xmlContent = currentData._rawXml;
-
-        if (!xmlContent) {
-            // Generate template from current data
-            const toast = document.createElement('div');
-            toast.textContent = 'Generating metadata template...';
-            toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);';
-            document.body.appendChild(toast);
-
-            try {
-                // Set loading state
-                const originalHtml = btnEditN42.innerHTML;
-                btnEditN42.disabled = true;
-                btnEditN42.style.opacity = '0.7';
-                btnEditN42.innerHTML = '<span class="spinner-inline"></span> Generating...';
-
-                // We use export_n42 logic to generate the XML string
-                const response = await api.exportN42({
-                    ...currentData,
-                    metadata: currentData.metadata || {}
-                });
-                if (response.ok) {
-                    xmlContent = await response.text();
-                    currentData._rawXml = xmlContent;
-                }
-
-                // Restore button
-                btnEditN42.disabled = false;
-                btnEditN42.style.opacity = '1';
-                btnEditN42.innerHTML = originalHtml;
-            } catch (e) {
-                console.error(e);
-                btnEditN42.disabled = false;
-                btnEditN42.style.opacity = '1';
-                btnEditN42.innerHTML = originalHtml;
-            }
-            toast.remove();
-        }
-
-        if (xmlContent) {
-            n42MetadataEditor.show(xmlContent, (newXml) => {
-                currentData._rawXml = newXml;
-
-                // Show success message
-                const toast = document.createElement('div');
-                toast.textContent = 'N42 Metadata Updated';
-                toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#10b981;color:white;padding:12px 24px;border-radius:8px;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);animation: slideIn 0.3s ease-out;';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 3000);
-            });
-        } else {
-            ui.showError('Could not initialize N42 editor');
-        }
-    });
-
 
     // Settings Modal
     document.getElementById('btn-settings').addEventListener('click', () => {
@@ -586,30 +397,15 @@ function setupEventListeners() {
         if (history.length === 0) {
             historyList.innerHTML = '<p style="text-align: center; color: #94a3b8;">No file history yet</p>';
         } else {
-            historyList.innerHTML = history.map((item, index) => {
-                // Check if item has data (legacy support check)
-                const hasData = item.data && item.data.energies;
-                const statusClass = hasData ? '' : 'opacity: 0.5; cursor: not-allowed;';
-                const statusTitle = hasData ? 'Click to load' : 'Old history item (no data)';
-
-                return `
-                <div class="history-item" data-index="${index}" style="${statusClass}" title="${statusTitle}">
+            historyList.innerHTML = history.map(item => `
+                <div class="history-item">
                     <div class="history-item-name">${item.filename}</div>
                     <div class="history-item-date">${new Date(item.timestamp).toLocaleString()}</div>
                     <div style="font-size: 0.875rem; margin-top: 0.5rem;">
-                        ${item.preview.peakCount} peaks | ${(item.preview.isotopes || []).join(', ') || 'No isotopes'}
+                        ${item.preview.peakCount} peaks | ${item.preview.isotopes.join(', ') || 'No isotopes'}
                     </div>
                 </div>
-            `;
-            }).join('');
-
-            // Add click listeners
-            document.querySelectorAll('.history-item').forEach(el => {
-                el.addEventListener('click', () => {
-                    const index = parseInt(el.getAttribute('data-index'));
-                    loadFromHistory(index);
-                });
-            });
+            `).join('');
         }
         modal.style.display = 'flex';
     });
@@ -630,9 +426,6 @@ function setupEventListeners() {
         if (currentData) {
             const scale = chartManager.getScaleType();
             chartManager.render(currentData.energies, currentData.counts, currentData.peaks, scale);
-
-            // Re-apply isotope highlights after theme change re-renders chart
-            reapplyIsotopeHighlights();
         }
     });
 
@@ -1015,7 +808,7 @@ function setupEventListeners() {
 const calBtn = document.getElementById('btn-calibrate');
 if (calBtn) {
     calBtn.addEventListener('click', () => {
-        document.getElementById('calibration-modal').style.display = 'flex';
+        document.getElementById('calibration-modal').style.display = 'block';
     });
 }
 
@@ -1098,14 +891,11 @@ if (chartCanvas) {
 // Source type descriptions for display
 const SOURCE_TYPE_INFO = {
     'uranium_glass': '🟢 Uranium Glass: Looking for U-238 decay chain (Th-234, Bi-214, Pa-234m). Ra-226 interference expected in 186 keV region.',
-    'uranium_ore': '⚛️ Uranium Ore: Full U-238 decay chain in secular equilibrium. U-235 visible at 186 keV (~0.72% natural).',
     'thoriated_lens': '🟠 Thoriated Lens: Looking for Th-232 decay chain (Ac-228, Tl-208). May also contain uranium.',
     'radium_dial': '☢️ Radium Dial: Looking for Ra-226 daughters (Bi-214, Pb-214) WITHOUT U-238 parents (Th-234).',
     'smoke_detector': '🔵 Smoke Detector: Looking for Am-241 at 60 keV.',
     'natural_background': '🌍 Natural Background: Looking for K-40 at 1461 keV.',
     'takumar_lens': '📷 Takumar Lens: ThO₂ glass with trace uranium. Analyzing Th-234 (93 keV) for thorium activity.',
-    'cesium_source': '🟡 Cesium-137: Calibration source at 662 keV. Half-life 30.17 years.',
-    'cobalt_source': '🔴 Cobalt-60: Dual peaks at 1173/1332 keV. Half-life 5.27 years.',
     'unknown': 'Standard Analysis: Detecting isotopes without specific source assumptions.',
     'auto': 'legacy' // fallback
 };
@@ -1125,42 +915,15 @@ document.getElementById('roi-source-type')?.addEventListener('change', (e) => {
     }
 
     // Auto-switch isotope based on source type
-    const SOURCE_ISOTOPE_MAP = {
-        'uranium_glass': 'U-235 (186 keV)',
-        'uranium_ore': 'U-235 (186 keV)',
-        'thoriated_lens': 'Th-234 (93 keV)',
-        'takumar_lens': 'Th-234 (93 keV)',
-        'radium_dial': 'Bi-214 (609 keV)',
-        'smoke_detector': 'Am-241 (60 keV)',
-        'cesium_source': 'Cs-137 (662 keV)',
-        'cobalt_source': 'Co-60 (1173 keV)',
-        'natural_background': 'K-40 (1461 keV)'
-    };
-
-    if (isotopeSelect && SOURCE_ISOTOPE_MAP[sourceType]) {
-        isotopeSelect.value = SOURCE_ISOTOPE_MAP[sourceType];
-        showToast(`Auto-selected ${SOURCE_ISOTOPE_MAP[sourceType]} for ${sourceType.replace(/_/g, ' ')}`, 'info');
+    if (sourceType === 'takumar_lens' && isotopeSelect) {
+        // For Takumar lenses, analyze Th-234 (93 keV) instead of U-235
+        isotopeSelect.value = 'Th-234 (93 keV)';
+        showToast('Switched to Th-234 analysis for thoriated lens', 'info');
+    } else if (sourceType === 'smoke_detector' && isotopeSelect) {
+        isotopeSelect.value = 'Am-241 (60 keV)';
+        showToast('Switched to Am-241 analysis for smoke detector', 'info');
     }
 });
-
-/**
- * Robust error formatting for FastAPI/Pydantic errors.
- * Handles both simple string details and structured validation arrays.
- */
-function formatErrorMessage(errData) {
-    if (!errData) return 'Unknown error';
-    const detail = errData.detail || errData;
-
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail)) {
-        return detail.map(d => {
-            const loc = d.loc ? d.loc.join('.') : 'input';
-            return `${loc}: ${d.msg}`;
-        }).join('<br>');
-    }
-    if (typeof detail === 'object') return JSON.stringify(detail);
-    return String(detail);
-}
 
 // Analyze ROI Button
 document.getElementById('btn-analyze-roi')?.addEventListener('click', async () => {
@@ -1170,9 +933,7 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
 
     const isotope = document.getElementById('roi-isotope').value;
     const detector = document.getElementById('roi-detector').value;
-    // Input is in minutes, convert to seconds for API
-    const acqTimeMinutes = parseFloat(document.getElementById('roi-acq-time').value) || 10;
-    const acqTime = acqTimeMinutes * 60;
+    const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
 
     // Safely get source type (handle missing element for older cached HTML)
     const sourceTypeElement = document.getElementById('roi-source-type');
@@ -1195,23 +956,14 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
             })
         });
 
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(formatErrorMessage(errData));
-        }
+        if (!response.ok) throw new Error((await response.json()).detail || 'ROI analysis failed');
         const data = await response.json();
 
 
         // Format results
-        // Format results
-        let activityStr;
-        if (data.activity_bq) {
-            activityStr = `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${data.activity_uci.toFixed(6)} μCi)`;
-        } else if (data.mda_bq) {
-            activityStr = `<span style="color: var(--text-secondary);">&lt; ${data.mda_bq.toFixed(1)} Bq (Limit)</span>`;
-        } else {
-            activityStr = '<span style="color: var(--text-secondary);">Not Detected</span>';
-        }
+        const activityStr = data.activity_bq
+            ? `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${data.activity_uci.toFixed(6)} μCi)`
+            : '<span style="color: #ef4444;">Unable to calculate</span>';
 
         let htmlOutput = `
                 <div style="color: var(--primary-color); font-weight: 600; margin-bottom: 0.25rem;">
@@ -1229,25 +981,6 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
         }
 
         htmlOutput += `<div>Activity: ${activityStr}</div>`;
-
-        // Confidence Bar
-        if (data.confidence !== undefined) {
-            const confPercent = Math.round(data.confidence * 100);
-            const confColor = data.confidence > 0.7 ? '#10b981' :
-                data.confidence > 0.4 ? '#f59e0b' : '#ef4444';
-
-            htmlOutput += `
-                <div style="margin-top: 0.5rem;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 2px;">
-                        <span>Confidence</span>
-                        <span style="color: ${confColor}; font-weight: bold;">${confPercent}%</span>
-                    </div>
-                    <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                        <div style="width: ${confPercent}%; height: 100%; background: ${confColor}; transition: width 0.3s ease;"></div>
-                    </div>
-                </div>
-             `;
-        }
 
         // If U-235, automatically fetch uranium enrichment ratio
         if (isotope === 'U-235 (186 keV)') {
@@ -1301,23 +1034,6 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
                 </div>
             `;
 
-        // Render enhanced analysis if present
-        if (data.enhanced_analysis && data.enhanced_analysis.insights) {
-            htmlOutput += `
-                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                    <div style="font-weight: 600; color: #10b981; margin-bottom: 0.5rem;">📊 Source-Specific Insights</div>
-            `;
-            for (const insight of data.enhanced_analysis.insights) {
-                const warningStyle = insight.warning ? 'color: #f59e0b;' : '';
-                htmlOutput += `
-                    <div style="margin-bottom: 0.3rem; ${warningStyle}">
-                        ${insight.icon || '•'} <strong>${insight.label}:</strong> ${insight.value}
-                    </div>
-                `;
-            }
-            htmlOutput += `</div>`;
-        }
-
         resultsDiv.innerHTML = htmlOutput;
 
         // Store last ROI for highlighting and Decay Tool
@@ -1336,9 +1052,7 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
     }
 
     const detector = document.getElementById('roi-detector').value;
-    // Input is in minutes, convert to seconds for API
-    const acqTimeMinutes = parseFloat(document.getElementById('roi-acq-time').value) || 10;
-    const acqTime = acqTimeMinutes * 60;
+    const acqTime = parseFloat(document.getElementById('roi-acq-time').value) || 600;
 
     const resultsDiv = document.getElementById('roi-results');
     resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing uranium ratio...</p>';
@@ -1355,10 +1069,7 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
             })
         });
 
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(formatErrorMessage(errData));
-        }
+        if (!response.ok) throw new Error((await response.json()).detail || 'Uranium ratio analysis failed');
         const data = await response.json();
 
         // Color based on category
@@ -1520,19 +1231,6 @@ async function handleFile(file) {
         ui.resetDropZone();
         ui.renderDashboard(data);
 
-        // Auto-populate ROI acquisition time from metadata (if available)
-        autoPopulateROITime(data);
-
-        // Store raw XML for N42 files to enable editing
-        if (file.name.toLowerCase().endsWith('.n42') || file.name.toLowerCase().endsWith('.xml')) {
-            try {
-                currentData._rawXml = await file.text();
-                console.log(`[Main] Stored raw XML (${currentData._rawXml.length} chars)`);
-            } catch (e) {
-                console.warn('[Main] Failed to read raw XML for editing:', e);
-            }
-        }
-
         if (backgroundData) {
             await refreshChartWithBackground();
         } else {
@@ -1543,40 +1241,6 @@ async function handleFile(file) {
         saveToHistory(file.name, data);
     } catch (err) {
         ui.showError(err.message);
-    }
-}
-
-/**
- * Auto-populates ROI acquisition time input from spectrum metadata.
- * Looks for live_time, real_time, or acquisition_time in metadata.
- * Converts seconds to minutes for the UI.
- * @param {Object} data - The spectrum data object with metadata
- */
-function autoPopulateROITime(data) {
-    if (!data || !data.metadata) return;
-
-    const input = document.getElementById('roi-acq-time');
-    if (!input) return;
-
-    // Try to get acquisition time from various metadata fields (in seconds)
-    let timeSeconds = null;
-    const m = data.metadata;
-
-    if (m.live_time && m.live_time > 0) {
-        timeSeconds = m.live_time;
-    } else if (m.real_time && m.real_time > 0) {
-        timeSeconds = m.real_time;
-    } else if (m.acquisition_time && m.acquisition_time > 0) {
-        timeSeconds = m.acquisition_time;
-    } else if (m.count_time && m.count_time > 0) {
-        timeSeconds = m.count_time;
-    }
-
-    if (timeSeconds && timeSeconds > 0) {
-        // Convert to minutes and set with 1 decimal place
-        const timeMinutes = (timeSeconds / 60).toFixed(1);
-        input.value = timeMinutes;
-        console.log(`[ROI] Auto-populated acquisition time: ${timeSeconds}s → ${timeMinutes} min`);
     }
 }
 
@@ -1729,8 +1393,6 @@ async function startAcquisition() {
                     ui.renderDashboard(currentData);
                     if (isPageVisible) {
                         chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
-                        // Ensure scrubber is visible and updated
-                        chartManager.showScrubber(currentData.energies, currentData.counts);
                     }
                 }
 
@@ -1751,8 +1413,6 @@ async function startAcquisition() {
                         ui.renderDashboard(currentData);
                         if (isPageVisible) {
                             chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
-                            // Ensure scrubber is visible and updated
-                            chartManager.showScrubber(currentData.energies, currentData.counts);
                         }
                     }
                     return;
@@ -1854,8 +1514,6 @@ async function getCurrentSpectrum() {
         ui.renderDashboard(data);
         if (isPageVisible) {
             chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
-            // Show zoom scrubber
-            chartManager.showScrubber(data.energies, data.counts);
         }
 
         showToast('Current spectrum loaded (cumulative from device)', 'success');
@@ -1875,83 +1533,15 @@ async function getCurrentSpectrum() {
  */
 function saveToHistory(filename, data) {
     const history = JSON.parse(localStorage.getItem('fileHistory') || '[]');
-
-    // Create history entry with FULL data
-    // Limit data size if necessary, but 4096 floats is small enough (~32KB)
-    const entry = {
+    history.unshift({
         filename,
         timestamp: new Date().toISOString(),
         preview: {
             peakCount: data.peaks?.length || 0,
             isotopes: data.isotopes?.slice(0, 3).map(i => i.isotope) || []
-        },
-        data: {
-            energies: data.energies,
-            counts: data.counts,
-            peaks: data.peaks,
-            metadata: data.metadata,
-            isotopes: data.isotopes,
-            decay_chains: data.decay_chains,
-            detector: data.detector,
-            roi_window: data.roi_window,
-            efficiency_percent: data.efficiency_percent,
-            branching_ratio: data.branching_ratio,
-            is_calibrated: data.is_calibrated,
-            enhanced_analysis: data.enhanced_analysis
         }
-    };
-
-    history.unshift(entry);
-
-    // Store last 10 entries
-    // Check total size might be good in future, but 10 * 100KB = 1MB is safe
-    try {
-        localStorage.setItem('fileHistory', JSON.stringify(history.slice(0, 10)));
-    } catch (e) {
-        console.warn('History storage failed (quota exceeded?):', e);
-        // Fallback: try saving fewer items or just preview
-        const minimized = history.slice(0, 5);
-        try {
-            localStorage.setItem('fileHistory', JSON.stringify(minimized));
-        } catch (e2) {
-            console.error('History storage critically failed:', e2);
-        }
-    }
-}
-
-/**
- * Loads a spectrum from history.
- * @param {number} index - Index in the history array
- */
-function loadFromHistory(index) {
-    const history = JSON.parse(localStorage.getItem('fileHistory') || '[]');
-    if (index < 0 || index >= history.length) return;
-
-    const item = history[index];
-    if (!item.data || !item.data.counts) {
-        alert('This history item is invalid or from an older version (no data stored).');
-        return;
-    }
-
-    const data = item.data;
-
-    // Restore currentData
-    currentData = data;
-
-    // Update UI
-    ui.renderDashboard(data);
-
-    // Show chart if visible
-    if (isPageVisible) {
-        chartManager.render(data.energies, data.counts, data.peaks, chartManager.getScaleType());
-        chartManager.showScrubber(data.energies, data.counts);
-    }
-
-    // Close modal
-    document.getElementById('history-modal').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-
-    showToast(`Loaded "${item.filename}" from history`, 'success');
+    });
+    localStorage.setItem('fileHistory', JSON.stringify(history.slice(0, 10)));
 }
 
 /**
@@ -2099,12 +1689,43 @@ function applyCalibration(slope, intercept) {
     }
 }
 
-// Decay Tool Logic moved to setupDecayTool() below
+// ==========================================
+// Decay Prediction Modal Logic
+// ==========================================
 
-
-// Globals for Decay Chart
+const decayModal = document.getElementById('decay-modal');
+const decayChartCtx = document.getElementById('decayChart').getContext('2d');
 let decayChartInstance = null;
 
+if (document.getElementById('btn-decay-tool')) {
+    document.getElementById('btn-decay-tool').addEventListener('click', () => {
+        decayModal.style.display = 'flex';
+
+        // Auto-populate from last ROI if available
+        if (window.lastROIResult && window.lastROIResult.activity_bq) {
+            document.getElementById('decay-activity').value = window.lastROIResult.activity_bq.toFixed(2);
+            showToast(`Loaded ${window.lastROIResult.activity_bq.toFixed(1)} Bq from last analysis`, 'info');
+        }
+
+        // Run initial default prediction
+        runDecayPrediction();
+    });
+}
+
+if (document.getElementById('close-decay')) {
+    document.getElementById('close-decay').addEventListener('click', () => {
+        decayModal.style.display = 'none';
+    });
+}
+
+if (document.getElementById('btn-run-decay')) {
+    document.getElementById('btn-run-decay').addEventListener('click', runDecayPrediction);
+}
+
+// Close on outside click
+decayModal.addEventListener('click', (e) => {
+    if (e.target === decayModal) decayModal.style.display = 'none';
+});
 
 async function runDecayPrediction() {
     const isotope = document.getElementById('decay-isotope').value;
@@ -2122,14 +1743,7 @@ async function runDecayPrediction() {
             })
         });
 
-        if (!response.ok) {
-            let errorMsg = "Prediction failed";
-            try {
-                const err = await response.json();
-                if (err.detail) errorMsg = err.detail;
-            } catch (ignore) { }
-            throw new Error(errorMsg);
-        }
+        if (!response.ok) throw new Error("Prediction failed");
 
         const result = await response.json();
         renderDecayChart(result);
@@ -2170,10 +1784,7 @@ function renderDecayChart(result) {
         colorIdx++;
     }
 
-    const ctx = document.getElementById('decayChart');
-    if (!ctx) return console.error('Decay chart canvas not found');
-
-    decayChartInstance = new Chart(ctx.getContext('2d'), {
+    decayChartInstance = new Chart(decayChartCtx, {
         type: 'line',
         data: {
             labels: labels,
@@ -2226,45 +1837,3 @@ function renderDecayChart(result) {
         }
     });
 }
-
-// Initialize Estimator with Callbacks
-document.addEventListener('DOMContentLoaded', () => {
-    estimatorUI.init({
-        getCurrentData: () => currentData,
-        onShowProjection: (factor) => {
-            if (!currentData || !currentData.counts) return;
-
-            // Calculate projected counts
-            const projectedCounts = currentData.counts.map(c => c * factor);
-
-            // Add to overlay
-            if (!overlaySpectra) overlaySpectra = [];
-
-            // Generate a color (simple rotation)
-            const color = colors[overlaySpectra.length % colors.length];
-
-            overlaySpectra.push({
-                name: `Projection (${factor.toFixed(1)}x)`,
-                energies: currentData.energies,
-                counts: projectedCounts,
-                color: color
-            });
-
-            // Enable Compare Mode UI
-            compareMode = true;
-            document.getElementById('compare-panel').style.display = 'flex';
-            document.getElementById('btn-compare').classList.add('active');
-            updateOverlayCount();
-
-            // Render
-            chartManager.renderComparison(overlaySpectra, chartManager.getScaleType());
-        }
-    });
-
-    // Decay Tool Listeners handled earlier (Lines 1961+)
-
-    // Also ensure populateDetectorOptions is called for other dropdowns if needed
-    // But estimatorUI handles its own dropdowns.
-});
-
-// setupDecayTool removed (inlined)

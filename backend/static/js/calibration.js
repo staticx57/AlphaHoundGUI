@@ -25,7 +25,7 @@ export class CalibrationUI {
     }
 
     show() {
-        this.elements.modal.style.display = 'block';
+        this.elements.modal.style.display = 'flex';
     }
 
     hide() {

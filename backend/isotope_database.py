@@ -317,51 +317,9 @@ DECAY_CHAINS = {
         "notes": "Usually overshadowed by U-238 chain. 185.7 keV overlaps with Ra-226 at 186.2 keV."
     },
     
-    # === Man-Made Sources (Calibration/Medical) ===
-    "Am-241": {
-        "parent": "Am-241",
-        "common_names": ["Americium Source", "Smoke Detector"],
-        "members": ["Am-241"],
-        "key_indicators": {
-            "Am-241": {"energies": [59.5], "required": True, "weight": 1.0}
-        },
-        "min_isotopes_required": 1,
-        "applications": ["Smoke detectors", "Calibration sources"],
-        "abundance_weight": 1.0,
-        "references": [],
-        "notes": "Single 59.5 keV peak. Np X-rays at 26 keV may also be visible."
-    },
-    
-    "Cs-137": {
-        "parent": "Cs-137",
-        "common_names": ["Cesium Source", "Check Source"],
-        "members": ["Cs-137", "Ba-137m"],
-        "key_indicators": {
-            "Cs-137": {"energies": [661.7], "required": True, "weight": 1.0}
-        },
-        "min_isotopes_required": 1,
-        "suppress_when_natural": True,  # Suppress chain when U-238/Th-232 detected 
-        "applications": ["Calibration sources", "Check sources", "Environmental contamination"],
-        "abundance_weight": 1.0,
-        "references": [],
-        "notes": "Single 662 keV peak. Half-life 30.17 years."
-    },
-    
-    "Co-60": {
-        "parent": "Co-60",
-        "common_names": ["Cobalt Source"],
-        "members": ["Co-60"],
-        "key_indicators": {
-            "Co-60-1173": {"energies": [1173.2], "required": True, "weight": 1.0},
-            "Co-60-1332": {"energies": [1332.5], "required": True, "weight": 1.0}
-        },
-        "min_isotopes_required": 2,  # MUST have both peaks
-        "suppress_when_natural": True,  # Suppress when U-238 or Th-232 chain detected
-        "applications": ["Industrial radiography", "Calibration sources", "Medical therapy"],
-        "abundance_weight": 1.0,
-        "references": [],
-        "notes": "Must detect BOTH 1173 and 1332 keV peaks. Half-life 5.27 years."
-    },
+    # NOTE: Single-isotope sources (Am-241, Cs-137, Co-60) have been REMOVED.
+    # They are NOT decay chains and should be handled via isotope identification.
+    # Their presence here was causing false positive "chain" detections in natural spectra.
     
     "Ra-226 (Refined)": {
         "parent": "Ra-226",
@@ -405,16 +363,11 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     U235_CHAIN = ["U-235", "Th-231", "Pa-231", "Ac-227", "Th-227", "Ra-223", "Rn-219"]
     
     # Isotopes that should NOT appear together with natural uranium samples
-    INCOMPATIBLE_WITH_NATURAL = [
-        "Cs-137",   # Fission product / medical
-        "I-131",    # Medical isotope
-        "F-18",     # PET imaging
-        "Tc-99m",   # Medical
-        "Co-60",    # Industrial/medical
-        "Sr-90",    # Fission product
-        "Pu-239",   # Weapons-grade
-        "Np-237",   # Reactor product
-    ]
+    # IMPORTED from centralized isotope_validation.py (SINGLE SOURCE OF TRUTH)
+    try:
+        from isotope_validation import INCOMPATIBLE_WITH_NATURAL
+    except ImportError:
+        INCOMPATIBLE_WITH_NATURAL = ["Cs-137", "I-131", "F-18", "Tc-99m", "Co-60", "Sr-90", "Pu-239", "Np-237"]
     
     # Natural abundance weights - penalize rare isotopes
     ABUNDANCE_WEIGHTS = {
@@ -427,6 +380,15 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     
     # Get appropriate database for mode
     database = get_isotope_database(mode)
+    
+    # ========== INTRINSIC VALIDATION RULES ==========
+    # Import from centralized validation module (SINGLE SOURCE OF TRUTH)
+    try:
+        from isotope_validation import generate_validation_rules, validate_isotope_detection
+        INTRINSIC_VALIDATION = generate_validation_rules(database)
+    except ImportError:
+        # Fallback: no validation (backwards compatibility)
+        INTRINSIC_VALIDATION = {}
     
     isotope_matches = {}
     
@@ -488,6 +450,26 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
             elif matches >= 3:
                 base_confidence = min(base_confidence * 1.1, 100.0)  # 10% bonus for 3+
             
+            # ========== INTRINSIC VALIDATION ==========
+            # Apply physics-based validation rules for specific isotopes
+            validation_failed = False
+            if isotope in INTRINSIC_VALIDATION:
+                rules = INTRINSIC_VALIDATION[isotope]
+                required_peaks = rules.get("required_peaks", 1)
+                min_conf_single = rules.get("min_confidence_single", 30.0)
+                
+                # Check if we have required number of peaks
+                if matches < required_peaks:
+                    # Cap confidence at min_confidence_single
+                    base_confidence = min(base_confidence, min_conf_single)
+                    validation_failed = True
+                    print(f"[Intrinsic] {isotope}: {matches}/{required_peaks} peaks - capped at {min_conf_single}%")
+                
+                # Low energy penalty for threshold-sensitive isotopes  
+                if rules.get("low_energy_penalty") and matches == 1:
+                    base_confidence *= 0.6  # Additional 40% penalty
+                    print(f"[Intrinsic] {isotope}: Low energy penalty applied")
+            
             # Apply abundance weighting
             abundance_weight = ABUNDANCE_WEIGHTS.get(isotope, 1.0)
             weighted_confidence = base_confidence * abundance_weight
@@ -508,6 +490,7 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
                 'matches': matches,
                 'total_lines': len(gamma_energies),
                 'matched_peaks': matched_peaks,
+                'expected_peaks': [{'energy': e, 'intensity': get_gamma_intensity(isotope, e)} for e in gamma_energies],
                 'abundance_weight': abundance_weight,
                 'suppressed': False
             }
@@ -523,12 +506,11 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     top_peak_energies = [p.get('energy', 0) for p in top_peaks]
     
     # Define characteristic energies for man-made sources
-    # NOTE: Only use isolated, unique peaks - avoid low-energy X-rays that overlap with natural sources
-    MANMADE_SIGNATURES = {
-        'Cs-137': [661.7],  # Only gamma peak - 32 keV Ba X-ray causes false positives
-        'Co-60': [1173.2, 1332.5],
-        'Am-241': [59.5],
-    }
+    # IMPORTED from centralized isotope_validation.py (SINGLE SOURCE OF TRUTH)
+    try:
+        from isotope_validation import MANMADE_SIGNATURES
+    except ImportError:
+        MANMADE_SIGNATURES = {'Cs-137': [661.7], 'Co-60': [1173.2, 1332.5], 'Am-241': [59.5]}
     
     # Check if ANY top peak matches a man-made source
     manmade_in_top_peaks = set()
@@ -559,16 +541,22 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     # ========== DOMINANT PEAK BOOST FOR MAN-MADE SOURCES ==========
     # If a man-made isotope's peak is in the top peaks, boost its confidence
     # This overrides the single-line 60% cap penalty
-    for iso in manmade_in_top_peaks:
-        if iso in isotope_matches:
-            # Boost to 95% to rank above false positive multi-peak matches
-            old_conf = isotope_matches[iso]['confidence']
-            isotope_matches[iso]['confidence'] = max(old_conf, 95.0)
-            print(f"[DEBUG Boost] Boosted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
+    # IMPORTANT: Only apply boost if NO natural chain is detected
+    # Otherwise natural spectra with coincidental energy matches get false positives
+    if not any_chain_detected:
+        for iso in manmade_in_top_peaks:
+            if iso in isotope_matches:
+                # Boost to 95% to rank above false positive multi-peak matches
+                old_conf = isotope_matches[iso]['confidence']
+                isotope_matches[iso]['confidence'] = max(old_conf, 95.0)
+                print(f"[DEBUG Boost] Boosted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
+    else:
+        print(f"[DEBUG Boost] Skipping boost - natural chain detected: {chains_detected}")
     
     # ========== DEMOTE NATURAL CHAIN ISOTOPES WHEN MAN-MADE DETECTED ==========
-    # If we detected man-made sources in top peaks, demote natural chain false positives
-    if manmade_in_top_peaks:
+    # If we detected man-made sources in top peaks AND no natural chain, demote natural chain matches
+    # But ONLY if no chain is detected - otherwise we risk demoting legitimate natural sources
+    if manmade_in_top_peaks and not any_chain_detected:
         for iso in isotope_matches:
             if iso in U238_CHAIN or iso in TH232_CHAIN:
                 # Demote to 40% - these are likely Compton continuum false matches
