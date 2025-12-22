@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## [Session 2025-12-22] - ML Isotope Identification Improvements
+
+### Added
+- **Real Data Augmentation**: New `ml_data_loader.py` loads N42/SPE/CSV spectra with auto-labeling (220 augmented training samples from local data)
+- **Environmental Background**: Training now includes K-40, Bi-214, Tl-208 environmental peaks to teach model background immunity
+- **Calibration Jitter**: ±10% gain and ±5keV offset variation during training for detector drift robustness
+- **Multi-Detector Profiles**: 8 detector configurations (AlphaHound CsI/BGO, Radiacode 103/103G/110/102, Generic NaI)
+- **Hybrid Scoring**: New `hybrid_identify()` function combines ML (40%) + peak-matching (60%) for improved accuracy
+- **`get_available_detectors()`** API function for UI detector selection
+
+### Changed
+- Training epochs increased from 25 to 50 for better convergence
+- MLIdentifier constructor now accepts `detector` parameter
+- Model cache now keyed by both model_type and detector
+
+---
+
 ## [Session 2025-12-22] - Documentation Overhaul & Chart Fixes
 
 ### Changed

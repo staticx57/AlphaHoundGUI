@@ -98,6 +98,69 @@ ML_MODEL_TYPES = {
     }
 }
 
+# =========================================================
+# DETECTOR PROFILES (Phase 4: Multi-Detector Support)
+# Different scintillator detectors have different resolutions
+# =========================================================
+DETECTOR_PROFILES = {
+    'alphahound_csi': {
+        'name': 'AlphaHound CsI(Tl)',
+        'channels': 1024,
+        'keV_per_channel': 3.0,
+        'fwhm_662': 0.10,  # 10% FWHM - 1.1cm³ CsI(Tl) per RadView specs
+        'description': 'AlphaHound AB+G with CsI(Tl) crystal (1.1cm³)'
+    },
+    'alphahound_bgo': {
+        'name': 'AlphaHound BGO',
+        'channels': 1024,
+        'keV_per_channel': 3.0,
+        'fwhm_662': 0.13,  # 13% FWHM - 0.6cm³ BGO per RadView specs
+        'description': 'AlphaHound AB+G with BGO crystal (0.6cm³)'
+    },
+    'alphahound': {  # Alias for CsI (most common)
+        'name': 'AlphaHound (Auto)',
+        'channels': 1024,
+        'keV_per_channel': 3.0,
+        'fwhm_662': 0.10,  # Default to CsI specs
+        'description': 'AlphaHound AB+G (defaults to CsI settings)'
+    },
+    'radiacode_103': {
+        'name': 'Radiacode 103',
+        'channels': 1024,
+        'keV_per_channel': 2.93,
+        'fwhm_662': 0.08,  # 8% FWHM - 1cm³ CsI(Tl)
+        'description': 'Radiacode 103 pocket detector (1cm³ crystal)'
+    },
+    'radiacode_103g': {
+        'name': 'Radiacode 103G',
+        'channels': 1024,
+        'keV_per_channel': 2.93,
+        'fwhm_662': 0.07,  # 7% FWHM - GMI crystal, better resolution
+        'description': 'Radiacode 103G with GMI crystal (1cm³)'
+    },
+    'radiacode_110': {
+        'name': 'Radiacode 110',
+        'channels': 1024,
+        'keV_per_channel': 2.93,
+        'fwhm_662': 0.08,  # 8% FWHM - same resolution as 103, larger crystal
+        'description': 'Radiacode 110 (3cm³ crystal, higher sensitivity)'
+    },
+    'radiacode_102': {
+        'name': 'Radiacode 102',
+        'channels': 1024,
+        'keV_per_channel': 2.93,
+        'fwhm_662': 0.08,  # 8% FWHM
+        'description': 'Radiacode 102 compact detector'
+    },
+    'generic_nai': {
+        'name': 'Generic NaI(Tl)',
+        'channels': 1024,
+        'keV_per_channel': 3.0,
+        'fwhm_662': 0.08,  # 8% typical for NaI
+        'description': 'Generic NaI(Tl) scintillator'
+    }
+}
+
 
 class MLIdentifier:
     """ML-based isotope identifier using PyRIID MLPClassifier.
@@ -105,27 +168,35 @@ class MLIdentifier:
     Uses authoritative gamma-ray energies from IAEA NDS, NNDC/ENSDF databases
     to generate synthetic training spectra for comprehensive isotope identification.
     
-    TUNED FOR ALPHAHOUND AB+G DETECTOR:
-    - 1024 channels @ 3 keV/channel (0-3069 keV range)
-    - CsI(Tl) crystal: 10% FWHM at 662 keV
-    - Energy-dependent resolution: FWHM = 0.10 * sqrt(662/E) * E
+    Supports multiple detector profiles:
+    - alphahound: AlphaHound CsI(Tl) @ 10% FWHM
+    - radiacode_103: Radiacode 103 @ 7% FWHM
+    - radiacode_102: Radiacode 102 @ 8% FWHM
+    - generic_nai: Generic NaI(Tl) @ 8% FWHM
     """
     
-    def __init__(self, model_type: str = "hobby"):
-        """Initialize ML identifier with selectable model type.
+    def __init__(self, model_type: str = "hobby", detector: str = "alphahound"):
+        """Initialize ML identifier with selectable model type and detector.
         
         Args:
             model_type: "hobby" for 35 common isotopes, "comprehensive" for 95+ isotopes
+            detector: Detector profile name (see DETECTOR_PROFILES)
         """
         self.model = None
         self.is_trained = False
         self.model_type = model_type if model_type in ML_MODEL_TYPES else "hobby"
-        self.n_channels = 1024  # AlphaHound standard channel count
-        self.keV_per_channel = 3.0  # AlphaHound actual calibration: ~3.0 keV/channel
-        # AlphaHound CsI(Tl) resolution: 10% FWHM at 662 keV
-        self.reference_fwhm_fraction = 0.10  # 10% at 662 keV
-        self.reference_energy = 662.0  # keV
-        print(f"[ML] Model type: {ML_MODEL_TYPES[self.model_type]['name']}")
+        
+        # Get detector profile
+        self.detector_name = detector if detector in DETECTOR_PROFILES else "alphahound"
+        profile = DETECTOR_PROFILES[self.detector_name]
+        
+        self.n_channels = profile['channels']
+        self.keV_per_channel = profile['keV_per_channel']
+        self.reference_fwhm_fraction = profile['fwhm_662']
+        self.reference_energy = 662.0  # keV (Cs-137 reference)
+        
+        print(f"[ML] Model: {ML_MODEL_TYPES[self.model_type]['name']}, Detector: {profile['name']}")
+        
         
     def energy_to_channel(self, energy_keV: float) -> int:
         """Convert gamma energy in keV to channel number."""
@@ -699,14 +770,15 @@ class MLIdentifier:
         except Exception as e:
             return {'success': False, 'error': f'TFLite export failed: {e}'}
 
-# Global instances (one per model type)
+# Global instances (one per model type + detector combination)
 _ml_identifiers = {}
 
-def get_ml_identifier(model_type: str = "hobby") -> Optional[MLIdentifier]:
-    """Get or create ML identifier instance for specified model type.
+def get_ml_identifier(model_type: str = "hobby", detector: str = "alphahound") -> Optional[MLIdentifier]:
+    """Get or create ML identifier instance for specified model type and detector.
     
     Args:
         model_type: "hobby" for 35 common isotopes, "comprehensive" for 95+
+        detector: Detector profile name ("alphahound", "radiacode_103", etc.)
         
     Returns:
         MLIdentifier instance (trained or None if PyRIID not available)
@@ -716,15 +788,36 @@ def get_ml_identifier(model_type: str = "hobby") -> Optional[MLIdentifier]:
     if not HAS_RIID:
         return None
     
-    # Normalize model type
+    # Normalize model type and detector
     if model_type not in ML_MODEL_TYPES:
         model_type = "hobby"
+    if detector not in DETECTOR_PROFILES:
+        detector = "alphahound"
     
-    # Create instance for this model type if not exists
-    if model_type not in _ml_identifiers:
-        _ml_identifiers[model_type] = MLIdentifier(model_type=model_type)
+    # Cache key is combination of model type and detector
+    cache_key = f"{model_type}_{detector}"
     
-    return _ml_identifiers[model_type]
+    # Create instance for this combination if not exists
+    if cache_key not in _ml_identifiers:
+        _ml_identifiers[cache_key] = MLIdentifier(model_type=model_type, detector=detector)
+    
+    return _ml_identifiers[cache_key]
+
+
+def get_available_detectors() -> dict:
+    """Get available detector profiles for settings UI.
+    
+    Returns:
+        Dict of detector_name -> {"name": str, "description": str, "fwhm": float}
+    """
+    return {
+        k: {
+            "name": v["name"], 
+            "description": v["description"],
+            "fwhm_662": v["fwhm_662"]
+        }
+        for k, v in DETECTOR_PROFILES.items()
+    }
 
 
 def get_available_ml_models() -> dict:

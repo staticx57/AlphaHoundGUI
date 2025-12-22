@@ -63,6 +63,20 @@
 | RADAI Synthetic | 3️⃣ | Large scale, pre-labeled |
 | JRC | 4️⃣ | Validation only (HPGe resolution differs) |
 
+---
+
+## Detector Profiles (Phase 4)
+
+| Profile | FWHM | Crystal | Description |
+|---------|------|---------|-------------|
+| `alphahound_csi` | 10% | 1.1cm³ CsI(Tl) | AlphaHound main |
+| `alphahound_bgo` | 13% | 0.6cm³ BGO | AlphaHound BGO variant |
+| `radiacode_103` | 8% | 1cm³ CsI | Standard Radiacode |
+| `radiacode_103g` | 7% | 1cm³ GMI | Best resolution |
+| `radiacode_110` | 8% | 3cm³ CsI | Higher sensitivity |
+| `radiacode_102` | 8% | CsI | Compact detector |
+| `generic_nai` | 8% | NaI(Tl) | Generic scintillator |
+
 
 
 ---
@@ -311,9 +325,9 @@ python test_ml_accuracy.py --model hobby --test-dir data/acquisitions/test
 | 1. Real Data Augmentation | Medium | ⭐⭐⭐⭐⭐ | **Highest** | ✅ Complete |
 | 2. Background Variation | Low | ⭐⭐⭐ | High | ✅ Complete |
 | 3. Calibration Jitter | Low | ⭐⭐⭐ | High | ✅ Complete |
-| 4. Multi-Detector | Medium | ⭐⭐ | Medium | Planned |
+| 4. Multi-Detector | Medium | ⭐⭐ | Medium | ✅ Complete |
 | 5. Hybrid Scoring | Low | ⭐⭐⭐⭐ | High | ✅ Complete |
-| 6. Architecture | High | ⭐⭐ | Low | Planned |
+| 6. Architecture | High | ⭐⭐ | Low | Optional |
 
 ---
 
