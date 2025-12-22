@@ -186,11 +186,25 @@ export class AlphaHoundChart {
                             closestIdx = i;
                         }
                     }
-                    const actualY = chartData[closestIdx]?.y ?? (peak.counts || peak.count || 0);
+
+                    // Find LOCAL MAXIMUM within ±10 channels of closest point
+                    const searchRadius = 10;
+                    let maxIdx = closestIdx;
+                    let maxY = chartData[closestIdx]?.y || 0;
+                    for (let i = Math.max(0, closestIdx - searchRadius); i < Math.min(chartData.length, closestIdx + searchRadius); i++) {
+                        if (chartData[i].y > maxY) {
+                            maxY = chartData[i].y;
+                            maxIdx = i;
+                        }
+                    }
+
+                    const actualX = chartData[maxIdx]?.x ?? peak.energy;
+                    const actualY = chartData[maxIdx]?.y ?? (peak.counts || peak.count || 0);
+                    console.log(`[Peak ${idx}] peak.energy=${peak.energy.toFixed(1)}, peakX=${actualX.toFixed(1)}, peakY=${actualY.toFixed(0)}`);
 
                     this.annotations[`peak${idx}`] = {
                         type: 'point',
-                        xValue: chartData[closestIdx]?.x ?? peak.energy,
+                        xValue: actualX,
                         yValue: actualY,
                         backgroundColor: peakColor + '80',
                         radius: 6,
@@ -238,11 +252,24 @@ export class AlphaHoundChart {
                             closestIdx = i;
                         }
                     }
-                    const actualY = chartData[closestIdx]?.y ?? (peak.counts || peak.count || 0);
+
+                    // Find LOCAL MAXIMUM within ±10 channels of closest point
+                    const searchRadius = 10;
+                    let maxIdx = closestIdx;
+                    let maxY = chartData[closestIdx]?.y || 0;
+                    for (let i = Math.max(0, closestIdx - searchRadius); i < Math.min(chartData.length, closestIdx + searchRadius); i++) {
+                        if (chartData[i].y > maxY) {
+                            maxY = chartData[i].y;
+                            maxIdx = i;
+                        }
+                    }
+
+                    const actualX = chartData[maxIdx]?.x ?? peak.energy;
+                    const actualY = chartData[maxIdx]?.y ?? (peak.counts || peak.count || 0);
 
                     this.annotations[`peak${idx}`] = {
                         type: 'point',
-                        xValue: chartData[closestIdx]?.x ?? peak.energy,
+                        xValue: actualX,
                         yValue: actualY,
                         backgroundColor: peakColor + '80',
                         radius: 6,
@@ -265,7 +292,7 @@ export class AlphaHoundChart {
                             borderWidth: 1.5,
                             pointRadius: 0,
                             fill: true,
-                            tension: 0.1
+                            tension: 0 // Straight lines through data points (no bezier)
                         }
                     ]
                 },
@@ -643,7 +670,7 @@ export class AlphaHoundChart {
                         display: true,
                         content: `${peak.element || ''} ${peak.shell || ''}`,
                         position: 'end',
-                        yAdjust: -yOffset, // STACKING (negative = upward)
+                        yAdjust: yOffset, // STACKING (positive = downward from top)
                         color: themedColor,
                         backgroundColor: 'rgba(0,0,0,0.7)',
                         font: { size: 9, weight: 'bold' },
@@ -710,8 +737,8 @@ export class AlphaHoundChart {
         const wasSyncing = this.isSyncing;
         this.isSyncing = true;
         try {
-            // Reset label offsets for fresh stacking calculation
-            this.labelOffsets = {};
+            // NOTE: Do NOT reset labelOffsets here - this function ADDS to existing highlights
+            // so we need to accumulate offsets for proper stacking
 
             // 1. Remove existing ones for this isotope from master
             const safeKey = isotopeName.replace(/[^a-zA-Z0-9]/g, '_');
@@ -787,7 +814,7 @@ export class AlphaHoundChart {
                             display: true,
                             content: `${isotopeName} ${en.toFixed(0)}`,
                             position: 'end',
-                            yAdjust: -yOffset, // STACKING (negative = upward)
+                            yAdjust: yOffset, // STACKING (positive = downward from top)
                             color: isoColor,
                             backgroundColor: 'rgba(0,0,0,0.7)',
                             font: { size: 9, weight: 'bold' },
