@@ -607,7 +607,7 @@ function setupEventListeners() {
         if (!currentData) return;
         const btn = document.getElementById('btn-export-pdf');
         const originalHTML = btn.innerHTML;
-        btn.innerHTML = '⏳ Generating...';
+        btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 14px; height: 14px;"> Generating...';
         btn.disabled = true;
 
         try {
@@ -648,7 +648,7 @@ function setupEventListeners() {
 
         const btn = document.getElementById('btn-export-n42');
         const originalHTML = btn.innerHTML;
-        btn.innerHTML = '⏳ Exporting...';
+        btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 14px; height: 14px;"> Exporting...';
         btn.disabled = true;
 
         try {
@@ -968,7 +968,7 @@ function setupEventListeners() {
         const statusEl = document.getElementById('bg-status');
         const originalText = btn.textContent;
 
-        btn.textContent = '⏳ Processing...';
+        btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 14px; height: 14px;"> Processing...';
         btn.disabled = true;
 
         try {
@@ -1211,7 +1211,7 @@ function setupEventListeners() {
         const btn = document.getElementById('btn-run-ml');
         const originalHTML = btn.innerHTML;
 
-        btn.innerHTML = '<span style="font-size: 1.2rem;">⏳</span> Running...';
+        btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 16px; height: 16px;"> Running...';
         btn.disabled = true;
         mlList.innerHTML = '<p style="color: var(--text-secondary);">Running AI identification (first run trains model ~10-30s)...</p>';
 
@@ -1259,7 +1259,7 @@ function setupEventListeners() {
                 mlList.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No ML predictions available for this spectrum</p>';
             }
         } catch (err) {
-            mlList.innerHTML = `<p style="color: #ef4444;">❌ Error: ${err.message}</p>`;
+            mlList.innerHTML = `<p style="color: #ef4444;"><img src="/static/icons/error.svg" class="icon" style="width: 14px; height: 14px; filter: invert(41%) sepia(93%) saturate(1352%) hue-rotate(336deg);"> Error: ${err.message}</p>`;
         } finally {
             btn.innerHTML = originalHTML;
             btn.disabled = false;

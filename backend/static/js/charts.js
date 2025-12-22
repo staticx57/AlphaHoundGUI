@@ -42,7 +42,7 @@ export class AlphaHoundChart {
 
         for (const existingX of keys) {
             if (Math.abs(parseFloat(existingX) - xValue) < proximityThreshold) {
-                maxOffset = Math.max(maxOffset, this.labelOffsets[existingX] + 20);
+                maxOffset = Math.max(maxOffset, this.labelOffsets[existingX] + 32);
             }
         }
 
@@ -104,7 +104,7 @@ export class AlphaHoundChart {
         }
 
         // Prepare data
-        const chartData = labels.map((l, i) => ({ x: l, y: dataPoints[i] }));
+        const chartData = labels.map((l, i) => ({ x: l, y: dataPoints[i] })); this.labelOffsets = {};
         const peakData = (peaks || []).map(p => ({ x: p.energy, y: p.counts || p.count || 0 }));
 
         // Get theme colors for peaks

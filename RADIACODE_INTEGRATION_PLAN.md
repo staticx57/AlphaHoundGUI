@@ -76,13 +76,13 @@ device.set_vibro_on(True)
 
 ### Platform Support
 
-| Platform | USB | Bluetooth |
-|----------|-----|-----------|
-| Windows | ✅ | ❌ |
-| Linux | ✅ | ✅ |
-| macOS | ✅ | ❌ |
+| Platform | USB | Bluetooth/BLE |
+|----------|-----|---------------|
+| Windows | ✅ | ✅ (via bleak) |
+| Linux | ✅ | ✅ (via bleak) |
+| macOS | ✅ | ✅ (via bleak) |
 
-**Note:** Bluetooth requires Linux with proper BLE permissions.
+**Note:** BLE support added via `bleak` library for cross-platform Bluetooth Low Energy connectivity.
 
 ---
 
@@ -352,16 +352,17 @@ DETECTOR_PROFILES = {
 
 ---
 
-## ✅ Success Criteria
+## ✅ Success Criteria (COMPLETED)
 
-- [ ] Connect to Radiacode 103/103G/110 via USB
-- [ ] Connect to Radiacode via Bluetooth (Linux)
-- [ ] Display live dose rate from Radiacode
-- [ ] Acquire and display spectrum from Radiacode
-- [ ] Run peak detection and isotope ID on Radiacode spectra
-- [ ] ROI Analysis works with Radiacode detector profiles
-- [ ] ML identification tuned for Radiacode FWHM
-- [ ] Device selector allows switching between AlphaHound and Radiacode
+- [x] Connect to Radiacode 103/103G/110 via USB
+- [x] Connect to Radiacode via Bluetooth/BLE (cross-platform via bleak)
+- [x] Display live dose rate from Radiacode
+- [x] Acquire and display spectrum from Radiacode
+- [x] Run peak detection and isotope ID on Radiacode spectra
+- [x] ROI Analysis works with Radiacode detector profiles
+- [x] ML identification tuned for Radiacode FWHM
+- [x] Device selector allows switching between AlphaHound and Radiacode
+- [x] BLE device scanning and discovery
 
 ---
 

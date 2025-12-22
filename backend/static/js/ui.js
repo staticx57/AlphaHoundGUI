@@ -27,7 +27,7 @@ export class AlphaHoundUI {
 
     showLoading(message = 'Processing...') {
         this.elements.dropZone.innerHTML = `
-            <div class="upload-icon">⏳</div>
+            <div class="upload-icon"><img src="/static/icons/hourglass.svg" class="icon spin" style="width: 48px; height: 48px;"></div>
             <h2>${message}</h2>
             <p>Please wait while we parse the spectrum...</p>
         `;
@@ -48,7 +48,7 @@ export class AlphaHoundUI {
 
     showError(message) {
         this.elements.dropZone.innerHTML = `
-            <div class="upload-icon">❌</div>
+            <div class="upload-icon"><img src="/static/icons/error.svg" style="width: 48px; height: 48px; filter: invert(1);"></div>
             <h2>Error. Try again.</h2>
             <p style="color: #ef4444; font-size: 0.8rem; margin-top: 0.5rem;">${message}</p>
             <input type="file" id="file-input" accept=".n42,.xml,.csv">
@@ -240,7 +240,7 @@ export class AlphaHoundUI {
                 color: #fbbf24;
             ">
                 <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; margin-bottom: 0.5rem;">
-                    <span style="font-size: 1.2rem;">⚠️</span>
+                    <img src="/static/icons/warning.svg" class="icon" style="width: 20px; height: 20px; filter: invert(1);">
                     <span>Data Quality Warning</span>
                     <span style="margin-left: auto; font-size: 0.75rem; color: var(--text-secondary);">
                         Max peak: ${dataQuality.max_peak_counts || 0} counts
@@ -251,7 +251,7 @@ export class AlphaHoundUI {
                 </ul>
                 ${dataQuality.mda_cs137 ? `
                 <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.8rem;">
-                    <span style="color: #10b981;">📊 Detection Sensitivity (MDA):</span>
+                    <span style="color: #10b981;"><img src="/static/icons/chart.svg" class="icon" style="width: 14px; height: 14px; margin-right: 4px;"> Detection Sensitivity (MDA):</span>
                     <span style="margin-left: 0.5rem;" title="Minimum Detectable Activity for Cs-137 at 95% confidence">
                         Cs-137: ${dataQuality.mda_cs137.readable}
                     </span>
@@ -581,7 +581,7 @@ export class AlphaHoundUI {
                         ${chain.equilibrium_status && chain.equilibrium_status.in_equilibrium !== null ? `
                         <div style="margin: 0.5rem 0; padding: 0.5rem; background: ${chain.equilibrium_status.in_equilibrium ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; border-radius: 6px; font-size: 0.8rem;">
                             <span style="color: ${chain.equilibrium_status.in_equilibrium ? '#10b981' : '#f59e0b'}; font-weight: 600;">
-                                ${chain.equilibrium_status.in_equilibrium ? '⚖️ SECULAR EQUILIBRIUM' : '⚠️ DISEQUILIBRIUM'}
+                                ${chain.equilibrium_status.in_equilibrium ? '<img src="/static/icons/balance.svg" class="icon" style="width: 14px; height: 14px; margin-right: 4px;"> SECULAR EQUILIBRIUM' : '<img src="/static/icons/warning.svg" class="icon" style="width: 14px; height: 14px; margin-right: 4px; filter: invert(1);"> DISEQUILIBRIUM'}
                             </span>
                             <span style="color: var(--text-secondary); margin-left: 0.5rem;" title="${chain.equilibrium_status.details}">
                                 ${chain.equilibrium_status.details}
@@ -708,7 +708,7 @@ export class AlphaHoundUI {
         const tempDisplay = document.getElementById('temp-display');
         if (tempDisplay) {
             if (temp !== null && temp !== undefined) {
-                tempDisplay.textContent = `🌡️ ${temp.toFixed(1)}°C`;
+                tempDisplay.innerHTML = `<img src="/static/icons/thermometer.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"> ${temp.toFixed(1)}°C`;
                 tempDisplay.style.display = 'inline';
             } else {
                 tempDisplay.style.display = 'none';

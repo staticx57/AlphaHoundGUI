@@ -8,7 +8,10 @@
     - [ ] Create and integrate transparent PNG favicon
     - [ ] Create and integrate transparent PNG upload icon
     - [ ] Create and integrate transparent PNG banner
+- [ ] **Replace Remaining Emoji with SVG Icons**: Audit and replace ~40 emoji instances in index.html, main.js, ui.js with professional SVG icons for consistency
 - [x] **Isotope Peak Visualization**: ✅ Implemented via `addIsotopeHighlight()` in `charts.js` - draws vertical reference lines on chart when isotope clicked.
+- [x] **Chart Autoscale & Label Stacking**: ✅ Fixed autoscale toggle between peak-focused view and full spectrum, fixed overlapping annotation labels with vertical stacking (2025-12-22)
+- [x] **Documentation Overhaul**: ✅ Major README update with Radiacode, XRF, SNIP, spectrum algebra, server-managed acquisitions (2025-12-22)
 
 ### ML & Analysis
 - [ ] Collect real detector data for ML fine-tuning

@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## [Session 2025-12-22] - Documentation Overhaul & Chart Fixes
+
+### Changed
+- **README.md Major Overhaul**: Comprehensive update reflecting all recent features:
+  - Added Radiacode 103/103G/110 device integration section with device comparison table
+  - Added XRF element identification feature
+  - Added SNIP background filtering description
+  - Added spectrum algebra features
+  - Documented server-managed acquisitions with crash recovery
+  - Updated project structure with new backend files
+  - Added bleak dependency for cross-platform BLE
+  - Updated credits with radiacode SDK attribution
+
+- **RADIACODE_INTEGRATION_PLAN.md**: Updated completion status:
+  - Marked all success criteria as completed
+  - Updated platform support table showing cross-platform BLE via bleak
+
+- **TODO.md**: Updated task tracking:
+  - Added "Replace Remaining Emoji with SVG Icons" task (~40 instances)
+  - Added "Chart Autoscale & Label Stacking" as completed
+  - Added "Documentation Overhaul" as completed
+
+### Fixed
+- **Chart Autoscale**: Spectrum chart autoscale toggle now correctly switches between peak-focused zoom and full spectrum view
+- **Annotation Label Stacking**: XRF and isotope peak labels now stack vertically to prevent overlapping
+
+---
+
 ## [Released - Session 2025-12-16] - Decay Prediction & Universal File Support
 
 ### Added
