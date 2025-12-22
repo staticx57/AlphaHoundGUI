@@ -3,6 +3,7 @@ uvicorn
 python-multipart
 numpy
 becquerel
+uncertainties>=3.1
 scipy
 matplotlib
 pyserial
@@ -12,3 +13,5 @@ riid
 tensorflow
 pandas
 slowapi
+radiacode>=0.4.0
+libusb-package  # Required for Windows USB support

@@ -16,6 +16,41 @@ except Exception as e:
     HAS_IAEA_DATA = False
     print(f"[Isotope Database] IAEA data load failed: {e}")
 
+# ========== CURIE X-RAY DATA INTEGRATION ==========
+# Provides characteristic X-ray emission lines for improved isotope ID
+try:
+    from curie_integration import (
+        get_element_xrays as _get_element_xrays,
+        get_all_xrays_for_isotope as _get_all_xrays_for_isotope,
+        calculate_attenuation,
+        HAS_CURIE
+    )
+    print(f"[Isotope Database] Curie X-ray integration loaded (curie available: {HAS_CURIE})")
+except ImportError:
+    HAS_CURIE = False
+    _get_element_xrays = lambda *args, **kwargs: []
+    _get_all_xrays_for_isotope = lambda *args, **kwargs: []
+    calculate_attenuation = lambda *args, **kwargs: {'error': 'curie not installed'}
+    print("[Isotope Database] Curie integration not available")
+
+
+def get_isotope_xrays(isotope_name: str):
+    """
+    Get characteristic X-ray emission lines for an isotope.
+    
+    These are X-rays from the daughter nucleus after decay, e.g.:
+    - Cs-137 -> Ba-137m emits Ba X-rays (~32 keV)
+    - Am-241 -> Np X-rays
+    
+    Args:
+        isotope_name: Isotope name (e.g., "Cs-137")
+        
+    Returns:
+        List of dicts with 'energy', 'element', 'shell', 'intensity' keys
+    """
+    return _get_all_xrays_for_isotope(isotope_name)
+
+
 
 def get_gamma_intensity(isotope: str, energy: float) -> float:
     """Get relative intensity (0.0-1.0) for a gamma line from IAEA data.
@@ -56,19 +91,20 @@ ISOTOPE_DATABASE_SIMPLE = {
     # U-238 Decay Chain (Uranium series) - Hobby sources
     # NOTE: U-238 itself has weak gammas, detected via daughter products
     "U-238": [49.55, 63.3, 92.4, 1001.0, 766.4],  # Includes Th-234, Pa-234m signatures
-    "Th-234": [63.3, 92.4],
+    "Th-234": [63.3, 92.5, 112.8],  # U-238 daughter - 63/93 keV doublet is characteristic
     "Pa-234m": [1001.0, 766.4],
     "U-234": [53.2],
     "Ra-226": [186.2],  # KEY: This is in U-238 chain, NOT U-235
     "Pb-214": [295.2, 351.9, 241.0],
     "Bi-214": [609.3, 1120.3, 1764.5],
     
-    # Th-232 Decay Chain (Thorium series) - Lantern mantles
-    "Th-232": [63.8],
-    "Ac-228": [338.3, 911.2, 968.9],
-    "Pb-212": [238.6],
-    "Bi-212": [727.0, 1621.0],
-    "Tl-208": [583.2, 860.6, 2614.5],
+    # Th-232 Decay Chain (Thorium series) - Lantern mantles, thoriated lenses
+    # NOTE: Th-232 itself has very weak gammas (~4%), detected via chain daughters
+    "Th-232": [63.8, 238.6, 583.2, 911.2, 2614.5],  # Chain signature peaks for identification
+    "Ac-228": [338.3, 911.2, 968.9, 463.0],  # Characteristic Th-chain marker
+    "Pb-212": [238.6, 300.1],  # Strong Th-chain marker
+    "Bi-212": [727.0, 1620.5],
+    "Tl-208": [583.2, 860.6, 2614.5],  # 2614 keV is highest natural gamma
     
     # U-235 Decay Chain (Actinium series)
     # NOTE: 185.7 keV REMOVED - overlaps with Ra-226 (186.2) from U-238 chain

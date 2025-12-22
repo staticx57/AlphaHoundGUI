@@ -1,0 +1,16 @@
+Starting simple scan...
+Found 14 devices
+[70:0C:AF:98:13:5F] Name: JBL PartyBox Stage 320
+[74:8E:16:EB:58:83] Name: JBL PartyBox Stage 320
+[E0:9D:13:28:3B:B5] Name: None
+[D4:AD:FC:28:3B:A1] Name: GBK_H6167_3BA1
+[6F:05:90:51:92:F2] Name: None
+[7D:04:D2:07:65:31] Name: None
+[55:32:D3:2B:84:71] Name: None
+[7B:A4:A3:40:89:E3] Name: None
+[F3:1C:09:6F:16:99] Name: None
+[52:43:06:E0:06:39] Name: RadiaCode-110#RC-110-001593
+[A4:06:E9:8B:63:4D] Name: None
+[70:30:08:6C:3C:E6] Name: None
+[6C:A4:C6:84:56:ED] Name: None
+[70:B0:B0:2D:39:7F] Name: None

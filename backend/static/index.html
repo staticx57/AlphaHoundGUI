@@ -8,8 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=6">
-    <link rel="stylesheet" href="/static/button-fixes.css?v=2">
+    <link rel="stylesheet" href="/static/style.css?v=10">
+    <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Chart.js loaded async for performance -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
@@ -37,7 +37,20 @@
     <main>
         <div class="data-hub">
             <div class="data-hub-row">
-                <!-- AlphaHound Device Quick Connect -->
+                <!-- Device Type Selector Tabs (vertical, compact) -->
+                <div id="device-type-tabs"
+                    style="display: flex; flex-direction: column; gap: 4px; margin-right: 0.5rem; flex-shrink: 0;">
+                    <button id="tab-alphahound" class="device-tab active"
+                        style="padding: 0.4rem 0.6rem; font-size: 0.75rem; writing-mode: horizontal-tb;">
+                        AlphaHound
+                    </button>
+                    <button id="tab-radiacode" class="device-tab"
+                        style="padding: 0.4rem 0.6rem; font-size: 0.75rem; writing-mode: horizontal-tb;">
+                        Radiacode
+                    </button>
+                </div>
+
+                <!-- AlphaHound Device Panel -->
                 <div id="device-quick-panel">
                     <div class="device-header">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -156,22 +169,120 @@
                                         style="font-size: 0.8rem; color: var(--text-secondary); display: none;">--°C</span>
                                 </div>
                             </div>
-                            <div class="sparkline-container" style="flex: 1; min-height: 40px;">
+                            <div class="sparkline-container" style="flex: 1; min-height: 40px; max-height: 60px;">
                                 <canvas id="doseRateChart"></canvas>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Drop Zone -->
-                <div class="upload-container" id="drop-zone">
-                    <div class="upload-icon">
-                        <img src="/static/icons/upload.svg" style="width: 48px; height: 48px;">
+                <!-- Radiacode Device Panel (sibling to AlphaHound panel) -->
+                <div id="radiacode-quick-panel" style="display: none;">
+                    <div class="device-header">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <img src="/static/icons/device.svg" class="icon icon-xl" alt="Device">
+                            <h3 style="margin: 0; color: var(--secondary-color);">Radiacode Device</h3>
+                        </div>
+
+                        <div class="device-action-group"
+                            style="flex: 1; display: flex; gap: 0.75rem; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
+
+                            <!-- Connection Mode -->
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer;">
+                                    <input type="radio" name="rc-conn-mode" value="usb" checked>
+                                    <span style="font-size: 0.85rem;">USB</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer;">
+                                    <input type="radio" name="rc-conn-mode" value="bluetooth">
+                                    <span style="font-size: 0.85rem;">Bluetooth</span>
+                                </label>
+                            </div>
+
+                            <!-- BLE Scan and Device Selection (shown when Bluetooth selected) -->
+                            <div id="rc-ble-controls" style="display: none; gap: 0.5rem; align-items: center;">
+                                <button id="btn-scan-ble" class="btn-secondary"
+                                    style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
+                                    title="Scan for nearby Radiacode devices">
+                                    <img src="/static/icons/refresh.svg" class="icon"
+                                        style="width: 14px; height: 14px;"> Scan
+                                </button>
+                                <select id="rc-ble-devices" style="min-width: 180px; font-size: 0.85rem;">
+                                    <option value="">Select BLE Device...</option>
+                                </select>
+                                <!-- Manual MAC input fallback -->
+                                <input type="text" id="rc-bluetooth-mac" placeholder="or enter MAC"
+                                    style="width: 140px; font-family: monospace; font-size: 0.8rem;"
+                                    title="Manual MAC address entry">
+                            </div>
+
+                            <button id="btn-connect-radiacode" class="btn-primary"
+                                style="padding: 0.5rem 1.5rem; flex-shrink: 0;">Connect</button>
+                        </div>
                     </div>
-                    <h2>Drop new file to replace</h2>
-                    <p>or click to browse local files</p>
+
+                    <!-- Radiacode Connected State -->
+                    <div id="radiacode-connected"
+                        style="display: none; border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
+
+                        <!-- Top row: Status + Buttons + Disconnect -->
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="color: var(--secondary-color); font-size: 1rem;">●</span>
+                                <span
+                                    style="color: var(--text-secondary); font-weight: 500; font-size: 0.85rem;">Connected</span>
+                                <span id="rc-device-model"
+                                    style="font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;"></span>
+                            </div>
+
+                            <!-- Action buttons - compact -->
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button id="btn-rc-get-spectrum" class="btn-primary"
+                                    style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                                    <img src="/static/icons/chart.svg" class="icon" style="width: 14px; height: 14px;">
+                                    Spectrum
+                                </button>
+                                <button id="btn-rc-clear" class="btn-secondary"
+                                    style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                                    <img src="/static/icons/refresh.svg" class="icon"
+                                        style="width: 14px; height: 14px;"> Clear
+                                </button>
+                            </div>
+
+                            <button id="btn-disconnect-radiacode"
+                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: #ef4444; color: white; margin-left: auto;">
+                                Disconnect
+                            </button>
+                        </div>
+
+                        <!-- Dose rate chart - full width -->
+                        <div
+                            style="display: flex; align-items: center; gap: 1rem; background: var(--bg-secondary); border-radius: 8px; padding: 0.5rem 0.75rem;">
+                            <div style="flex-shrink: 0; min-width: 100px;">
+                                <span
+                                    style="color: var(--text-secondary); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; display: block;">Dose
+                                    Rate</span>
+                                <span id="rc-dose-display"
+                                    style="font-size: 1.1rem; font-weight: 800; color: var(--secondary-color);">--</span>
+                            </div>
+                            <div style="flex: 1; min-height: 45px; max-height: 55px;">
+                                <canvas id="rcDoseRateChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drop Zone (compact) -->
+                <div class="upload-container" id="drop-zone"
+                    style="max-width: 200px; min-height: 100px; padding: 1rem; flex-shrink: 0;">
+                    <div class="upload-icon">
+                        <img src="/static/icons/upload.svg" style="width: 32px; height: 32px;">
+                    </div>
+                    <h2 style="font-size: 0.85rem; margin: 0.25rem 0 0 0;">Drop file</h2>
+                    <p style="font-size: 0.7rem; margin: 0.15rem 0 0 0;">or click to browse</p>
                     <input type="file" id="file-input" accept=".n42,.xml,.csv">
                 </div>
+
             </div>
         </div>
 
@@ -195,6 +306,7 @@
 
                 <!-- Right Group: Tools -->
                 <div class="control-group">
+
                     <span class="control-label">Tools</span>
                     <button id="btn-edit-n42" class="btn-accent" title="Edit N42 Metadata"><img
                             src="/static/icons/settings.svg" class="icon"> Metadata</button>
@@ -916,7 +1028,7 @@
     </main>
 
     <!-- Main Application Logic (ES6 Modules) -->
-    <script type="module" src="/static/js/main.js?v=3.8"></script>
+    <script type="module" src="/static/js/main.js?v=4.9"></script>
 </body>
 
 </html>

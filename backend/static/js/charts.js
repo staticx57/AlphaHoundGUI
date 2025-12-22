@@ -5,8 +5,50 @@ export class AlphaHoundChart {
         this.primaryColor = '#38bdf8'; // Default, should read from CSS
         this.autoScale = true; // Default to auto-scale (zoom to data)
         this.decimationThreshold = 2048; // Decimate spectra larger than this
-        this.isSyncing = false; // Guard to prevent recursion between chart and scrubber
-        this.isUpdatingAnnotations = false; // Guard to prevent recursion during annotation updates
+        this.isSyncing = false; // Unified guard for all chart updates and event reactions
+        this.annotations = {}; // Master state for annotations (source of truth)
+        this.labelOffsets = {}; // Track vertical offsets for label stacking { xValue: offset }
+    }
+
+    /**
+     * Deep clone an object to break Proxy links from Chart.js.
+     */
+    _clone(obj) {
+        if (!obj || typeof obj !== 'object') return obj;
+        try {
+            return JSON.parse(JSON.stringify(obj));
+        } catch (e) {
+            const result = Array.isArray(obj) ? [] : {};
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    result[key] = (typeof obj[key] === 'object' && obj[key] !== null)
+                        ? this._clone(obj[key])
+                        : obj[key];
+                }
+            }
+            return result;
+        }
+    }
+
+    /**
+     * Calculate vertical offset for labels to prevent overlapping.
+     * @param {number} xValue - Energy value where label is placed
+     * @param {number} proximityThreshold - Threshold in keV to consider labels "overlapping"
+     * @returns {number} Y-offset in pixels
+     */
+    _getVerticalOffset(xValue, proximityThreshold = 50) {
+        let maxOffset = 0;
+        const keys = Object.keys(this.labelOffsets);
+
+        for (const existingX of keys) {
+            if (Math.abs(parseFloat(existingX) - xValue) < proximityThreshold) {
+                maxOffset = Math.max(maxOffset, this.labelOffsets[existingX] + 20);
+            }
+        }
+
+        this.labelOffsets[xValue] = maxOffset;
+        console.log(`[LabelStack] x=${xValue.toFixed(1)}, offset=${maxOffset}`);
+        return maxOffset;
     }
 
     /**
@@ -61,110 +103,56 @@ export class AlphaHoundChart {
             return;
         }
 
-        if (this.chart) this.chart.destroy();
+        // Prepare data
+        const chartData = labels.map((l, i) => ({ x: l, y: dataPoints[i] }));
+        const peakData = (peaks || []).map(p => ({ x: p.energy, y: p.counts || p.count || 0 }));
 
-        // ... rest of render ...
+        // Get theme colors for peaks
+        const styles = getComputedStyle(document.documentElement);
+        const peakColor = styles.getPropertyValue('--chart-peak-color').trim() || '#ef4444';
 
-        // Convert to {x, y} format for linear x-axis
-        let chartData = labels.map((energy, idx) => ({
-            x: parseFloat(energy),
-            y: dataPoints[idx]
-        }));
-
-        // Performance: Decimate large spectra (>2048 points) to improve rendering
-        if (chartData.length > this.decimationThreshold) {
-            console.log(`[Performance] Decimating ${chartData.length} points to 1024`);
-            chartData = this.decimateData(chartData, 1024);
-        }
-
-        // Calculate max energy based on mode
-        const fullMaxEnergy = Math.max(...labels.map(e => parseFloat(e)));
+        // Auto-Scale / Zoom Logic
+        const fullMaxEnergy = labels.length > 0 ? labels[labels.length - 1] : 3000;
+        this.fullMaxEnergy = fullMaxEnergy;
         let maxEnergy = fullMaxEnergy;
-        let maxY = undefined; // Let Chart.js auto-scale by default
+        let maxY = (dataPoints.length > 0 ? Math.max(...dataPoints) : 100) * 1.15;
 
         if (this.autoScale) {
-            // ==========================================
-            // X-AXIS AUTO-SCALE (Aggressive Data Detection)
-            // ==========================================
-            const maxCount = Math.max(...dataPoints);
-            const totalCounts = dataPoints.reduce((a, b) => a + b, 0);
-
-            // Method 1: Find where tail contains 1.0% of data (start of signal from right)
-            let cumulativeCounts = 0;
-            let percentileIndex = dataPoints.length - 1;
-            for (let i = dataPoints.length - 1; i >= 0; i--) {
-                cumulativeCounts += dataPoints[i];
-                if (cumulativeCounts >= totalCounts * 0.01) {
-                    percentileIndex = i;
-                    break;
+            // Primary: Peak-based zoom (show all detected peaks with 10% padding)
+            if (peaks && peaks.length > 0) {
+                const maxPeakEnergy = Math.max(...peaks.map(p => p.energy || 0));
+                // 10% padding after rightmost peak
+                maxEnergy = Math.min(maxPeakEnergy * 1.10, fullMaxEnergy);
+            } else {
+                // Fallback: Data-based (99.5% percentile) when no peaks detected
+                const totalCounts = dataPoints.reduce((a, b) => a + b, 0);
+                let cumulativeCounts = 0;
+                let percentileIndex = dataPoints.length - 1;
+                for (let i = dataPoints.length - 1; i >= 0; i--) {
+                    cumulativeCounts += dataPoints[i];
+                    if (cumulativeCounts >= totalCounts * 0.995) {
+                        percentileIndex = i;
+                        break;
+                    }
                 }
+                maxEnergy = Math.min(parseFloat(labels[percentileIndex]) * 1.15, fullMaxEnergy);
             }
 
-            // Method 2: Find last SIGNIFICANT data (above noise threshold)
-            // Increased threshold to avoid extending scale for single random counts
-            // min 2 counts, or 1.5% of max
-            const noiseThreshold = Math.max(maxCount * 0.015, 2);
+            // Ensure minimum zoom of 200 keV
+            maxEnergy = Math.max(maxEnergy, 200);
 
-            let lastSignificantIndex = 0;
-            for (let i = dataPoints.length - 1; i >= 0; i--) {
-                if (dataPoints[i] > noiseThreshold) {
-                    lastSignificantIndex = i;
-                    break;
-                }
-            }
-
-            // Use the LARGER of the two (safe approach - show more data)
-            const dataEndIndex = Math.max(percentileIndex, lastSignificantIndex);
-
-            // Ensure we include at least a reasonable energy range
-            const calculatedEnergy = parseFloat(labels[dataEndIndex]) * 1.1;
-
-            // Minimum zoom: at least 200 keV or 5% of full range
-            const minZoom = Math.max(200, fullMaxEnergy * 0.05);
-            maxEnergy = Math.max(calculatedEnergy, minZoom);
-
-            // Cap at full range
-            maxEnergy = Math.min(maxEnergy, fullMaxEnergy);
-
-            // ==========================================
-            // Y-AXIS AUTO-SCALE 
-            // ==========================================
-            // Find max count in the visible range only
+            // Y-AXIS AUTO-SCALE (Visible range headroom)
             const visibleEndIndex = labels.findIndex(e => parseFloat(e) > maxEnergy);
             const visibleData = visibleEndIndex > 0 ? dataPoints.slice(0, visibleEndIndex) : dataPoints;
             const visibleMaxCount = Math.max(...visibleData);
-
-            // 15% headroom above visible maximum peak
             maxY = visibleMaxCount * 1.15;
         }
 
+        if (maxY <= 0) maxY = 100;
 
-        // Get theme colors from CSS variables
-        const styles = getComputedStyle(document.documentElement);
-        const annotationColor = styles.getPropertyValue('--chart-annotation-color').trim() || '#f59e0b';
-
-        // Annotations - use display_energy for chart alignment (snapped to local max)
-        const annotations = {};
-        if (peaks && peaks.length > 0) {
-            peaks.slice(0, 10).forEach((peak, idx) => {
-                // Use display_energy (local max of raw data) if available, else use energy
-                const displayX = peak.display_energy || peak.energy;
-                annotations[`peak${idx}`] = {
-                    type: 'point',
-                    xValue: displayX,
-                    yValue: peak.counts,
-                    backgroundColor: annotationColor + '80', // Add transparency
-                    radius: 6,
-                    borderColor: annotationColor,
-                    borderWidth: 2
-                };
-            });
-        }
-
-        // Calculate min energy (add left buffer for visual appeal)
+        // Calculate min energy (add left buffer for visual appeal, from git version)
         let minEnergy = 0;
         if (this.autoScale && labels.length > 0) {
-            // Find first non-zero data point
             let firstNonZeroIndex = 0;
             for (let i = 0; i < dataPoints.length; i++) {
                 if (dataPoints[i] > 0) {
@@ -172,80 +160,177 @@ export class AlphaHoundChart {
                     break;
                 }
             }
-            // Add 5% left buffer (but never go below 0)
             const firstDataEnergy = parseFloat(labels[firstNonZeroIndex]);
             minEnergy = Math.max(0, firstDataEnergy - (maxEnergy * 0.05));
         }
 
-        this.chart = new Chart(this.ctx, {
-            type: 'line',
-            data: {
-                datasets: [{
-                    label: 'Counts',
-                    data: chartData,
-                    borderColor: this.primaryColor,
-                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    fill: true,
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { intersect: false, mode: 'index' },
-                scales: {
-                    x: {
-                        type: 'linear',
-                        min: 0,  // Always start at 0 keV - no negative energy
-                        max: maxEnergy,
-                        bounds: 'data',  // Prevent Chart.js from adding padding
-                        title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: {
-                            color: '#94a3b8',
-                            includeBounds: true
-                        }
-                    },
-                    y: {
-                        type: scaleType,
-                        min: scaleType === 'logarithmic' ? 1 : 0,
-                        max: maxY, // Apply intelligent max if autoscale is active
-                        beginAtZero: scaleType === 'linear',
-                        title: { display: true, text: 'Counts', color: '#94a3b8' },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    }
-                },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        borderColor: 'rgba(148, 163, 184, 0.2)',
-                        borderWidth: 1
-                    },
-                    zoom: {
-                        zoom: {
-                            wheel: { enabled: true },
-                            pinch: { enabled: true },
-                            mode: 'xy',
-                            onZoom: () => this.updateScrubberFromChart()
-                        },
-                        pan: {
-                            enabled: true,
-                            mode: 'xy',
-                            onPan: () => this.updateScrubberFromChart()
-                        }
-                    },
-                    annotation: { annotations: annotations }
-                }
-            }
-        });
+        if (this.chart) {
+            // [STABILITY] Non-destructive update 
+            this.chart.data.datasets[0].data = chartData;
 
-        // Sync scrubber after initial/new render
+            // Handle Peaks as Annotations (as done in git version, but theme-aware)
+            // Clear old peak annotations from master state
+            Object.keys(this.annotations).forEach(k => {
+                if (k.startsWith('peak')) delete this.annotations[k];
+            });
+
+            if (peaks && peaks.length > 0) {
+                peaks.slice(0, 15).forEach((peak, idx) => {
+                    // Find closest chart data point to peak energy
+                    let closestIdx = 0;
+                    let closestDiff = Infinity;
+                    for (let i = 0; i < chartData.length; i++) {
+                        const diff = Math.abs(chartData[i].x - peak.energy);
+                        if (diff < closestDiff) {
+                            closestDiff = diff;
+                            closestIdx = i;
+                        }
+                    }
+                    const actualY = chartData[closestIdx]?.y ?? (peak.counts || peak.count || 0);
+
+                    this.annotations[`peak${idx}`] = {
+                        type: 'point',
+                        xValue: chartData[closestIdx]?.x ?? peak.energy,
+                        yValue: actualY,
+                        backgroundColor: peakColor + '80',
+                        radius: 6,
+                        borderColor: peakColor,
+                        borderWidth: 2,
+                        drawTime: 'afterDatasetsDraw'
+                    };
+                });
+            }
+
+            // Scale Management: Detect mode switch to snap view
+            const xScale = this.chart.options.scales.x;
+            const yScale = this.chart.options.scales.y;
+            const modeSwitched = this._lastRenderMode !== this.autoScale;
+            console.log(`[Chart] autoScale=${this.autoScale}, lastRenderMode=${this._lastRenderMode}, modeSwitched=${modeSwitched}, fullMaxEnergy=${fullMaxEnergy}`);
+            this._lastRenderMode = this.autoScale;
+
+            if (this.autoScale) {
+                console.log(`[Chart] AutoScale: setting x=[${minEnergy}, ${maxEnergy}], y=[0, ${maxY}]`);
+                // Use zoom plugin's zoomScale for programmatic zoom
+                this.chart.zoomScale('x', { min: minEnergy, max: maxEnergy }, 'none');
+                this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: maxY }, 'none');
+            } else {
+                // Full spectrum mode - reset to full scale
+                const fullYMax = (dataPoints.length > 0 ? Math.max(...dataPoints) : 100) * 1.15;
+                console.log(`[Chart] FullSpectrum: setting x=[0, ${fullMaxEnergy}], y=[0, ${fullYMax}]`);
+                this.chart.zoomScale('x', { min: 0, max: fullMaxEnergy }, 'none');
+                this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: fullYMax }, 'none');
+            }
+
+            yScale.type = scaleType;
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
+            this.chart.update('none');
+        } else {
+            // First time render - Initialize master annotations
+            if (peaks && peaks.length > 0) {
+                peaks.slice(0, 15).forEach((peak, idx) => {
+                    // Find closest chart data point to peak energy
+                    let closestIdx = 0;
+                    let closestDiff = Infinity;
+                    for (let i = 0; i < chartData.length; i++) {
+                        const diff = Math.abs(chartData[i].x - peak.energy);
+                        if (diff < closestDiff) {
+                            closestDiff = diff;
+                            closestIdx = i;
+                        }
+                    }
+                    const actualY = chartData[closestIdx]?.y ?? (peak.counts || peak.count || 0);
+
+                    this.annotations[`peak${idx}`] = {
+                        type: 'point',
+                        xValue: chartData[closestIdx]?.x ?? peak.energy,
+                        yValue: actualY,
+                        backgroundColor: peakColor + '80',
+                        radius: 6,
+                        borderColor: peakColor,
+                        borderWidth: 2,
+                        drawTime: 'afterDatasetsDraw'
+                    };
+                });
+            }
+
+            this.chart = new Chart(this.ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Counts',
+                            data: chartData,
+                            borderColor: this.primaryColor,
+                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            fill: true,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                        axis: 'x'
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            min: minEnergy,
+                            max: maxEnergy,
+                            bounds: 'data',
+                            title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', includeBounds: true }
+                        },
+                        y: {
+                            type: scaleType,
+                            min: scaleType === 'logarithmic' ? 1 : 0,
+                            max: maxY,
+                            beginAtZero: scaleType === 'linear',
+                            title: { display: true, text: 'Counts', color: '#94a3b8' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(148, 163, 184, 0.2)',
+                            borderWidth: 1
+                        },
+                        zoom: {
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                mode: 'xy',
+                                onZoom: () => this.updateScrubberFromChart()
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                onPan: () => this.updateScrubberFromChart()
+                            },
+                            limits: {
+                                y: { min: scaleType === 'logarithmic' ? 1 : 0 }
+                            }
+                        },
+                        annotation: {
+                            annotations: this._clone(this.annotations)
+                        }
+                    }
+                }
+            });
+        }
+
+        // Sync scrubber after render
         if (this.scrubberContainer && this.fullCounts) {
             this.updateScrubberFromChart();
         }
@@ -253,6 +338,7 @@ export class AlphaHoundChart {
 
     toggleAutoScale() {
         this.autoScale = !this.autoScale;
+        // Note: render() will call resetZoom on mode switch, no need to do it here
         return this.autoScale;
     }
 
@@ -304,6 +390,7 @@ export class AlphaHoundChart {
                         borderColor: 'rgba(148, 163, 184, 0.2)',
                         borderWidth: 1
                     },
+                    annotation: { annotations: {} },
                     zoom: {
                         zoom: {
                             wheel: { enabled: true },
@@ -315,6 +402,9 @@ export class AlphaHoundChart {
                             enabled: true,
                             mode: 'xy',
                             onPan: () => this.updateScrubberFromChart()
+                        },
+                        limits: {
+                            y: { min: 0 }
                         }
                     }
                 }
@@ -333,7 +423,23 @@ export class AlphaHoundChart {
 
     resetZoom() {
         if (this.chart) {
+            this.autoScale = false;
+            this._lastRenderMode = false;
             this.chart.resetZoom();
+
+            // Re-apply full spectrum limits manually to ensure they stick
+            const fullMax = this.fullMaxEnergy || 3000;
+            this.chart.options.scales.x.min = 0;
+            this.chart.options.scales.x.max = fullMax;
+
+            // Notify UI via button state if possible (main.js handles the button usually)
+            const btn = document.getElementById('btn-auto-scale');
+            if (btn) {
+                btn.classList.remove('active');
+                btn.textContent = 'Full Spectrum';
+            }
+
+            this.chart.update();
             this.updateScrubberFromChart();
         }
     }
@@ -349,7 +455,8 @@ export class AlphaHoundChart {
             console.warn('Chart not initialized');
             return;
         }
-
+        if (this.isSyncing) return;
+        this.isSyncing = true;
         try {
             // Check if annotation plugin is available
             if (!this.chart.options.plugins.annotation) {
@@ -366,13 +473,13 @@ export class AlphaHoundChart {
             const styles = getComputedStyle(document.documentElement);
             const annotationColor = styles.getPropertyValue('--chart-annotation-color').trim() || '#f59e0b';
 
-            // Clear any existing ROI highlights
-            delete this.chart.options.plugins.annotation.annotations.roiHighlight;
-            delete this.chart.options.plugins.annotation.annotations.roiLineStart;
-            delete this.chart.options.plugins.annotation.annotations.roiLineEnd;
+            // Clear any existing ROI highlights from master state
+            delete this.annotations.roiHighlight;
+            delete this.annotations.roiLineStart;
+            delete this.annotations.roiLineEnd;
 
-            // Add subtle background box
-            this.chart.options.plugins.annotation.annotations.roiHighlight = {
+            // Add subtle background box to master
+            this.annotations.roiHighlight = {
                 type: 'box',
                 xMin: startEnergy,
                 xMax: endEnergy,
@@ -391,8 +498,8 @@ export class AlphaHoundChart {
                 }
             };
 
-            // Add vertical line at start of ROI
-            this.chart.options.plugins.annotation.annotations.roiLineStart = {
+            // Add vertical line at start of ROI to master
+            this.annotations.roiLineStart = {
                 type: 'line',
                 xMin: startEnergy,
                 xMax: startEnergy,
@@ -402,8 +509,8 @@ export class AlphaHoundChart {
                 drawTime: 'afterDatasetsDraw'
             };
 
-            // Add vertical line at end of ROI
-            this.chart.options.plugins.annotation.annotations.roiLineEnd = {
+            // Add vertical line at end of ROI to master
+            this.annotations.roiLineEnd = {
                 type: 'line',
                 xMin: endEnergy,
                 xMax: endEnergy,
@@ -413,27 +520,34 @@ export class AlphaHoundChart {
                 drawTime: 'afterDatasetsDraw'
             };
 
+            // Sync chart configuration with cloned master state
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
+
             // Force full chart update (no animation to prevent recursion)
             this.chart.update('none');
             console.log(`✓ ROI highlighted: ${startEnergy}-${endEnergy} keV`);
         } catch (err) {
             console.error('Error highlighting ROI:', err);
+        } finally {
+            this.isSyncing = false;
         }
     }
 
-    /**
-     * Clear ROI highlighting from the chart.
-     */
     clearROIHighlight() {
-        if (!this.chart) return;
+        if (!this.chart || !this.chart.options.plugins.annotation?.annotations) return;
+        if (this.isSyncing) return;
 
-        const annotations = this.chart.options.plugins.annotation.annotations || {};
-        delete annotations.roiHighlight;
-        delete annotations.roiLineStart;
-        delete annotations.roiLineEnd;
+        this.isSyncing = true;
+        try {
+            delete this.annotations.roiHighlight;
+            delete this.annotations.roiLineStart;
+            delete this.annotations.roiLineEnd;
 
-        this.chart.options.plugins.annotation.annotations = annotations;
-        this.chart.update('none');
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
+            this.chart.update('none');
+        } finally {
+            this.isSyncing = false;
+        }
     }
 
     /**
@@ -442,33 +556,37 @@ export class AlphaHoundChart {
      */
     highlightMultipleROI(regions) {
         if (!this.chart) return;
+        if (this.isSyncing) return;
 
-        const annotations = this.chart.options.plugins.annotation.annotations || {};
+        this.isSyncing = true;
+        try {
+            // Remove existing ROI highlights from master
+            Object.keys(this.annotations).filter(k => k.startsWith('roi_')).forEach(k => delete this.annotations[k]);
 
-        // Remove existing ROI highlights
-        Object.keys(annotations).filter(k => k.startsWith('roi_')).forEach(k => delete annotations[k]);
+            // Add new ones to master
+            regions.forEach((region, idx) => {
+                this.annotations[`roi_${idx}`] = {
+                    type: 'box',
+                    xMin: region.start,
+                    xMax: region.end,
+                    backgroundColor: region.color || 'rgba(249, 115, 22, 0.25)',
+                    borderColor: region.borderColor || 'rgba(249, 115, 22, 0.9)',
+                    borderWidth: 2,
+                    label: {
+                        display: !!region.label,
+                        content: region.label || '',
+                        position: 'start',
+                        color: region.labelColor || '#f97316',
+                        font: { size: 10, weight: 'bold' }
+                    }
+                };
+            });
 
-        // Add new ones
-        regions.forEach((region, idx) => {
-            annotations[`roi_${idx}`] = {
-                type: 'box',
-                xMin: region.start,
-                xMax: region.end,
-                backgroundColor: region.color || 'rgba(249, 115, 22, 0.25)',
-                borderColor: region.borderColor || 'rgba(249, 115, 22, 0.9)',
-                borderWidth: 2,
-                label: {
-                    display: !!region.label,
-                    content: region.label || '',
-                    position: 'start',
-                    color: region.labelColor || '#f97316',
-                    font: { size: 10, weight: 'bold' }
-                }
-            };
-        });
-
-        this.chart.options.plugins.annotation.annotations = annotations;
-        this.chart.update('none');
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
+            this.chart.update('none');
+        } finally {
+            this.isSyncing = false;
+        }
     }
 
     /**
@@ -479,7 +597,7 @@ export class AlphaHoundChart {
      */
     highlightXRFPeaks(peaks, color = null, skipUpdate = false) {
         // Guard against recursion
-        if (this.isUpdatingAnnotations) {
+        if (this.isSyncing) {
             console.warn('[XRF Highlight] Blocked recursive call');
             return;
         }
@@ -495,92 +613,63 @@ export class AlphaHoundChart {
             return;
         }
 
-        this.isUpdatingAnnotations = true;
+        this.isSyncing = true;
         try {
-            // Ensure annotation plugin is configured
-            if (!this.chart.options.plugins.annotation) {
-                this.chart.options.plugins.annotation = { annotations: {} };
-            }
-            if (!this.chart.options.plugins.annotation.annotations) {
-                this.chart.options.plugins.annotation.annotations = {};
-            }
+            // Reset label offsets for fresh stacking calculation
+            this.labelOffsets = {};
 
-            const annotations = this.chart.options.plugins.annotation.annotations;
+            // 1. Remove existing XRF highlights from master
+            Object.keys(this.annotations).filter(k => k.startsWith('xrf_')).forEach(k => delete this.annotations[k]);
 
-            // Remove existing XRF highlights
-            Object.keys(annotations).filter(k => k.startsWith('xrf_')).forEach(k => delete annotations[k]);
+            // 2. Add new ones to master
+            const styles = getComputedStyle(document.documentElement);
+            const xrfColor = styles.getPropertyValue('--chart-xrf-color').trim() || '#8b5cf6';
+            const themedColor = xrfColor; // Assuming themedColor logic exists or use standard
 
-            // Helper: Check for existing isotope annotations at this energy
-            const countExistingAnnotationsAtEnergy = (energy) => {
-                let count = 0;
-                Object.keys(annotations).forEach(key => {
-                    if (key.startsWith('iso_')) {
-                        const ann = annotations[key];
-                        if (ann.xMin && Math.abs(ann.xMin - energy) < 2.0) {
-                            count++;
-                        }
-                    }
-                });
-                return count;
-            };
-
-            // Add vertical line for each XRF peak
             peaks.forEach((peak, idx) => {
-                if (!peak.energy) {
-                    console.warn(`[XRF Highlight] Peak ${idx} missing energy:`, peak);
-                    return;
-                }
+                const en = peak.energy;
+                const safeName = (peak.element || 'X').replace(/[^a-zA-Z0-9]/g, '_');
+                const yOffset = this._getVerticalOffset(en);
 
-                // Check for overlapping isotope annotations and offset label upward
-                const overlapCount = countExistingAnnotationsAtEnergy(peak.energy);
-                const yAdjust = -(overlapCount * 16); // Offset upward by 16px per existing annotation
-
-                annotations[`xrf_${idx}`] = {
+                this.annotations[`xrf_${safeName}_${idx}`] = {
                     type: 'line',
-                    xMin: peak.energy,
-                    xMax: peak.energy,
+                    xMin: en,
+                    xMax: en,
                     borderColor: themedColor,
                     borderWidth: 2,
                     borderDash: [6, 3],
                     drawTime: 'afterDatasetsDraw',
                     label: {
                         display: true,
-                        content: `${peak.element} ${peak.shell}`,
-                        position: 'start',
-                        yAdjust: yAdjust,
+                        content: `${peak.element || ''} ${peak.shell || ''}`,
+                        position: 'end',
+                        yAdjust: -yOffset, // STACKING (negative = upward)
                         color: themedColor,
                         backgroundColor: 'rgba(0,0,0,0.7)',
                         font: { size: 9, weight: 'bold' },
                         padding: 3
                     }
                 };
-                console.log(`[XRF Highlight] Added annotation xrf_${idx} at ${peak.energy} keV`);
             });
 
-            if (!skipUpdate) {
-                this.chart.update('none');
-            }
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
+            if (!skipUpdate) this.chart.update('none');
             console.log(`✓ XRF peaks highlighted: ${peaks.length} lines`);
         } finally {
-            this.isUpdatingAnnotations = false;
+            this.isSyncing = false;
         }
     }
 
-
-    /**
-     * Clear XRF peak highlighting from the chart.
-     */
     clearXRFHighlights() {
-        if (!this.chart || this.isUpdatingAnnotations) return;
-
-        this.isUpdatingAnnotations = true;
+        if (!this.chart || this.isSyncing) return;
+        this.isSyncing = true;
         try {
-            const annotations = this.chart.options.plugins.annotation.annotations || {};
-            Object.keys(annotations).filter(k => k.startsWith('xrf_')).forEach(k => delete annotations[k]);
-            this.chart.options.plugins.annotation.annotations = annotations;
+            Object.keys(this.annotations).filter(k => k.startsWith('xrf_')).forEach(k => delete this.annotations[k]);
+            this.labelOffsets = {}; // Reset stacking on clear
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
             this.chart.update('none');
         } finally {
-            this.isUpdatingAnnotations = false;
+            this.isSyncing = false;
         }
     }
 
@@ -592,18 +681,15 @@ export class AlphaHoundChart {
      * @param {boolean} skipUpdate - If true, skip chart.update() (for batch operations)
      */
     clearIsotopeHighlights(skipUpdate = false) {
-        if (!this.chart || this.isUpdatingAnnotations) return;
-
-        this.isUpdatingAnnotations = true;
+        if (!this.chart || this.isSyncing) return;
+        this.isSyncing = true;
         try {
-            const annotations = this.chart.options.plugins.annotation.annotations || {};
-            Object.keys(annotations).filter(k => k.startsWith('iso_')).forEach(k => delete annotations[k]);
-            this.chart.options.plugins.annotation.annotations = annotations;
-            if (!skipUpdate) {
-                this.chart.update('none');
-            }
+            Object.keys(this.annotations).filter(k => k.startsWith('iso_')).forEach(k => delete this.annotations[k]);
+            this.labelOffsets = {}; // Reset stacking on clear
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
+            if (!skipUpdate) this.chart.update('none');
         } finally {
-            this.isUpdatingAnnotations = false;
+            this.isSyncing = false;
         }
     }
 
@@ -616,81 +702,51 @@ export class AlphaHoundChart {
      * @param {string} color - Color for this isotope's lines
      */
     addIsotopeHighlight(isotopeName, matchedPeaks, expectedPeaks, color, skipUpdate = false) {
-        if (!this.chart || this.isUpdatingAnnotations) {
-            console.warn('[Isotope Highlight] Chart not initialized or recursion blocked');
+        if (!this.chart || (this.isSyncing && !skipUpdate)) {
+            console.warn('[Isotope Highlight] recursion blocked');
             return;
         }
 
-        this.isUpdatingAnnotations = true;
+        const wasSyncing = this.isSyncing;
+        this.isSyncing = true;
         try {
-            // Ensure annotation plugin is configured
-            if (!this.chart.options.plugins.annotation) {
-                this.chart.options.plugins.annotation = { annotations: {} };
-            }
-            if (!this.chart.options.plugins.annotation.annotations) {
-                this.chart.options.plugins.annotation.annotations = {};
-            }
+            // Reset label offsets for fresh stacking calculation
+            this.labelOffsets = {};
 
-            const annotations = this.chart.options.plugins.annotation.annotations;
-
-            // Create safe key from isotope name (remove special chars)
+            // 1. Remove existing ones for this isotope from master
             const safeKey = isotopeName.replace(/[^a-zA-Z0-9]/g, '_');
+            Object.keys(this.annotations).forEach(k => {
+                if (k.startsWith(`iso_${safeKey}`)) delete this.annotations[k];
+            });
 
-            // Fallback color if none provided
-            const baseColor = color || '#f59e0b';
+            // 2. Add new ones to master
+            const styles = getComputedStyle(document.documentElement);
+            const isoColor = color || styles.getPropertyValue('--chart-isotope-color').trim() || '#3b82f6';
 
-            // Lighter color for unmatched expected peaks (35% alpha)
-            const unmatchedColor = baseColor.startsWith('#')
-                ? baseColor + '59'
-                : baseColor.replace(/[\d.]+\)$/, '0.35)');
-
-            // Build set of matched energies for quick lookup with tolerance
-            const matchedEnergies = [];
-            if (matchedPeaks) {
-                matchedPeaks.forEach(p => {
-                    const en = p.observed || p.expected || p.energy;
-                    if (en) matchedEnergies.push(en);
-                });
+            // Safe color parsing for the unmatched line (opacity)
+            let unmatchedColor;
+            if (isoColor.startsWith('#')) {
+                unmatchedColor = isoColor.length === 7 ? isoColor + '59' : isoColor;
+            } else if (isoColor.startsWith('rgba')) {
+                unmatchedColor = isoColor.replace(/[\d.]+\)$/, '0.35)');
+            } else if (isoColor.startsWith('rgb')) {
+                unmatchedColor = isoColor.replace(/\)$/, ', 0.35)').replace(/^rgb/, 'rgba');
+            } else {
+                unmatchedColor = isoColor + '80';
             }
 
-            // Helper: Check if there's already an annotation (isotope or XRF) at this energy
-            // Returns the count of existing annotations at this energy (for stacking)
-            const countExistingAnnotationsAtEnergy = (energy) => {
-                let count = 0;
-                Object.keys(annotations).forEach(key => {
-                    // Check other isotope annotations (not from this isotope)
-                    if (key.startsWith('iso_') && !key.startsWith(`iso_${safeKey}`)) {
-                        const ann = annotations[key];
-                        if (ann.xMin && Math.abs(ann.xMin - energy) < 2.0) {
-                            count++;
-                        }
-                    }
-                    // Also check XRF annotations
-                    if (key.startsWith('xrf_')) {
-                        const ann = annotations[key];
-                        if (ann.xMin && Math.abs(ann.xMin - energy) < 2.0) {
-                            count++;
-                        }
-                    }
-                });
-                return count;
-            };
+            // Build set of matched energies
+            const matchedEnergies = (matchedPeaks || []).map(p => p.observed || p.expected || p.energy).filter(Number.isFinite);
 
             // First: Add ALL expected peaks in lighter saturation (unmatched)
-            if (expectedPeaks && expectedPeaks.length > 0) {
+            if (expectedPeaks) {
                 expectedPeaks.forEach((peak, idx) => {
-                    const en = peak.energy || peak.expected || peak.observed;
-                    if (!en) return;
-
-                    // Skip if this energy was matched (within 2 keV tolerance)
+                    const en = peak.energy || peak.expected;
+                    if (!Number.isFinite(en)) return;
                     const isMatched = matchedEnergies.some(me => Math.abs(me - en) < 2.0);
                     if (isMatched) return;
 
-                    // Check for overlapping annotations and offset label upward
-                    const overlapCount = countExistingAnnotationsAtEnergy(en);
-                    const yAdjust = -(overlapCount * 16); // Offset upward (negative) by 16px per existing annotation
-
-                    annotations[`iso_${safeKey}_exp_${idx}`] = {
+                    this.annotations[`iso_${safeKey}_exp_${idx}`] = {
                         type: 'line',
                         xMin: en,
                         xMax: en,
@@ -701,8 +757,7 @@ export class AlphaHoundChart {
                         label: {
                             display: true,
                             content: `(${en.toFixed(0)})`,
-                            position: 'start',
-                            yAdjust: yAdjust,
+                            position: 'end',
                             color: unmatchedColor,
                             backgroundColor: 'rgba(0,0,0,0.5)',
                             font: { size: 8, weight: 'normal' },
@@ -713,31 +768,27 @@ export class AlphaHoundChart {
             }
 
             // Second: Add MATCHED peaks in full color
-            if (matchedPeaks && matchedPeaks.length > 0) {
+            if (matchedPeaks) {
                 matchedPeaks.forEach((peak, idx) => {
                     const en = peak.observed || peak.expected || peak.energy;
-                    if (!en) return;
+                    if (!Number.isFinite(en)) return;
 
-                    const label = `${isotopeName} ${en.toFixed(0)}`;
+                    const yOffset = this._getVerticalOffset(en);
 
-                    // Check for overlapping annotations and offset label upward
-                    const overlapCount = countExistingAnnotationsAtEnergy(en);
-                    const yAdjust = -(overlapCount * 16); // Offset upward (negative) by 16px per existing annotation
-
-                    annotations[`iso_${safeKey}_${idx}`] = {
+                    this.annotations[`iso_${safeKey}_${idx}`] = {
                         type: 'line',
                         xMin: en,
                         xMax: en,
-                        borderColor: baseColor,
+                        borderColor: isoColor,
                         borderWidth: 2,
                         borderDash: [4, 4],
                         drawTime: 'afterDatasetsDraw',
                         label: {
                             display: true,
-                            content: label,
-                            position: 'start',
-                            yAdjust: yAdjust,
-                            color: baseColor,
+                            content: `${isotopeName} ${en.toFixed(0)}`,
+                            position: 'end',
+                            yAdjust: -yOffset, // STACKING (negative = upward)
+                            color: isoColor,
                             backgroundColor: 'rgba(0,0,0,0.7)',
                             font: { size: 9, weight: 'bold' },
                             padding: 3
@@ -746,34 +797,27 @@ export class AlphaHoundChart {
                 });
             }
 
-            if (!skipUpdate) {
-                this.chart.update('none');
-            }
-            console.log(`✓ Added isotope highlight: ${isotopeName} (${matchedPeaks?.length || 0} matched, ${expectedPeaks?.length || 0} expected)`);
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
+            if (!skipUpdate) this.chart.update('none');
+            console.log(`✓ Added isotope highlight: ${isotopeName}`);
         } finally {
-            this.isUpdatingAnnotations = false;
+            this.isSyncing = wasSyncing;
         }
     }
 
-    /**
-     * Remove isotope peak highlighting for a single isotope.
-     * @param {string} isotopeName - Name of the isotope to remove
-     */
     removeIsotopeHighlight(isotopeName) {
-        if (!this.chart || !this.chart.options.plugins.annotation.annotations || this.isUpdatingAnnotations) return;
-
-        this.isUpdatingAnnotations = true;
+        if (!this.chart || this.isSyncing) return;
+        this.isSyncing = true;
         try {
-            const annotations = this.chart.options.plugins.annotation.annotations;
             const safeKey = isotopeName.replace(/[^a-zA-Z0-9]/g, '_');
-
-            const keysToDelete = Object.keys(annotations).filter(k => k.startsWith('iso_' + safeKey));
-            keysToDelete.forEach(k => delete annotations[k]);
-
+            Object.keys(this.annotations).forEach(k => {
+                if (k.startsWith(`iso_${safeKey}`)) delete this.annotations[k];
+            });
+            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
             this.chart.update('none');
             console.log(`✓ Removed isotope highlight: ${isotopeName}`);
         } finally {
-            this.isUpdatingAnnotations = false;
+            this.isSyncing = false;
         }
     }
 
@@ -957,11 +1001,30 @@ export class AlphaHoundChart {
 }
 
 export class DoseRateChart {
-    constructor() {
-        this.ctx = document.getElementById('doseRateChart')?.getContext('2d');
+    /**
+     * Create a DoseRateChart instance.
+     * @param {HTMLCanvasElement|string} canvas - Canvas element or element ID
+     * @param {object} options - Optional configuration
+     * @param {string} options.label - Chart label
+     * @param {string} options.color - Line color (defaults to theme accent)
+     * @param {number} options.maxPoints - Maximum data points to display (default 300)
+     */
+    constructor(canvas, options = {}) {
+        // Support both canvas element and ID string
+        if (typeof canvas === 'string') {
+            this.ctx = document.getElementById(canvas)?.getContext('2d');
+        } else if (canvas instanceof HTMLCanvasElement) {
+            this.ctx = canvas.getContext('2d');
+        } else {
+            // Fallback for backward compatibility
+            this.ctx = document.getElementById('doseRateChart')?.getContext('2d');
+        }
+
+        this.options = options;
         this.chart = null;
-        this.data = new Array(300).fill(null); // 5 minutes history (assuming ~1Hz)
-        this.labels = new Array(300).fill('');
+        const maxPoints = options.maxPoints || 300;
+        this.data = new Array(maxPoints).fill(null);
+        this.labels = new Array(maxPoints).fill('');
         this.init();
     }
 
@@ -971,8 +1034,14 @@ export class DoseRateChart {
 
         // Get theme colors
         const styles = getComputedStyle(document.documentElement);
-        // Default to accent color or fallbacks
-        const lineColor = styles.getPropertyValue('--accent-color').trim() || '#10b981';
+        // Use provided color preference, color variable name, or fallback to accent color
+        let lineColor;
+        if (this.options.colorVar) {
+            lineColor = styles.getPropertyValue(this.options.colorVar).trim();
+        }
+        if (!lineColor) {
+            lineColor = this.options.color || styles.getPropertyValue('--accent-color').trim() || '#10b981';
+        }
 
         this.chart = new Chart(this.ctx, {
             type: 'line',
@@ -982,7 +1051,9 @@ export class DoseRateChart {
                     data: this.data,
                     borderColor: lineColor,
                     borderWidth: 2,
-                    backgroundColor: lineColor + '20', // Transparent fill
+                    backgroundColor: lineColor.startsWith('#') ? lineColor + '20' :
+                        lineColor.startsWith('rgba') ? lineColor.replace(/[\d.]+\)$/, '0.2)') :
+                            lineColor.replace(/\)$/, ', 0.2)').replace(/^rgb/, 'rgba'),
                     fill: 'start',
                     pointRadius: 0,
                     tension: 0.4,
@@ -1004,7 +1075,7 @@ export class DoseRateChart {
                         display: true,
                         position: 'right',
                         ticks: {
-                            color: '#64748b',
+                            color: styles.getPropertyValue('--text-secondary').trim() || '#64748b',
                             font: { size: 10 },
                             maxTicksLimit: 3
                         },
@@ -1017,24 +1088,54 @@ export class DoseRateChart {
         });
     }
 
+    /**
+     * Add a new data point to the chart.
+     * @param {number} value - The value to add
+     */
+    addDataPoint(value) {
+        this.update(value);
+    }
+
     update(doseRate) {
-        if (!this.chart) return;
+        if (!this.chart || this.isSyncing) return;
+        this.isSyncing = true;
 
-        // Push new value, shift old
-        this.data.push(doseRate);
-        this.data.shift();
+        try {
+            // Push new value, shift old
+            this.data.push(doseRate);
+            this.data.shift();
 
-        // Update chart data reference (Chart.js optimizes this)
-        this.chart.data.datasets[0].data = this.data;
+            // Update chart data reference (Chart.js optimizes this)
+            this.chart.data.datasets[0].data = this.data;
 
-        // Update color dynamically if theme changes
-        // (Optional optimization: only do this if theme changed)
-        const styles = getComputedStyle(document.documentElement);
-        const lineColor = styles.getPropertyValue('--accent-color').trim() || '#10b981';
-        this.chart.data.datasets[0].borderColor = lineColor;
-        this.chart.data.datasets[0].backgroundColor = lineColor + '20';
+            // Update color dynamically if theme changes
+            const styles = getComputedStyle(document.documentElement);
+            let lineColor;
+            if (this.options.colorVar) {
+                lineColor = styles.getPropertyValue(this.options.colorVar).trim();
+            }
+            if (!lineColor) {
+                lineColor = this.options.color || styles.getPropertyValue('--accent-color').trim() || '#10b981';
+            }
+            this.chart.data.datasets[0].borderColor = lineColor;
+            this.chart.data.datasets[0].backgroundColor = lineColor.startsWith('#') ? lineColor + '20' :
+                lineColor.startsWith('rgba') ? lineColor.replace(/[\d.]+\)$/, '0.2)') :
+                    lineColor.replace(/\)$/, ', 0.2)').replace(/^rgb/, 'rgba');
 
-        this.chart.update('none'); // Update without animation
+            this.chart.update('none'); // Update without animation
+        } finally {
+            this.isSyncing = false;
+        }
+    }
+
+    /**
+     * Destroy the chart instance.
+     */
+    destroy() {
+        if (this.chart) {
+            this.chart.destroy();
+            this.chart = null;
+        }
     }
 }
 

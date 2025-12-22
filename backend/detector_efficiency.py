@@ -95,6 +95,84 @@ DETECTOR_DATABASE = {
             2614: 1.2,
         }
     },
+    
+    # === Radiacode Detectors ===
+    "Radiacode 103": {
+        "type": "CsI(Tl)",
+        "description": "Radiacode 103 - CsI(Tl) 10×10×10mm",
+        "dimensions_mm": (10, 10, 10),
+        "volume_cm3": 1.0,
+        "min_energy_keV": 20,
+        "cs137_sensitivity_cps_per_uSv_h": 30.0,
+        "energy_resolution_662keV": 0.084,  # 8.4% FWHM
+        "efficiencies": {
+            # Based on 1.0 cm³ CsI(Tl) crystal
+            20: 22.0,
+            60: 19.0,
+            93: 16.0,
+            122: 13.5,
+            186: 11.0,
+            352: 6.5,
+            511: 4.8,
+            609: 3.9,
+            662: 3.5,
+            1173: 1.8,
+            1332: 1.5,
+            1461: 1.3,
+            2614: 0.7,
+        }
+    },
+    "Radiacode 103G": {
+        "type": "GAGG",
+        "description": "Radiacode 103G - GAGG 10×10×10mm (best resolution)",
+        "dimensions_mm": (10, 10, 10),
+        "volume_cm3": 1.0,
+        "min_energy_keV": 20,
+        "cs137_sensitivity_cps_per_uSv_h": 40.0,
+        "energy_resolution_662keV": 0.074,  # 7.4% FWHM - best resolution
+        "efficiencies": {
+            # GAGG has higher light yield than CsI(Tl)
+            20: 24.0,
+            60: 21.0,
+            93: 17.5,
+            122: 14.5,
+            186: 12.0,
+            352: 7.0,
+            511: 5.2,
+            609: 4.2,
+            662: 3.8,
+            1173: 1.9,
+            1332: 1.6,
+            1461: 1.4,
+            2614: 0.75,
+        }
+    },
+    "Radiacode 110": {
+        "type": "CsI(Tl)",
+        "description": "Radiacode 110 - CsI(Tl) 14×14×14mm (highest sensitivity)",
+        "dimensions_mm": (14, 14, 14),
+        "volume_cm3": 3.0,  # ~2.7 cm³
+        "min_energy_keV": 20,
+        "cs137_sensitivity_cps_per_uSv_h": 77.0,  # Highest sensitivity
+        "energy_resolution_662keV": 0.084,  # 8.4% FWHM
+        "efficiencies": {
+            # Larger crystal = higher efficiency
+            20: 35.0,
+            60: 30.0,
+            93: 25.0,
+            122: 21.0,
+            186: 17.5,
+            352: 10.5,
+            511: 7.5,
+            609: 6.2,
+            662: 5.5,
+            1173: 2.8,
+            1332: 2.4,
+            1461: 2.1,
+            2614: 1.1,
+        }
+    },
+    
     "Custom": {
         "type": "Custom",
         "description": "User-defined detector efficiency",
@@ -105,6 +183,7 @@ DETECTOR_DATABASE = {
         "efficiencies": {}  # User will input
     }
 }
+
 
 
 def get_detector(name: str) -> Optional[Dict]:

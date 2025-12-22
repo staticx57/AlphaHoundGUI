@@ -16,6 +16,7 @@
     --font-family: 'Inter', system-ui, -apple-system, sans-serif;
     --accent-color: #38bdf8;
     --chart-annotation-color: #f59e0b;
+    --chart-peak-color: #ef4444;
     /* Orange for visibility */
 }
 
@@ -33,6 +34,7 @@
     --input-bg: #ffffff;
     --accent-color: #0ea5e9;
     --chart-annotation-color: #b91c1c;
+    --chart-peak-color: #dc2626;
     /* Darker Red for better visibility on light */
 }
 
@@ -56,6 +58,7 @@
     --input-bg: rgba(51, 41, 0, 0.6);
     --accent-color: #fbbf24;
     --chart-annotation-color: #ef4444;
+    --chart-peak-color: #ef4444;
     /* Bright Red for high contrast with gold/green */
 }
 
@@ -81,6 +84,7 @@
     --input-bg: rgba(20, 51, 20, 0.6);
     --accent-color: #10b981;
     --chart-annotation-color: #d946ef;
+    --chart-peak-color: #d946ef;
     /* Magenta for max contrast against toxic green */
 }
 
@@ -106,6 +110,7 @@
     --input-bg: rgba(26, 31, 58, 0.8);
     --accent-color: #5b9eff;
     --chart-annotation-color: #fbbf24;
+    --chart-peak-color: #fbbf24;
     /* Yellow for visibility */
 }
 
@@ -131,6 +136,7 @@
     --input-bg: rgba(13, 2, 8, 0.8);
     --accent-color: #00f5ff;
     --chart-annotation-color: #ff006e;
+    --chart-peak-color: #ff006e;
     /* Magenta/pink for visibility */
 }
 
@@ -555,8 +561,8 @@ tbody tr:hover {
 }
 
 .modal-content {
-    background: rgba(22, 32, 51, 0.98);
-    /* Solid widget content */
+    background: var(--card-bg);
+    /* Theme-aware modal background */
     border: 1px solid var(--border-color);
     border-radius: 1.5rem;
     padding: 1.5rem;

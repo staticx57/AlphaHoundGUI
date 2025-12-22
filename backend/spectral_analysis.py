@@ -51,13 +51,29 @@ def fit_gaussian(energies, counts, peak_centers, window_width=10):
             fwhm = 2.355 * sigma
             net_area = amplitude * sigma * np.sqrt(2 * np.pi)
             
+            # Extract uncertainties from covariance matrix diagonal
+            perr = np.sqrt(np.diag(pcov)) if pcov is not None else [0, 0, 0, 0]
+            amplitude_unc, mean_unc, sigma_unc, bg_unc = perr
+            fwhm_unc = 2.355 * sigma_unc
+            # Propagate uncertainty for net_area = A * sigma * sqrt(2*pi)
+            # Using quadrature: dA^2/A^2 + dS^2/S^2
+            if amplitude > 0 and sigma > 0:
+                net_area_unc = net_area * np.sqrt((amplitude_unc/amplitude)**2 + (sigma_unc/sigma)**2)
+            else:
+                net_area_unc = 0.0
+            
             fit_results.append({
                 "energy": float(mean),
+                "energy_unc": float(mean_unc),
                 "centroid_channel": float(np.interp(mean, energies, np.arange(len(energies)))),
                 "fwhm": float(abs(fwhm)),
+                "fwhm_unc": float(fwhm_unc),
                 "amplitude": float(amplitude),
+                "amplitude_unc": float(amplitude_unc),
                 "net_area": float(net_area),
+                "net_area_unc": float(net_area_unc),
                 "background_level": float(bg),
+                "background_unc": float(bg_unc),
                 "chi_squared": float(np.sum((y_window - gaussian_bg(x_window, *popt))**2) / (len(x_window) - 4))
             })
         except Exception as e:

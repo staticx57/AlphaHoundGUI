@@ -8,17 +8,17 @@ def test_subtract_background():
     bg = [10, 20, 30]
     
     # Normal subtraction
-    net = subtract_background(source, bg, scaling_factor=1.0)
-    assert net == [90, 180, 270]
+    result = subtract_background(source, bg, scaling_factor=1.0)
+    assert result['net_counts'] == [90, 180, 270]
     
     # With scaling
-    net_scaled = subtract_background(source, bg, scaling_factor=2.0)
-    assert net_scaled == [80, 160, 240]
+    result_scaled = subtract_background(source, bg, scaling_factor=2.0)
+    assert result_scaled['net_counts'] == [80, 160, 240]
     
     # Clamping
     high_bg = [200, 200, 200]
-    net_clamp = subtract_background(source, high_bg, scaling_factor=1.0)
-    assert net_clamp == [0, 0, 100]
+    result_clamp = subtract_background(source, high_bg, scaling_factor=1.0)
+    assert result_clamp['net_counts'] == [0, 0, 100]
 
 def test_calibrate_energy():
     channels = [10, 20, 30]

@@ -273,15 +273,37 @@ export class AlphaHoundUI {
             'live_time_s': 'Live Time',
             'real_time_s': 'Real Time',
             'energy_calibration_slope': 'Cal Slope',
-            'energy_calibration_offset': 'Cal Offset'
+            'energy_calibration_offset': 'Cal Offset',
+            'calibration': 'Calibration',
+            'duration_s': 'Duration'
         };
 
         const metaHtml = Object.entries(metadata || {}).map(([key, value]) => {
             let displayKey = keyMap[key] || key.toUpperCase().replaceAll('_', ' ');
             let displayValue = value || '-';
 
-            if (key === 'count_time_minutes' && value > 0) {
+            // Handle object values (like calibration coefficients)
+            if (value !== null && typeof value === 'object') {
+                if (key === 'calibration' && value.a0 !== undefined) {
+                    // Format calibration as readable string
+                    displayValue = `${value.a1?.toFixed(2) || '?'} keV/ch`;
+                } else {
+                    // Generic object handling
+                    displayValue = JSON.stringify(value);
+                }
+            } else if (key === 'count_time_minutes' && value > 0) {
                 displayValue = `${parseFloat(value).toFixed(2)} min`;
+            } else if (key === 'duration_s' && typeof value === 'number') {
+                // Format duration - convert seconds to readable format
+                if (value >= 3600) {
+                    const hrs = Math.floor(value / 3600);
+                    const mins = Math.floor((value % 3600) / 60);
+                    displayValue = `${hrs}h ${mins}m`;
+                } else if (value >= 60) {
+                    displayValue = `${(value / 60).toFixed(1)} min`;
+                } else {
+                    displayValue = `${value.toFixed(1)}s`;
+                }
             } else if (key.includes('time') && !isNaN(value) && typeof value === 'number') {
                 displayValue = `${value.toFixed(1)}s`;
             }
@@ -289,7 +311,7 @@ export class AlphaHoundUI {
             return `
                 <div class="stat-card">
                     <div class="stat-label">${displayKey}</div>
-                    <div class="stat-value" title="${value}">${displayValue}</div>
+                    <div class="stat-value" title="${typeof value === 'object' ? JSON.stringify(value) : value}">${displayValue}</div>
                 </div>
             `;
         }).join('');

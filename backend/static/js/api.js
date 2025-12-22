@@ -274,6 +274,118 @@ export class AlphaHoundAPI {
         return await response.json();
     }
 
+    // ============================================================
+    // Radiacode Device API
+    // ============================================================
+
+    /**
+     * Checks if Radiacode library is available on server.
+     * @returns {Promise<{available: boolean, ble_available: boolean, message: string}>}
+     */
+    async checkRadiacodeAvailable() {
+        const response = await fetch('/radiacode/available');
+        return await response.json();
+    }
+
+    /**
+     * Scans for nearby Radiacode BLE devices.
+     * @param {number} timeout - Scan timeout in seconds (default: 5)
+     * @returns {Promise<Array<{name: string, address: string, rssi: number}>>} List of discovered devices
+     * @throws {Error} If BLE not available or scan fails
+     */
+    async scanRadiacodeBLE(timeout = 5.0) {
+        const response = await fetch(`/radiacode/scan-ble?timeout=${timeout}`);
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'BLE scan failed');
+        }
+        return await response.json();
+    }
+
+    /**
+     * Connects to Radiacode device.
+     * @param {boolean} useBluetooth - Use Bluetooth instead of USB
+     * @param {string|null} bluetoothMac - Bluetooth MAC address (required if useBluetooth=true)
+     * @returns {Promise<Object>} Connection status and device info
+     * @throws {Error} If connection fails
+     */
+    async connectRadiacode(useBluetooth = false, bluetoothMac = null) {
+        const response = await fetch('/radiacode/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                use_bluetooth: useBluetooth,
+                bluetooth_mac: bluetoothMac
+            })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Radiacode connection failed');
+        }
+        return await response.json();
+    }
+
+    /**
+     * Disconnects from Radiacode device.
+     * @returns {Promise<Object>} Disconnect status
+     */
+    async disconnectRadiacode() {
+        const response = await fetch('/radiacode/disconnect', { method: 'POST' });
+        return await response.json();
+    }
+
+    /**
+     * Gets Radiacode connection status.
+     * @returns {Promise<Object>} Status including connected, device_info
+     */
+    async getRadiacodeStatus() {
+        const response = await fetch('/radiacode/status');
+        return await response.json();
+    }
+
+    /**
+     * Gets current dose rate from Radiacode.
+     * @returns {Promise<{dose_rate_uSv_h: number}>}
+     * @throws {Error} If device not connected
+     */
+    async getRadiacodeDose() {
+        const response = await fetch('/radiacode/dose');
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to get dose rate');
+        }
+        return await response.json();
+    }
+
+    /**
+     * Gets spectrum from Radiacode with optional analysis.
+     * @param {boolean} analyze - Run peak detection and isotope ID
+     * @returns {Promise<Object>} Spectrum data with counts, energies, peaks, isotopes
+     * @throws {Error} If device not connected
+     */
+    async getRadiacodeSpectrum(analyze = true) {
+        const response = await fetch(`/radiacode/spectrum?analyze=${analyze}`);
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to get spectrum');
+        }
+        return await response.json();
+    }
+
+    /**
+     * Clears spectrum on Radiacode device.
+     * @returns {Promise<Object>} Status
+     * @throws {Error} If clear fails
+     */
+    async clearRadiacodeSpectrum() {
+        const response = await fetch('/radiacode/clear', { method: 'POST' });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to clear spectrum');
+        }
+        return await response.json();
+    }
+
     // WebSocket Logic
     setupDoseWebSocket(onDoseRate, onConnectionStatus) {
         this.listeners.onDoseRate = onDoseRate;

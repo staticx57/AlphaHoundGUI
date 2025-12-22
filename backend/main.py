@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 import os
 import asyncio
 from alphahound_serial import device as alphahound_device
-from routers import device, analysis, isotopes
+from routers import device, analysis, isotopes, device_radiacode
 
 # Track active WebSocket connections for session management
 active_websockets = set()
@@ -30,8 +30,10 @@ app.add_middleware(
 
 # Routers
 app.include_router(device.router)
+app.include_router(device_radiacode.router)
 app.include_router(analysis.router)
 app.include_router(isotopes.router)
+
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")

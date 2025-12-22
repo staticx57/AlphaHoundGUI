@@ -13,6 +13,10 @@ scipy
 pillow
 pandas
 
+# Device connectivity
+radiacode             # Radiacode detector USB/BLE interface
+bleak>=0.21.0         # Cross-platform BLE (for Radiacode Bluetooth on Windows)
+
 # Machine Learning (Optional - ~377MB)
 # Install with: pip install git+https://github.com/sandialabs/pyriid.git@main
 # Or use install.bat for automatic installation

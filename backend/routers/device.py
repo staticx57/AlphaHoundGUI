@@ -5,18 +5,7 @@ from typing import Optional
 import asyncio
 import re
 from alphahound_serial import device as alphahound_device
-from peak_detection import detect_peaks
-from isotope_database import identify_isotopes, identify_decay_chains
-from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
-
-# Enhanced analysis modules (with fallback)
-try:
-    from peak_detection_enhanced import detect_peaks_enhanced
-    from chain_detection_enhanced import identify_decay_chains_enhanced
-    from confidence_scoring import enhance_isotope_identifications
-    HAS_ENHANCED_ANALYSIS = True
-except ImportError:
-    HAS_ENHANCED_ANALYSIS = False
+from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
 
 router = APIRouter(prefix="/device", tags=["device"])
 
@@ -143,47 +132,27 @@ async def acquire_spectrum(request: SpectrumRequest):
     # energies = [energy for count, energy in spectrum]  # OLD
     energies = [i * 3.0 for i in range(len(counts))]     # NEW (Forced 3.0 keV)
     
-    # Use enhanced peak detection if available
-    if HAS_ENHANCED_ANALYSIS:
-        try:
-            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
-        except:
-            peaks = detect_peaks(energies, counts)
-    else:
-        peaks = detect_peaks(energies, counts)
+    # Use common enhanced analysis pipeline
+    result = {
+        "counts": counts,
+        "energies": energies,
+        "metadata": {
+            "source": "AlphaHound Device",
+            "channels": len(counts)
+        }
+    }
+    result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=float(actual_duration_seconds))
     
-    if peaks:
-        all_isotopes = identify_isotopes(
-            peaks, 
-            energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'],
-            mode=DEFAULT_SETTINGS.get('mode', 'simple')
-        )
-        
-        # Use enhanced chain detection if available
-        if HAS_ENHANCED_ANALYSIS:
-            try:
-                all_chains = identify_decay_chains_enhanced(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-                all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
-            except:
-                all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-        else:
-            all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-        
-        weighted_chains = apply_abundance_weighting(all_chains)
-        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
-    else:
-        isotopes = []
-        decay_chains = []
+    # Extract results for backward compatibility in the response
+    peaks = result.get("peaks", [])
+    isotopes = result.get("isotopes", [])
+    decay_chains = result.get("decay_chains", [])
     
     # Calculate acquisition timing for N42 export
     from datetime import datetime, timezone, timedelta
     
     # Use actual duration if provided, otherwise use count_minutes
     actual_duration_seconds = request.actual_duration_s if request.actual_duration_s else (count_minutes * 60)
-    
-    # Calculate start time (current time minus acquisition duration)
-    end_time = datetime.now(timezone.utc)
-    start_time = end_time - timedelta(seconds=actual_duration_seconds)
     
     return sanitize_for_json({
         "counts": counts,
@@ -197,8 +166,8 @@ async def acquire_spectrum(request: SpectrumRequest):
             "count_time_minutes": (actual_duration_seconds / 60),
             # N42 export fields
             "acquisition_time": actual_duration_seconds,
-            "live_time": actual_duration_seconds,  # AlphaHound has no dead-time correction
-            "real_time": actual_duration_seconds,   # AlphaHound has no dead-time correction
+            "live_time": actual_duration_seconds,
+            "real_time": actual_duration_seconds,
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat()
         }
@@ -255,50 +224,18 @@ async def get_current_spectrum():
     counts = [count for count, energy in spectrum]
     energies = [i * 3.0 for i in range(len(counts))]
     
-    # Use enhanced peak detection if available
-    if HAS_ENHANCED_ANALYSIS:
-        try:
-            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
-        except:
-            peaks = detect_peaks(energies, counts)
-    else:
-        peaks = detect_peaks(energies, counts)
-    
-    if peaks:
-        all_isotopes = identify_isotopes(
-            peaks, 
-            energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'],
-            mode=DEFAULT_SETTINGS.get('mode', 'simple')
-        )
-        
-        # Use enhanced chain detection if available
-        if HAS_ENHANCED_ANALYSIS:
-            try:
-                all_chains = identify_decay_chains_enhanced(peaks, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-                all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
-            except:
-                all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-        else:
-            all_chains = identify_decay_chains(peaks, all_isotopes, energy_tolerance=DEFAULT_SETTINGS['energy_tolerance'])
-        
-        weighted_chains = apply_abundance_weighting(all_chains)
-        isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, DEFAULT_SETTINGS)
-    else:
-        isotopes = []
-        decay_chains = []
-    
-    return sanitize_for_json({
+    # Use common enhanced analysis pipeline
+    result = {
         "counts": counts,
         "energies": energies,
-        "peaks": peaks,
-        "isotopes": isotopes,
-        "decay_chains": decay_chains,
         "metadata": {
             "source": "AlphaHound Device (Current Cumulative)",
             "channels": len(counts),
             "note": "This is the device's internal accumulation - not time-stamped"
         }
-    })
+    }
+    result = analyze_spectrum_peaks(result, is_calibrated=True)
+    return result
 
 
 @router.post("/acquisition/start")

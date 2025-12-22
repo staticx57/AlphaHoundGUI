@@ -8,7 +8,7 @@
     - [ ] Create and integrate transparent PNG favicon
     - [ ] Create and integrate transparent PNG upload icon
     - [ ] Create and integrate transparent PNG banner
-- [ ] **Isotope Peak Visualization**: When user clicks a detected isotope (e.g., U-238), draw vertical reference lines on the chart at the isotope's database peak energies. This allows visual confirmation that detected peaks align with expected gamma lines.
+- [x] **Isotope Peak Visualization**: ✅ Implemented via `addIsotopeHighlight()` in `charts.js` - draws vertical reference lines on chart when isotope clicked.
 
 ### ML & Analysis
 - [ ] Collect real detector data for ML fine-tuning
@@ -38,36 +38,36 @@
 - [x] **Auto-populate ROI acquisition time**: Pulls from N42/CSV metadata (live_time/real_time/acquisition_time)
 - [x] **Change ROI time unit to minutes**: Accepts fractional minutes (e.g., 1.5) for consistency with acquisition UI
 
-### Source-Specific Analysis Enhancements
+### Source-Specific Analysis Enhancements ✅ (Implemented in `source_analysis.py`)
 
 #### Thoriated Lens (Th-232)
-- [ ] ThO₂ mass estimation from Th-234 activity
-- [ ] Secular equilibrium check (Pb-212/Th-234 ratio)
-- [ ] Add Pb-212 (239 keV), Tl-208 (583 keV) to isotope database
+- [x] ThO₂ mass estimation from Th-234 activity - `analyze_thoriated_lens()`
+- [x] Secular equilibrium check (Pb-212/Th-234 ratio) - `chain_detection_enhanced.py`
+- [x] Pb-212 (239 keV), Tl-208 (583 keV) in isotope database - `isotope_database.py`
 
 #### Smoke Detector (Am-241)
-- [ ] Compare to standard detector activity (~37 kBq)
-- [ ] Age estimation from Pu-241 ingrowth
+- [x] Compare to standard detector activity (~37 kBq) - `analyze_smoke_detector()`
+- [ ] Age estimation from Pu-241 ingrowth *(Deferred - requires long-term tracking)*
 
 #### Radium Dial (Ra-226)
-- [ ] Dose rate estimation (μSv/hr at contact and distance)
-- [ ] Radium mass estimation from Bi-214 activity
-- [ ] Age verification via Pb-210 equilibrium
+- [x] Dose rate estimation (μSv/hr at contact and distance) - `activity_calculator.py`
+- [x] Radium mass estimation from Bi-214 activity - `analyze_radium_dial()`
+- [ ] Age verification via Pb-210 equilibrium *(Deferred - Pb-210 not easily detectable)*
 
 #### Cesium-137
-- [ ] Decay-corrected activity estimation
-- [ ] Half-life remaining display
+- [x] Decay-corrected activity estimation - `analyze_cesium137()`
+- [x] Half-life remaining display - `analyze_cesium137()`
 
 #### Potassium-40 (Natural Background)
-- [ ] Potassium mass estimation from K-40 activity
-- [ ] Compare to human body K-40 content (~4,400 Bq)
+- [x] Potassium mass estimation from K-40 activity - `analyze_potassium40()`
+- [x] Compare to human body K-40 content (~4,400 Bq) - `HUMAN_BODY_K40` constant
 
 #### Cobalt-60
-- [ ] Age/decay estimation (5.27 yr half-life)
-- [ ] Original source strength calculation
+- [x] Age/decay estimation (5.27 yr half-life) - `analyze_cobalt60()`
+- [x] Original source strength calculation - `analyze_cobalt60()`
 
 #### Universal
-- [ ] Dose rate estimation for all source types
+- [x] Dose rate estimation for all source types - `activity_calculator.py`
 
 ### New Source Types ✅ (2025-12-17)
 - [x] **Uranium Ore** - Full U-238 chain + U-235 detection
@@ -76,7 +76,8 @@
 - [x] **Synthetic Test Spectra** - 6 N42 files in `backend/data/test_spectra/`
 
 ### Low Priority / Future
-- [ ] **Radiacode Device Integration** (10-15 hours) - See [RADIACODE_INTEGRATION_PLAN.md](RADIACODE_INTEGRATION_PLAN.md) [(EDA Reference)](https://towardsdatascience.com/exploratory-data-analysis-gamma-spectroscopy-in-python/)
+- [x] **Radiacode Device Integration** ✅ Implemented in `radiacode_driver.py` + `routers/device_radiacode.py` - USB connection, spectrum, dose rate polling
+- [x] **Radiacode Bluetooth on Windows**: ✅ Implemented using `bleak` library. Added BLE device scanning, device selection dropdown, and cross-platform BLE connectivity (Windows/macOS/Linux).
 
 ---
 

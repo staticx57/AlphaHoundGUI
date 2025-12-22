@@ -26,6 +26,8 @@ except ImportError as e:
     HAS_ENHANCED_ANALYSIS = False
     print(f"[Analysis] Enhanced modules not available: {e}")
 
+from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
+
 # Constants for input validation
 MAX_FILE_SIZE_MB = 10
 # Extended file format support via SandiaSpecUtils
@@ -51,207 +53,6 @@ ALLOWED_EXTENSIONS = {
 }
 MAX_SPECTRUM_CHANNELS = 16384
 
-def _analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0, use_enhanced: bool = True) -> dict:
-    """
-    Common analysis pipeline for all file formats.
-    Detects peaks, identifies isotopes, and finds decay chains.
-    
-    Args:
-        result: Parsed spectrum dict with 'counts' and 'energies'
-        is_calibrated: Whether the spectrum has energy calibration
-        live_time: Acquisition time in seconds (for settings selection)
-        use_enhanced: Whether to use enhanced analysis modules if available
-    
-    Returns:
-        Updated result dict with 'peaks', 'isotopes', and 'decay_chains'
-    """
-    if not result.get("counts") or not result.get("energies"):
-        return result
-    
-    energies = result["energies"]
-    counts = result["counts"]
-    
-    # Preserve any peaks already detected by the parser
-    parser_peaks = result.get("peaks", [])
-    
-    # Use enhanced peak detection if available
-    if use_enhanced and HAS_ENHANCED_ANALYSIS:
-        try:
-            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
-            result["analysis_mode"] = "enhanced"
-            
-            # If enhanced returns 0 but parser found peaks, fall back to basic
-            if not peaks and parser_peaks:
-                print(f"[Analysis] Enhanced found 0 peaks but parser found {len(parser_peaks)}, falling back to basic")
-                peaks = detect_peaks(energies, counts)
-                result["analysis_mode"] = "standard_fallback"
-        except Exception as e:
-            print(f"[Analysis] Enhanced detection failed, falling back: {e}")
-            peaks = detect_peaks(energies, counts)
-            result["analysis_mode"] = "standard"
-    else:
-        peaks = detect_peaks(energies, counts)
-        result["analysis_mode"] = "standard"
-    
-    # Final fallback: if still no peaks but parser had some, use parser peaks
-    if not peaks and parser_peaks:
-        print(f"[Analysis] Using {len(parser_peaks)} peaks from original parser")
-        peaks = parser_peaks
-        result["analysis_mode"] = "parser_preserved"
-    
-    result["peaks"] = peaks
-    
-    if not peaks:
-        result["isotopes"] = []
-        result["decay_chains"] = []
-        return result
-    
-    # Select settings based on calibration and acquisition time
-    if is_calibrated and live_time > 30.0:
-        current_settings = DEFAULT_SETTINGS
-    else:
-        current_settings = UPLOAD_SETTINGS
-    
-    # Identify isotopes
-    all_isotopes = identify_isotopes(
-        peaks, 
-        energy_tolerance=current_settings['energy_tolerance'], 
-        mode=current_settings.get('mode', 'simple')
-    )
-    
-    # Use enhanced chain detection if available
-    if use_enhanced and HAS_ENHANCED_ANALYSIS:
-        try:
-            print(f"[DEBUG] Using enhanced chain detection with {len(peaks)} peaks")
-            all_chains = identify_decay_chains_enhanced(
-                peaks,
-                energy_tolerance=current_settings['energy_tolerance'],
-                min_score=0.25
-            )
-            print(f"[DEBUG] Enhanced chains found: {len(all_chains)}")
-            # Log ALL peak energies for debugging
-            peak_energies = sorted([p.get('energy', 0) for p in peaks])
-            print(f"[DEBUG] All {len(peaks)} peak energies: {peak_energies}")
-            # Also enhance isotope confidence scores
-            all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
-            print(f"[DEBUG] Enhanced isotopes: {len(all_isotopes)}")
-        except Exception as e:
-            print(f"[Analysis] Enhanced chain detection failed: {e}")
-            import traceback
-            traceback.print_exc()
-            all_chains = identify_decay_chains(
-                peaks, all_isotopes, 
-                energy_tolerance=current_settings['energy_tolerance']
-            )
-    else:
-        all_chains = identify_decay_chains(
-            peaks, all_isotopes, 
-            energy_tolerance=current_settings['energy_tolerance']
-        )
-    
-    weighted_chains = apply_abundance_weighting(all_chains)
-    isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
-    
-    # Try multiplet fitting for better peak deconvolution
-    if use_enhanced and HAS_ENHANCED_ANALYSIS:
-        try:
-            peaks = enhance_peaks_with_multiplet_fitting(energies, counts, peaks)
-            result["peaks"] = peaks
-        except Exception as e:
-            print(f"[Analysis] Multiplet fitting failed: {e}")
-    
-    result["isotopes"] = isotopes
-    result["decay_chains"] = decay_chains
-    
-    # Add XRF detection for low-energy peaks
-    try:
-        from nuclear_data import detect_xrf_peaks
-        peak_energies = [p.get('energy', 0) for p in peaks if p.get('energy', 0) < 100]
-        if peak_energies:
-            xrf_results = detect_xrf_peaks(peak_energies)
-            if xrf_results:
-                result["xrf_detections"] = xrf_results
-                print(f"[Analysis] Detected XRF: {[x['element'] for x in xrf_results]}")
-    except Exception as e:
-        print(f"[Analysis] XRF detection failed: {e}")
-    
-    result["isotopes"] = isotopes
-    result["decay_chains"] = decay_chains
-    
-    # Assess data quality and add warnings
-    max_peak_counts = max((p.get('counts', 0) for p in peaks), default=0)
-    
-    # live_time of 0 or 1 is often a placeholder for "unknown"
-    time_is_known = live_time > 1.0
-    
-    data_quality = {
-        "low_statistics": max_peak_counts < 500,
-        "short_acquisition": time_is_known and live_time < 60.0,
-        "max_peak_counts": int(max_peak_counts),
-        "warnings": []
-    }
-    
-    if data_quality["low_statistics"]:
-        data_quality["warnings"].append(
-            f"Low statistics: max peak has only {int(max_peak_counts)} counts. "
-            "Results may be unreliable. Consider longer acquisition."
-        )
-    if data_quality["short_acquisition"]:
-        data_quality["warnings"].append(
-            f"Short acquisition time ({live_time:.0f}s). "
-            "Longer measurement improves identification confidence."
-        )
-    
-    # Calculate MDA for key isotopes (Cs-137 as reference)
-    try:
-        from detector_efficiency import calculate_mda
-        
-        # Estimate background at 662 keV (Cs-137 region)
-        # Use counts in the 650-680 keV range
-        background_counts = 0
-        for i, e in enumerate(energies):
-            if 650 <= e <= 680 and i < len(counts):
-                background_counts += counts[i]
-        
-        if live_time > 1.0 and background_counts >= 0:
-            cs137_mda = calculate_mda(
-                background_counts=background_counts,
-                energy_keV=662,
-                branching_ratio=0.851,  # 85.1% gamma yield
-                live_time_s=live_time
-            )
-            if cs137_mda.get('valid'):
-                data_quality["mda_cs137"] = {
-                    "value_bq": cs137_mda['mda_bq'],
-                    "readable": cs137_mda['mda_readable'],
-                    "detection_limit_counts": cs137_mda['detection_limit_counts']
-                }
-    except Exception as e:
-        pass  # MDA calculation is optional
-    
-    result["data_quality"] = data_quality
-    
-    # Sanitize entire result for JSON compliance (handle NaN, Inf, numpy types)
-    return sanitize_for_json(result)
-
-def sanitize_for_json(obj):
-    """Recursively sanitize object for JSON serialization."""
-    if isinstance(obj, float):
-        if math.isnan(obj) or math.isinf(obj):
-            return None
-        return obj
-    elif isinstance(obj, dict):
-        return {k: sanitize_for_json(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [sanitize_for_json(i) for i in obj]
-    elif hasattr(obj, 'item'):  # Numpy scalars
-        val = obj.item()
-        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-            return None
-        return val
-    elif hasattr(obj, 'tolist'):  # Numpy arrays
-        return sanitize_for_json(obj.tolist())
-    return obj
 
 router = APIRouter(tags=["analysis"])
 
@@ -399,7 +200,7 @@ async def upload_file(file: UploadFile = File(...)):
             # Use common analysis pipeline
             is_calibrated = result.get("is_calibrated", True)
             live_time = float(result.get("metadata", {}).get("live_time", 0))
-            result = _analyze_spectrum_peaks(result, is_calibrated, live_time)
+            result = analyze_spectrum_peaks(result, is_calibrated, live_time)
             return result
         except HTTPException:
             raise

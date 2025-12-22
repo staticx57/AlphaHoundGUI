@@ -1,7 +1,7 @@
 // Updated: 2024-12-14 17:00 - N42 Export Fixed
 import { api } from './api.js';
-import { ui } from './ui.js?v=2.6';
-import { chartManager, DoseRateChart } from './charts.js?v=3.3';
+import { ui } from './ui.js?v=2.9';
+import { chartManager, DoseRateChart } from './charts.js?v=3.8';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
 import { n42MetadataEditor } from './n42_editor.js';
@@ -19,9 +19,63 @@ let overlaySpectra = [];
 let compareMode = false;
 let backgroundData = null; // New background state
 let doseChart = null; // Live dose rate chart instance
+let rcDoseChart = null; // Radiacode dose rate chart instance
 let lastCheckpointTime = 0; // Checkpoint save tracking
 const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
+let radiacodeDoseInterval = null;  // Radiacode dose rate polling interval
 const colors = ['#38bdf8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+// ============================================================
+// Radiacode Dose Rate Polling
+// ============================================================
+function startRadiacodeDosePolling() {
+    if (radiacodeDoseInterval) return;  // Already polling
+
+    console.log('[Radiacode] Starting dose rate polling');
+
+    // Poll immediately, then every 2 seconds
+    pollRadiacodeDose();
+    radiacodeDoseInterval = setInterval(pollRadiacodeDose, 2000);
+}
+
+function stopRadiacodeDosePolling() {
+    if (radiacodeDoseInterval) {
+        console.log('[Radiacode] Stopping dose rate polling');
+        clearInterval(radiacodeDoseInterval);
+        radiacodeDoseInterval = null;
+    }
+}
+
+async function pollRadiacodeDose() {
+    try {
+        const result = await api.getRadiacodeDose();
+        const doseEl = document.getElementById('rc-dose-display');
+        if (doseEl && result.dose_rate_uSv_h !== undefined) {
+            // Format dose rate with proper precision
+            const dose = result.dose_rate_uSv_h;
+            let displayValue;
+            if (dose >= 1000) {
+                displayValue = (dose / 1000).toFixed(2) + ' mSv/h';
+            } else if (dose >= 1) {
+                displayValue = dose.toFixed(2) + ' μSv/h';
+            } else {
+                displayValue = (dose * 1000).toFixed(1) + ' nSv/h';
+            }
+            doseEl.textContent = displayValue;
+
+            // Update sparkline chart if initialized
+            if (rcDoseChart) {
+                rcDoseChart.addDataPoint(dose);
+            }
+        }
+    } catch (err) {
+        // Don't spam errors - just log once
+        if (!pollRadiacodeDose._hasError) {
+            console.warn('[Radiacode] Dose poll error:', err.message);
+            pollRadiacodeDose._hasError = true;
+        }
+    }
+}
 
 // Settings
 let currentSettings = {
@@ -173,6 +227,7 @@ document.addEventListener('visibilitychange', () => {
         } else {
             chartManager.render(currentData.energies, currentData.counts, currentData.peaks, scale);
         }
+        reapplyIsotopeHighlights();
     }
 });
 
@@ -331,6 +386,206 @@ function setupEventListeners() {
             console.log(`[Settings] UI Mode changed to: ${newMode}`);
         });
     });
+
+    // ============================================================
+    // Device Type Tab Switching (AlphaHound / Radiacode)
+    // ============================================================
+    const tabAlphahound = document.getElementById('tab-alphahound');
+    const tabRadiacode = document.getElementById('tab-radiacode');
+    const panelAlphahound = document.getElementById('device-quick-panel');
+    const panelRadiacode = document.getElementById('radiacode-quick-panel');
+
+    if (tabAlphahound && tabRadiacode) {
+        tabAlphahound.addEventListener('click', () => {
+            // Use CSS classes for theme-aware styling
+            tabAlphahound.classList.add('active');
+            tabRadiacode.classList.remove('active');
+            if (panelAlphahound) panelAlphahound.style.display = 'block';
+            if (panelRadiacode) panelRadiacode.style.display = 'none';
+        });
+
+        tabRadiacode.addEventListener('click', () => {
+            // Use CSS classes for theme-aware styling
+            tabRadiacode.classList.add('active');
+            tabAlphahound.classList.remove('active');
+            if (panelRadiacode) panelRadiacode.style.display = 'block';
+            if (panelAlphahound) panelAlphahound.style.display = 'none';
+        });
+    }
+
+
+
+    // Radiacode connection mode toggle (show/hide BLE controls)
+    document.querySelectorAll('input[name="rc-conn-mode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const bleControls = document.getElementById('rc-ble-controls');
+            if (bleControls) {
+                bleControls.style.display = e.target.value === 'bluetooth' ? 'flex' : 'none';
+            }
+        });
+    });
+
+    // Radiacode BLE Scan Button
+    const btnScanBle = document.getElementById('btn-scan-ble');
+    if (btnScanBle) {
+        btnScanBle.addEventListener('click', async () => {
+            const deviceSelect = document.getElementById('rc-ble-devices');
+            if (!deviceSelect) return;
+
+            btnScanBle.disabled = true;
+            btnScanBle.innerHTML = '<img src="/static/icons/refresh.svg" class="icon spin" style="width: 14px; height: 14px;"> Scanning...';
+
+            try {
+                const devices = await api.scanRadiacodeBLE(5.0);
+                console.log('[Radiacode] BLE scan found:', devices);
+
+                // Clear and populate dropdown
+                deviceSelect.innerHTML = '<option value="">Select BLE Device...</option>';
+
+                if (devices.length === 0) {
+                    deviceSelect.innerHTML += '<option value="" disabled>No devices found</option>';
+                    showToast('No Radiacode devices found. Make sure the device is powered on and in range.', 'warning');
+                } else {
+                    devices.forEach(device => {
+                        const rssiInfo = device.rssi !== null ? ` (${device.rssi} dBm)` : '';
+                        deviceSelect.innerHTML += `<option value="${device.address}">${device.name}${rssiInfo}</option>`;
+                    });
+                    showToast(`Found ${devices.length} Radiacode device(s)`, 'success');
+                }
+            } catch (err) {
+                console.error('[Radiacode] BLE scan error:', err);
+                showToast(`BLE scan failed: ${err.message}`, 'error');
+            } finally {
+                btnScanBle.disabled = false;
+                btnScanBle.innerHTML = '<img src="/static/icons/refresh.svg" class="icon" style="width: 14px; height: 14px;"> Scan';
+            }
+        });
+    }
+
+    // Radiacode Connect Button
+    const btnConnectRadiacode = document.getElementById('btn-connect-radiacode');
+    if (btnConnectRadiacode) {
+        btnConnectRadiacode.addEventListener('click', async () => {
+            const useBluetooth = document.querySelector('input[name="rc-conn-mode"]:checked')?.value === 'bluetooth';
+
+            // Get BLE address from dropdown or manual input
+            let bluetoothMac = null;
+            if (useBluetooth) {
+                const deviceSelect = document.getElementById('rc-ble-devices');
+                const manualMac = document.getElementById('rc-bluetooth-mac')?.value?.trim();
+                bluetoothMac = deviceSelect?.value || manualMac || null;
+
+                if (!bluetoothMac) {
+                    showToast('Please scan for devices and select one, or enter a MAC address manually', 'warning');
+                    return;
+                }
+            }
+
+            btnConnectRadiacode.disabled = true;
+            btnConnectRadiacode.textContent = 'Connecting...';
+
+            try {
+                const result = await api.connectRadiacode(useBluetooth, bluetoothMac);
+                console.log('[Radiacode] Connected:', result);
+
+                // Show connected panel
+                const connectedPanel = document.getElementById('radiacode-connected');
+                if (connectedPanel) connectedPanel.style.display = 'grid';
+
+                // Update model display
+                const modelSpan = document.getElementById('rc-device-model');
+                if (modelSpan && result.device_info) {
+                    modelSpan.textContent = result.device_info.model || 'Radiacode';
+                }
+
+                btnConnectRadiacode.textContent = 'Connected';
+                showToast('Radiacode connected successfully', 'success');
+
+                // Initialize dose rate sparkline chart
+                const rcChartCanvas = document.getElementById('rcDoseRateChart');
+                if (rcChartCanvas) {
+                    // Destroy existing chart if any to avoid conflicts
+                    if (rcDoseChart) {
+                        rcDoseChart.destroy();
+                        rcDoseChart = null;
+                    }
+                    rcDoseChart = new DoseRateChart(rcChartCanvas, {
+                        label: 'Dose Rate',
+                        colorVar: '--secondary-color', // Respect the current theme
+                        maxPoints: 60
+                    });
+                }
+
+                // Start dose rate polling
+                startRadiacodeDosePolling();
+            } catch (err) {
+                console.error('[Radiacode] Connect error:', err);
+                showToast(`Connection failed: ${err.message}`, 'error');
+                btnConnectRadiacode.textContent = 'Connect';
+            } finally {
+                btnConnectRadiacode.disabled = false;
+            }
+        });
+    }
+
+    // Radiacode Disconnect Button
+    const btnDisconnectRadiacode = document.getElementById('btn-disconnect-radiacode');
+    if (btnDisconnectRadiacode) {
+        btnDisconnectRadiacode.addEventListener('click', async () => {
+            try {
+                stopRadiacodeDosePolling();  // Stop polling first
+                await api.disconnectRadiacode();
+                const connectedPanel = document.getElementById('radiacode-connected');
+                if (connectedPanel) connectedPanel.style.display = 'none';
+                document.getElementById('btn-connect-radiacode').textContent = 'Connect';
+                document.getElementById('rc-dose-display').textContent = '--';
+                showToast('Radiacode disconnected', 'info');
+            } catch (err) {
+                console.error('[Radiacode] Disconnect error:', err);
+            }
+        });
+    }
+
+    // Radiacode Get Spectrum Button
+    const btnRcGetSpectrum = document.getElementById('btn-rc-get-spectrum');
+    if (btnRcGetSpectrum) {
+        btnRcGetSpectrum.addEventListener('click', async () => {
+            btnRcGetSpectrum.disabled = true;
+            btnRcGetSpectrum.textContent = 'Loading...';
+
+            try {
+                const data = await api.getRadiacodeSpectrum(true);
+                console.log('[Radiacode] Spectrum received:', data);
+
+                currentData = data;
+                ui.renderDashboard(data);
+                chartManager.render(data.energies, data.counts, data.peaks, 'linear');
+                chartManager.showScrubber(data.energies, data.counts);  // Show zoom slider
+
+                showToast('Spectrum loaded from Radiacode', 'success');
+            } catch (err) {
+                console.error('[Radiacode] Spectrum error:', err);
+                showToast(`Failed to get spectrum: ${err.message}`, 'error');
+            } finally {
+                btnRcGetSpectrum.disabled = false;
+                btnRcGetSpectrum.innerHTML = '<img src="/static/icons/chart.svg" class="icon"> Get Spectrum';
+            }
+        });
+    }
+
+    // Radiacode Clear Spectrum Button
+    const btnRcClear = document.getElementById('btn-rc-clear');
+    if (btnRcClear) {
+        btnRcClear.addEventListener('click', async () => {
+            try {
+                await api.clearRadiacodeSpectrum();
+                showToast('Radiacode spectrum cleared', 'info');
+            } catch (err) {
+                console.error('[Radiacode] Clear error:', err);
+                showToast(`Failed to clear: ${err.message}`, 'error');
+            }
+        });
+    }
 
     document.getElementById('btn-export-csv').addEventListener('click', () => {
         if (!currentData) return;
@@ -651,6 +906,7 @@ function setupEventListeners() {
 
     // Auto-Scale Toggle
     document.getElementById('btn-auto-scale').addEventListener('click', (e) => {
+        console.log('[Main] Auto-scale button clicked, currentData exists:', !!currentData);
         const isAutoScale = chartManager.toggleAutoScale();
         e.target.classList.toggle('active', isAutoScale);
         e.target.textContent = isAutoScale ? 'Auto-Scale' : 'Full Spectrum';
@@ -1419,32 +1675,38 @@ function getToastColors(type, theme) {
         'dark': {
             success: { bg: '#10b981', border: '#10b981', shadow: 'rgba(16, 185, 129, 0.3)' },
             warning: { bg: '#f59e0b', border: '#f59e0b', shadow: 'rgba(245, 158, 11, 0.3)' },
-            info: { bg: '#3b82f6', border: '#3b82f6', shadow: 'rgba(59, 130, 246, 0.3)' }
+            info: { bg: '#3b82f6', border: '#3b82f6', shadow: 'rgba(59, 130, 246, 0.3)' },
+            error: { bg: '#ef4444', border: '#ef4444', shadow: 'rgba(239, 68, 68, 0.3)' }
         },
         'light': {
             success: { bg: '#10b981', border: '#059669', shadow: 'rgba(16, 185, 129, 0.2)' },
             warning: { bg: '#f59e0b', border: '#d97706', shadow: 'rgba(245, 158, 11, 0.2)' },
-            info: { bg: '#3b82f6', border: '#2563eb', shadow: 'rgba(59, 130, 246, 0.2)' }
+            info: { bg: '#3b82f6', border: '#2563eb', shadow: 'rgba(59, 130, 246, 0.2)' },
+            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.2)' }
         },
         'nuclear': {
             success: { bg: '#fbbf24', border: '#f59e0b', shadow: 'rgba(251, 191, 36, 0.4)' },
             warning: { bg: '#f59e0b', border: '#ea580c', shadow: 'rgba(245, 158, 11, 0.4)' },
-            info: { bg: '#fbbf24', border: '#f59e0b', shadow: 'rgba(251, 191, 36, 0.4)' }
+            info: { bg: '#fbbf24', border: '#f59e0b', shadow: 'rgba(251, 191, 36, 0.4)' },
+            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
         },
         'toxic': {
             success: { bg: '#10b981', border: '#059669', shadow: 'rgba(16, 185, 129, 0.4)' },
             warning: { bg: '#84cc16', border: '#65a30d', shadow: 'rgba(132, 204, 22, 0.4)' },
-            info: { bg: '#22c55e', border: '#16a34a', shadow: 'rgba(34, 197, 94, 0.4)' }
+            info: { bg: '#22c55e', border: '#16a34a', shadow: 'rgba(34, 197, 94, 0.4)' },
+            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
         },
         'scifi': {
             success: { bg: '#00d9ff', border: '#3b82f6', shadow: 'rgba(0, 217, 255, 0.5)' },
             warning: { bg: '#a855f7', border: '#9333ea', shadow: 'rgba(168, 85, 247, 0.5)' },
-            info: { bg: '#3b82f6', border: '#00d9ff', shadow: 'rgba(59, 130, 246, 0.5)' }
+            info: { bg: '#3b82f6', border: '#00d9ff', shadow: 'rgba(59, 130, 246, 0.5)' },
+            error: { bg: '#ef4444', border: '#f87171', shadow: 'rgba(239, 68, 68, 0.5)' }
         },
         'cyberpunk': {
             success: { bg: '#fcee09', border: '#00f5ff', shadow: '0 0 20px rgba(252, 238, 9, 0.6), 0 0 40px rgba(0, 245, 255, 0.3)' },
             warning: { bg: '#ff006e', border: '#fcee09', shadow: '0 0 20px rgba(255, 0, 110, 0.6), 0 0 40px rgba(252, 238, 9, 0.3)' },
-            info: { bg: '#00f5ff', border: '#fcee09', shadow: '0 0 20px rgba(0, 245, 255, 0.6), 0 0 40px rgba(252, 238, 9, 0.3)' }
+            info: { bg: '#00f5ff', border: '#fcee09', shadow: '0 0 20px rgba(0, 245, 255, 0.6), 0 0 40px rgba(252, 238, 9, 0.3)' },
+            error: { bg: '#ff006e', border: '#ef4444', shadow: '0 0 20px rgba(255, 0, 110, 0.6), 0 0 40px rgba(239, 68, 68, 0.3)' }
         }
     };
 
