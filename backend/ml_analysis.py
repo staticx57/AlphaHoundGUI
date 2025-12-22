@@ -47,6 +47,16 @@ except ImportError:
     def get_gamma_intensity(isotope, energy): return 1.0
     print("[WARNING] Isotope database not found, using fallback isotopes")
 
+# Import real spectrum loader for training data augmentation
+try:
+    from ml_data_loader import load_real_training_data
+    HAS_REAL_DATA_LOADER = True
+    print("[ML] Real spectrum loader available")
+except ImportError:
+    HAS_REAL_DATA_LOADER = False
+    load_real_training_data = None
+    print("[WARNING] Real spectrum loader not available")
+
 
 # =========================================================
 # SELECTABLE ML MODEL TYPES
@@ -174,6 +184,74 @@ class MLIdentifier:
             spectrum[:edge_channel] += continuum_counts
         
         return spectrum
+    
+    def add_environmental_background(self, spectrum: np.ndarray, scale: float = 1.0):
+        """Add realistic environmental background radiation to spectrum.
+        
+        Phase 2 of ML Improvement Plan: Train model to ignore background.
+        
+        Background includes:
+        - K-40 at 1461 keV (potassium in soil/concrete)
+        - Bi-214 at 609 keV (radon daughter)
+        - Tl-208 at 2614 keV (thorium chain)
+        - Low-energy continuum from cosmic rays
+        """
+        # Environmental background peaks with typical relative intensities
+        BACKGROUND_PEAKS = [
+            (1461, 0.30),  # K-40 - strongest environmental gamma
+            (609, 0.15),   # Bi-214 from radon
+            (352, 0.08),   # Pb-214 from radon
+            (2614, 0.05),  # Tl-208 from thorium
+            (583, 0.04),   # Tl-208 secondary
+            (911, 0.03),   # Ac-228 from thorium
+        ]
+        
+        # Randomize background intensity (0.5x to 2.0x scale)
+        bg_scale = scale * np.random.uniform(0.5, 2.0)
+        base_bg_intensity = 50  # Base counts for background peaks
+        
+        for energy_keV, rel_intensity in BACKGROUND_PEAKS:
+            channel = self.energy_to_channel(energy_keV)
+            if channel < 5 or channel >= self.n_channels - 5:
+                continue
+            
+            peak_intensity = int(base_bg_intensity * rel_intensity * bg_scale)
+            if peak_intensity < 1:
+                continue
+            
+            # Add Gaussian-shaped background peak
+            fwhm = self.get_fwhm_channels(energy_keV)
+            half_width = max(2, fwhm // 2)
+            start_ch = max(0, channel - half_width)
+            end_ch = min(self.n_channels, channel + half_width + 1)
+            width = end_ch - start_ch
+            
+            if width > 0:
+                peak_counts = np.random.poisson(max(1, peak_intensity // width), width)
+                spectrum[start_ch:end_ch] += peak_counts
+        
+        # Add low-energy continuum (cosmic/scattered)
+        low_energy_continuum = np.exp(-np.arange(self.n_channels) / 100) * 3 * bg_scale
+        spectrum += np.random.poisson(np.maximum(0.1, low_energy_continuum))
+        
+        return spectrum
+    
+    def energy_to_channel_with_jitter(self, energy_keV: float) -> int:
+        """Convert energy to channel with calibration jitter.
+        
+        Phase 3 of ML Improvement Plan: Make model robust to calibration drift.
+        
+        Applies random ±10% gain variation and ±5 keV offset to simulate
+        real-world detector calibration differences.
+        """
+        # Random calibration variation
+        gain_jitter = np.random.uniform(0.9, 1.1)  # ±10% gain
+        offset_jitter = np.random.uniform(-5, 5)    # ±5 keV offset
+        
+        effective_keV_per_ch = self.keV_per_channel * gain_jitter
+        channel = int((energy_keV - offset_jitter) / effective_keV_per_ch)
+        
+        return max(0, min(channel, self.n_channels - 1))
         
     def lazy_train(self):
         """Train model on synthetic data using authoritative isotope database."""
@@ -308,8 +386,9 @@ class MLIdentifier:
                 labels.append(isotope)
                 
                 # Add characteristic peaks at each gamma energy
+                # Phase 3: Use calibration jitter for robustness
                 for energy_keV in energies:
-                    channel = self.energy_to_channel(energy_keV)
+                    channel = self.energy_to_channel_with_jitter(energy_keV)
                     
                     # Skip if outside detector range
                     if channel < 5 or channel >= self.n_channels - 5:
@@ -336,6 +415,10 @@ class MLIdentifier:
                         # Add Compton continuum for realistic CsI(Tl) response
                         self.add_compton_continuum(spectra_matrix[sample_idx], energy_keV, peak_intensity)
                 
+                # Phase 2: Add environmental background (50% of samples)
+                if np.random.random() > 0.5:
+                    self.add_environmental_background(spectra_matrix[sample_idx])
+                
                 sample_idx += 1
         
         # Generate multi-isotope mixture training data with weighted sample counts
@@ -358,7 +441,8 @@ class MLIdentifier:
                     relative_strength = mix_ratios[iso_idx]
                     
                     for energy_keV in energies:
-                        channel = self.energy_to_channel(energy_keV)
+                        # Phase 3: Use calibration jitter
+                        channel = self.energy_to_channel_with_jitter(energy_keV)
                         
                         if channel < 5 or channel >= self.n_channels - 5:
                             continue
@@ -379,7 +463,46 @@ class MLIdentifier:
                             peak_counts = np.random.poisson(max(1, peak_intensity // width), width)
                             spectra_matrix[sample_idx, start_ch:end_ch] += peak_counts
                 
+                # Phase 2: Add environmental background (50% of mixtures)
+                if np.random.random() > 0.5:
+                    self.add_environmental_background(spectra_matrix[sample_idx])
+                
                 sample_idx += 1
+        
+        # =========================================================
+        # REAL SPECTRA AUGMENTATION (Phase 1 of ML Improvement Plan)
+        # Load real labeled spectra from data/acquisitions for training
+        # Real data is weighted 10x compared to synthetic for better learning
+        # =========================================================
+        real_spectra_matrix = None
+        real_labels = []
+        
+        if HAS_REAL_DATA_LOADER and load_real_training_data:
+            try:
+                print("[ML] Loading real spectra for training augmentation...")
+                real_spectra_matrix, real_labels = load_real_training_data(
+                    data_dir=None,  # Uses default data directory
+                    target_channels=self.n_channels,
+                    augment_count=10  # Each real spectrum creates 10 training samples
+                )
+                
+                if len(real_labels) > 0:
+                    print(f"[ML] Loaded {len(real_labels)} augmented samples from real spectra")
+                    print(f"[ML] Real labels: {set(real_labels)}")
+            except Exception as e:
+                print(f"[ML] Real spectra loading failed (non-critical): {e}")
+                real_spectra_matrix = None
+                real_labels = []
+        
+        # Combine synthetic and real spectra
+        if real_spectra_matrix is not None and len(real_labels) > 0:
+            # Append real spectra to synthetic
+            spectra_matrix = np.vstack([spectra_matrix[:sample_idx], real_spectra_matrix])
+            labels.extend(real_labels)
+            print(f"[ML] Combined training set: {sample_idx} synthetic + {len(real_labels)} real = {len(labels)} total")
+        else:
+            # Trim synthetic matrix to actual size
+            spectra_matrix = spectra_matrix[:sample_idx]
         
         # Create SampleSet with 2D matrix spectra
         train_ss = SampleSet()
@@ -402,10 +525,11 @@ class MLIdentifier:
         )
         train_ss.sources = sources_df
         
-        # Train model
+        # Train model with increased epochs for better convergence
         try:
             self.model = MLPClassifier()
-            self.model.fit(train_ss, epochs=25, target_level='Isotope', verbose=False)
+            # Increased epochs from 25 to 50 for better training with real data
+            self.model.fit(train_ss, epochs=50, target_level='Isotope', verbose=False)
             self.is_trained = True
             print(f"[ML] Training complete. Model ready with {len(unique_isotopes)} isotopes.")
         except Exception as e:
@@ -614,3 +738,99 @@ def get_available_ml_models() -> dict:
         for k, v in ML_MODEL_TYPES.items()
     }
 
+
+def hybrid_identify(counts: List[int], peak_isotopes: List[Dict], 
+                    model_type: str = "hobby", 
+                    ml_weight: float = 0.4) -> List[Dict]:
+    """Combine ML and peak-matching for improved identification.
+    
+    Phase 5 of ML Improvement Plan: Hybrid ensemble scoring.
+    
+    Peak-matching is more reliable for known isotopes with clear signatures,
+    while ML can identify complex mixtures and unusual patterns.
+    
+    Args:
+        counts: Spectrum counts array
+        peak_isotopes: Results from peak-matching algorithm
+            Each dict: {'isotope': str, 'confidence': float, ...}
+        model_type: ML model type ('hobby' or 'comprehensive')
+        ml_weight: Weight for ML predictions (0.0-1.0), default 0.4
+            Peak-matching gets (1 - ml_weight)
+    
+    Returns:
+        Combined results sorted by hybrid confidence
+    """
+    peak_weight = 1.0 - ml_weight
+    
+    # Get ML predictions
+    ml_results = []
+    ml = get_ml_identifier(model_type)
+    if ml is not None:
+        try:
+            ml_results = ml.identify(counts, top_k=10)
+        except Exception as e:
+            print(f"[Hybrid] ML failed, using peak-matching only: {e}")
+    
+    # Build combined score map
+    combined = {}
+    
+    # Add peak-matching results
+    for r in peak_isotopes:
+        isotope = r.get('isotope', '')
+        if not isotope:
+            continue
+        
+        conf = r.get('confidence', 0)
+        combined[isotope] = {
+            'isotope': isotope,
+            'peak_conf': conf,
+            'ml_conf': 0.0,
+            'matched_peaks': r.get('matched_peaks', []),
+            'peak_method': r.get('method', 'Peak Matching')
+        }
+    
+    # Add/merge ML results
+    for r in ml_results:
+        isotope = r.get('isotope', '')
+        if not isotope:
+            continue
+        
+        if isotope in combined:
+            combined[isotope]['ml_conf'] = r.get('confidence', 0)
+        else:
+            combined[isotope] = {
+                'isotope': isotope,
+                'peak_conf': 0.0,
+                'ml_conf': r.get('confidence', 0),
+                'matched_peaks': [],
+                'peak_method': None
+            }
+    
+    # Calculate hybrid scores
+    results = []
+    for isotope, scores in combined.items():
+        # Weighted combination
+        hybrid_conf = (peak_weight * scores['peak_conf'] + 
+                      ml_weight * scores['ml_conf'])
+        
+        # Determine primary method
+        if scores['peak_conf'] > scores['ml_conf']:
+            method = 'Hybrid (Peak+ML)'
+        elif scores['ml_conf'] > scores['peak_conf']:
+            method = 'Hybrid (ML+Peak)'
+        else:
+            method = 'Hybrid'
+        
+        results.append({
+            'isotope': isotope,
+            'confidence': round(hybrid_conf, 2),
+            'peak_conf': round(scores['peak_conf'], 2),
+            'ml_conf': round(scores['ml_conf'], 2),
+            'method': method,
+            'matched_peaks': scores['matched_peaks']
+        })
+    
+    # Sort by hybrid confidence
+    results.sort(key=lambda x: x['confidence'], reverse=True)
+    
+    return results
