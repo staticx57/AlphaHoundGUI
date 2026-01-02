@@ -1013,7 +1013,7 @@ function setupEventListeners() {
             chartManager.render(currentData.energies, result.net_counts, adjustedPeaks, chartManager.getScaleType());
 
             // Update status - make clear this is visual only
-            statusEl.innerHTML = '✓ Background removed <em>(chart only - analysis unchanged)</em>';
+            statusEl.innerHTML = '<img src="/static/icons/check.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Background removed <em>(chart only - analysis unchanged)</em>';
             statusEl.style.color = '#10b981';
             document.getElementById('bg-active-indicator').style.display = 'inline';
 
@@ -1142,9 +1142,9 @@ function setupEventListeners() {
                     'no_match': '#6b7280'
                 };
                 const qualityLabels = {
-                    'good': '✓ High Confidence',
-                    'moderate': '⚠ Moderate',
-                    'low_confidence': '⚠ Low Confidence',
+                    'good': '<img src="/static/icons/check.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> High Confidence',
+                    'moderate': '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Moderate',
+                    'low_confidence': '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Low Confidence',
                     'no_match': '? No Match'
                 };
                 const qualityBadge = quality !== 'unknown' ?
@@ -1353,15 +1353,15 @@ if (chartCanvas) {
 
 // Source type descriptions for display
 const SOURCE_TYPE_INFO = {
-    'uranium_glass': '🟢 Uranium Glass: Looking for U-238 decay chain (Th-234, Bi-214, Pa-234m). Ra-226 interference expected in 186 keV region.',
-    'uranium_ore': '⚛️ Uranium Ore: Full U-238 decay chain in secular equilibrium. U-235 visible at 186 keV (~0.72% natural).',
-    'thoriated_lens': '🟠 Thoriated Lens: Looking for Th-232 decay chain (Ac-228, Tl-208). May also contain uranium.',
-    'radium_dial': '☢️ Radium Dial: Looking for Ra-226 daughters (Bi-214, Pb-214) WITHOUT U-238 parents (Th-234).',
-    'smoke_detector': '🔵 Smoke Detector: Looking for Am-241 at 60 keV.',
-    'natural_background': '🌍 Natural Background: Looking for K-40 at 1461 keV.',
-    'takumar_lens': '📷 Takumar Lens: ThO₂ glass with trace uranium. Analyzing Th-234 (93 keV) for thorium activity.',
-    'cesium_source': '🟡 Cesium-137: Calibration source at 662 keV. Half-life 30.17 years.',
-    'cobalt_source': '🔴 Cobalt-60: Dual peaks at 1173/1332 keV. Half-life 5.27 years.',
+    'uranium_glass': 'Uranium Glass: Looking for U-238 decay chain (Th-234, Bi-214, Pa-234m). Ra-226 interference expected in 186 keV region.',
+    'uranium_ore': 'Uranium Ore: Full U-238 decay chain in secular equilibrium. U-235 visible at 186 keV (~0.72% natural).',
+    'thoriated_lens': 'Thoriated Lens: Looking for Th-232 decay chain (Ac-228, Tl-208). May also contain uranium.',
+    'radium_dial': 'Radium Dial: Looking for Ra-226 daughters (Bi-214, Pb-214) WITHOUT U-238 parents (Th-234).',
+    'smoke_detector': 'Smoke Detector: Looking for Am-241 at 60 keV.',
+    'natural_background': 'Natural Background: Looking for K-40 at 1461 keV.',
+    'takumar_lens': 'Takumar Lens: ThO2 glass with trace uranium. Analyzing Th-234 (93 keV) for thorium activity.',
+    'cesium_source': 'Cesium-137: Calibration source at 662 keV. Half-life 30.17 years.',
+    'cobalt_source': 'Cobalt-60: Dual peaks at 1173/1332 keV. Half-life 5.27 years.',
     'unknown': 'Standard Analysis: Detecting isotopes without specific source assumptions.',
     'auto': 'legacy' // fallback
 };
@@ -1561,7 +1561,7 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
         if (data.enhanced_analysis && data.enhanced_analysis.insights) {
             htmlOutput += `
                 <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                    <div style="font-weight: 600; color: #10b981; margin-bottom: 0.5rem;">📊 Source-Specific Insights</div>
+                    <div style="font-weight: 600; color: #10b981; margin-bottom: 0.5rem;"><img src="/static/icons/chart.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Source-Specific Insights</div>
             `;
             for (const insight of data.enhanced_analysis.insights) {
                 const warningStyle = insight.warning ? 'color: #f59e0b;' : '';

@@ -8,7 +8,7 @@
     - [ ] Create and integrate transparent PNG favicon
     - [ ] Create and integrate transparent PNG upload icon
     - [ ] Create and integrate transparent PNG banner
-- [ ] **Replace Remaining Emoji with SVG Icons**: Audit and replace ~40 emoji instances in index.html, main.js, ui.js with professional SVG icons for consistency
+- [x] **Replace Remaining Emoji with SVG Icons**: ✅ Replaced ~40 emoji instances with SVG icons across index.html, main.js, ui.js, calibration.js, isotopes_ui.js, n42_editor.js (2026-01-01)
 - [x] **Isotope Peak Visualization**: ✅ Implemented via `addIsotopeHighlight()` in `charts.js` - draws vertical reference lines on chart when isotope clicked.
 - [x] **Chart Autoscale & Label Stacking**: ✅ Fixed autoscale toggle between peak-focused view and full spectrum, fixed overlapping annotation labels with vertical stacking (2025-12-22)
 - [x] **Documentation Overhaul**: ✅ Major README update with Radiacode, XRF, SNIP, spectrum algebra, server-managed acquisitions (2025-12-22)
@@ -36,6 +36,17 @@
 - [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally
 - [ ] **Temperature Compensation**: Temperature captured - consider using for gain stabilization
 - [ ] **CSV/XML Energy Interpolation**: Implement energy-per-channel interpolation for imported CSV and XML files lacking energy data (e.g., legacy formats with only channel numbers). Support presets for known detectors (Radiacode models, AlphaHound profiles), custom detector coefficients, or manual keV/channel entry.
+
+### Radiacode Device Features (Available in radiacode library, not yet exposed)
+- [ ] **Device Settings Panel**: Add UI for Radiacode device configuration:
+    - [ ] `set_display_brightness(0-9)` - Display brightness control
+    - [ ] `set_sound_on(bool)` - Enable/disable device sound alerts
+    - [ ] `set_vibro_on(bool)` - Enable/disable device vibration
+    - [ ] `set_display_off_time(seconds)` - Auto-shutdown duration
+    - [ ] `set_language('en'/'ru')` - Device language setting
+- [ ] **Accumulated Dose Display**: Show total accumulated dose from `data_buf()` RealTimeData
+- [ ] **Device Info Display**: Show serial number and firmware version in connection panel
+- [ ] **Configuration Readout**: Expose `configuration()` output for debugging/advanced users
 
 ### ROI Enhancements ✅
 - [x] **Auto-populate ROI acquisition time**: Pulls from N42/CSV metadata (live_time/real_time/acquisition_time)

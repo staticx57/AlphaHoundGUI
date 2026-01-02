@@ -55,7 +55,7 @@ export class CalibrationUI {
             <tr data-id="${p.id}">
                 <td>${parseFloat(p.channel).toFixed(2)}</td>
                 <td><input type="number" value="${p.energy}" placeholder="e.g. 662" onchange="calibrationUI.updatePoint(${p.id}, 'energy', this.value)" style="width: 80px;"></td>
-                <td><button onclick="calibrationUI.removePoint(${p.id})" style="color: red;">✕</button></td>
+                <td><button onclick="calibrationUI.removePoint(${p.id})" style="color: red; background: transparent; border: none; cursor: pointer;"><img src="/static/icons/close.svg" class="icon" style="width: 14px; height: 14px;"></button></td>
             </tr>
         `).join('');
     }

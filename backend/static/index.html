@@ -78,7 +78,7 @@
                         <!-- Left: Controls -->
                         <div class="device-controls">
                             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                <span style="color: #10b981; font-size: 1.2rem;">●</span>
+                                <span class="status-dot" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span>
                                 <span style="color: var(--text-secondary); font-weight: 500;">Connected</span>
                                 <span id="acquisition-server-status"
                                     style="display: none; margin-left: 0.5rem; padding: 2px 8px; background: var(--accent-color); color: white; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
@@ -228,7 +228,7 @@
                         <!-- Top row: Status + Buttons + Disconnect -->
                         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="color: var(--secondary-color); font-size: 1rem;">●</span>
+                                <span class="status-dot" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--secondary-color);"></span>
                                 <span
                                     style="color: var(--text-secondary); font-weight: 500; font-size: 0.85rem;">Connected</span>
                                 <span id="rc-device-model"
@@ -639,7 +639,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>File History</h3>
-                    <button id="close-history" class="close-btn">✕</button>
+                    <button id="close-history" class="close-btn"><img src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
                 <div id="history-list"></div>
             </div>
@@ -650,7 +650,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h3><img src="/static/icons/settings.svg" class="icon"> Analysis Settings</h3>
-                    <button id="close-settings" class="close-btn">✕</button>
+                    <button id="close-settings" class="close-btn"><img src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
 
                 <div style="margin: 1.5rem 0;">
@@ -761,7 +761,7 @@
             <div class="modal-content" style="padding: 1.5rem;">
                 <div class="modal-header">
                     <h3>Energy Calibration</h3>
-                    <button id="close-calibration" class="close-btn">✕</button>
+                    <button id="close-calibration" class="close-btn"><img src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
                 <div style="margin: 1rem 0;">
                     <p>Click on the chart to add points (Channel), then enter the known energy.</p>
@@ -793,7 +793,7 @@
             <div class="modal-content" style="max-width: 650px;">
                 <div class="modal-header">
                     <h3>Custom Isotopes</h3>
-                    <button id="close-isotopes" class="close-btn">✕</button>
+                    <button id="close-isotopes" class="close-btn"><img src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
 
                 <!-- Add Isotope Form -->
@@ -851,7 +851,7 @@
             <div class="modal-content" style="max-width: 700px; padding: 1.5rem;">
                 <div class="modal-header" style="margin-bottom: 2rem;">
                     <h3 style="margin: 0; color: var(--primary-color);">Acquisition Estimator & Projection</h3>
-                    <button id="close-estimator" class="close-btn" style="line-height: 1;">✕</button>
+                    <button id="close-estimator" class="close-btn" style="line-height: 1;"><img src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
 
                 <div class="tabs"
@@ -983,7 +983,7 @@
             <div class="modal-content" style="max-width: 900px; padding: 1.5rem;">
                 <div class="modal-header" style="margin-bottom: 2rem;">
                     <h3 style="margin: 0; color: var(--primary-color);">Radioactive Decay Prediction</h3>
-                    <button id="close-decay" class="close-btn" style="line-height: 1;">✕</button>
+                    <button id="close-decay" class="close-btn" style="line-height: 1;"><img src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
                 <div
                     style="display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 1.5rem; margin-bottom: 2rem; align-items: end; background: rgba(255,255,255,0.02); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">

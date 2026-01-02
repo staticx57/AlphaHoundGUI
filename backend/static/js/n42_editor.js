@@ -27,15 +27,15 @@ export class N42MetadataEditor {
             <div class="modal-content" style="max-width: 800px; max-height: 85vh; overflow-y: auto; padding: 1.5rem;">
                 <div class="modal-header" style="margin-bottom: 2rem;">
                     <h2 style="margin: 0; display: flex; align-items: center; gap: 0.75rem; color: var(--primary-color);">
-                        📝 N42 Metadata Editor
+                        <img src="/static/icons/pencil.svg" class="icon" style="width: 20px; height: 20px;"> N42 Metadata Editor
                     </h2>
-                    <button id="close-n42-editor" class="close-btn" style="background: none; border: none; font-size: 1.75rem; cursor: pointer; color: var(--text-secondary); line-height: 1;">×</button>
+                    <button id="close-n42-editor" class="close-btn" style="background: none; border: none; cursor: pointer; color: var(--text-secondary); line-height: 1;"><img src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
                 
                 <div class="modal-body" style="padding: 1rem;">
                     <!-- Timestamp Section -->
                     <fieldset style="border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; background: rgba(255,255,255,0.02);">
-                        <legend style="color: var(--accent-color); font-weight: 600; padding: 0 0.5rem;">📅 Timestamp</legend>
+                        <legend style="color: var(--accent-color); font-weight: 600; padding: 0 0.5rem;"><img src="/static/icons/calendar.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Timestamp</legend>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                             <div>
                                 <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Start Date</label>
@@ -63,7 +63,7 @@ export class N42MetadataEditor {
 
                     <!-- Instrument Info -->
                     <fieldset style="border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; background: rgba(255,255,255,0.02);">
-                        <legend style="color: var(--accent-color); font-weight: 600; padding: 0 0.5rem;">🔧 Instrument</legend>
+                        <legend style="color: var(--accent-color); font-weight: 600; padding: 0 0.5rem;"><img src="/static/icons/wrench.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Instrument</legend>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                             <div>
                                 <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Manufacturer</label>
@@ -82,7 +82,7 @@ export class N42MetadataEditor {
 
                     <!-- Sample Description -->
                     <fieldset style="border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-                        <legend style="color: var(--accent-color); font-weight: 600;">🧪 Sample</legend>
+                        <legend style="color: var(--accent-color); font-weight: 600;"><img src="/static/icons/flask.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Sample</legend>
                         <div>
                             <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Description</label>
                             <textarea id="n42-sample-desc" rows="2" placeholder="Describe the measured sample..." style="width: 100%; padding: 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); resize: vertical;"></textarea>
@@ -91,7 +91,7 @@ export class N42MetadataEditor {
 
                     <!-- Location -->
                     <fieldset style="border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-                        <legend style="color: var(--accent-color); font-weight: 600;">📍 Location</legend>
+                        <legend style="color: var(--accent-color); font-weight: 600;"><img src="/static/icons/pin.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Location</legend>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <div>
                                 <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Latitude</label>
@@ -103,13 +103,13 @@ export class N42MetadataEditor {
                             </div>
                         </div>
                         <button id="n42-get-location" style="margin-top: 0.75rem; padding: 0.4rem 0.8rem; background: var(--card-bg); border: 1px solid var(--accent-color); color: var(--accent-color); border-radius: 4px; cursor: pointer; font-size: 0.875rem;">
-                            📍 Get Current Location
+                            <img src="/static/icons/pin.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Get Current Location
                         </button>
                     </fieldset>
 
                     <!-- Remarks -->
                     <fieldset style="border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
-                        <legend style="color: var(--accent-color); font-weight: 600;">💬 Notes</legend>
+                        <legend style="color: var(--accent-color); font-weight: 600;"><img src="/static/icons/comment.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Notes</legend>
                         <div>
                             <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Remarks/Comments</label>
                             <textarea id="n42-remarks" rows="2" placeholder="Add notes about this measurement..." style="width: 100%; padding: 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); resize: vertical;"></textarea>

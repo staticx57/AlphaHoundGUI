@@ -67,7 +67,7 @@ export const isotopeUI = {
                             ${energies.join(', ')} keV
                         </span>
                     </div>
-                    <button class="btn-delete-iso" data-name="${name}" style="background:transparent; border:none; color:#ef4444; cursor:pointer;">✕</button>
+                    <button class="btn-delete-iso" data-name="${name}" style="background:transparent; border:none; color:#ef4444; cursor:pointer;"><img src="/static/icons/close.svg" class="icon" style="width: 14px; height: 14px;"></button>
                 `;
                 this.list.appendChild(item);
             }

@@ -145,7 +145,7 @@ export class AlphaHoundUI {
             ">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #60a5fa;">
-                        <span>⚡</span> XRF / Fluorescence Detected
+                        <img src="/static/icons/bolt.svg" class="icon" style="width: 16px; height: 16px;"> XRF / Fluorescence Detected
                     </div>
                     <button id="btn-clear-xrf-highlight" style="
                         background: transparent;
@@ -399,10 +399,10 @@ export class AlphaHoundUI {
                                     border-radius: 4px;
                                     font-size: 0.6rem;
                                     cursor: pointer;
-                                " title="Highlight peaks on chart">📍</button>
+                                " title="Highlight peaks on chart"><img src="/static/icons/pin.svg" class="icon" style="width: 12px; height: 12px;"></button>
                                 <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600; cursor: ${iso.confidence_factors ? 'pointer' : 'default'};" 
                                       ${iso.confidence_factors ? 'onclick="event.stopPropagation(); this.parentElement.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display = this.parentElement.parentElement.parentElement.querySelector(\'.confidence-factors\').style.display === \'none\' ? \'block\' : \'none\'"' : ''}>
-                                    ${confidenceLabel} ${iso.confidence_factors ? '▼' : ''}
+                                    ${confidenceLabel} ${iso.confidence_factors ? '<img src="/static/icons/chevron-down.svg" class="icon" style="width: 10px; height: 10px; vertical-align: middle;">' : ''}
                                 </span>
                             </div>
                         </div>
@@ -416,12 +416,12 @@ export class AlphaHoundUI {
                         ${iso.activity_estimate ? `
                         <div style="font-size: 0.7rem; color: #10b981; margin-top: 0.25rem; padding: 3px 6px; background: rgba(16, 185, 129, 0.1); border-radius: 4px; display: inline-block;" 
                              title="Estimated activity (±${iso.activity_estimate.uncertainty_pct?.toFixed(0) || '?'}% uncertainty)">
-                            ⚛️ Est. Activity: ${iso.activity_estimate.readable}
+                            <img src="/static/icons/atom.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Est. Activity: ${iso.activity_estimate.readable}
                         </div>
                         ` : ''}
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                             <span>${iso.matches}/${iso.total_lines} peaks matched</span>
-                            <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat" onclick="event.stopPropagation();">📚 NNDC</a>
+                            <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat" onclick="event.stopPropagation();"><img src="/static/icons/book.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> NNDC</a>
                         </div>
                     </div>
                 `;
@@ -470,7 +470,7 @@ export class AlphaHoundUI {
                     window.chartManager.removeIsotopeHighlight(isoName);
                     btn.style.background = 'rgba(245, 158, 11, 0.2)';
                     btn.style.borderColor = '#f59e0b';
-                    btn.textContent = '📍';
+                    btn.innerHTML = '<img src="/static/icons/pin.svg" class="icon" style="width: 12px; height: 12px;">';
                 } else {
                     // Select
                     window._selectedIsotopes.add(isoName);
@@ -481,7 +481,7 @@ export class AlphaHoundUI {
 
                     btn.style.background = color + '30';
                     btn.style.borderColor = color;
-                    btn.textContent = '✓';
+                    btn.innerHTML = '<img src="/static/icons/check.svg" class="icon" style="width: 12px; height: 12px;">';
                 }
             });
         });
@@ -493,8 +493,8 @@ export class AlphaHoundUI {
             this.elements.decayChainsContainer.style.display = 'block';
             this.elements.decayChainsList.innerHTML = chains.map(chain => {
                 const confidenceClass = chain.confidence_level.toLowerCase() + '-confidence';
-                const confidenceBadge = chain.confidence_level === 'HIGH' ? '<span style="color: #10b981;">●</span>' :
-                    chain.confidence_level === 'MEDIUM' ? '<span style="color: #f59e0b;">●</span>' : '<span style="color: #ef4444;">●</span>';
+                const confidenceBadge = chain.confidence_level === 'HIGH' ? '<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>' :
+                    chain.confidence_level === 'MEDIUM' ? '<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f59e0b;"></span>' : '<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span>';
 
                 const membersHTML = Object.entries(chain.detected_members).map(([isotope, peaks]) => {
                     const energies = peaks.map(p => p.energy.toFixed(1)).join(', ');
@@ -535,7 +535,7 @@ export class AlphaHoundUI {
 
                         arrow = `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.2rem; padding: 0 0.25rem; min-width: 24px;">
                             ${branchLabel}
-                            <span style="margin-top: -2px;">→</span>
+                            <img src="/static/icons/arrow-right.svg" class="icon" style="width: 16px; height: 16px;">
                         </div>`;
                     }
 
@@ -546,7 +546,7 @@ export class AlphaHoundUI {
                                     ${member}
                                 </div>
                                 ${halfLife ? `<div style="font-size: 0.55rem; color: var(--text-secondary); margin-top: 1px;">${halfLife}</div>` : ''}
-                                ${isDetected ? '<div style="font-size: 0.65rem; margin-top: 2px;"><span style="font-size: 10px;">✓</span> DETECTED</div>' : ''}
+                                ${isDetected ? '<div style="font-size: 0.65rem; margin-top: 2px;"><img src="/static/icons/check.svg" class="icon" style="width: 10px; height: 10px; vertical-align: middle;"> DETECTED</div>' : ''}
                                 ${isStable ? '<div style="font-size: 0.65rem; margin-top: 2px;">STABLE</div>' : ''}
                             </div>
                             ${arrow}
@@ -572,9 +572,9 @@ export class AlphaHoundUI {
                                 ${chainGraphic}
                             </div>
                             <div style="margin-top: 0.75rem; font-size: 0.7rem; color: var(--text-secondary); display: flex; gap: 1rem;">
-                                <span><span style="color: #10b981;">●</span> Detected</span>
-                                <span><span style="color: #8b5cf6;">●</span> Stable End Product</span>
-                                <span><span style="color: rgba(255,255,255,0.3);">●</span> Not Detected</span>
+                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; vertical-align: middle;"></span> Detected</span>
+                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6; vertical-align: middle;"></span> Stable End Product</span>
+                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); vertical-align: middle;"></span> Not Detected</span>
                             </div>
                         </div>
                         
@@ -692,7 +692,7 @@ export class AlphaHoundUI {
                     style.innerHTML = `@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }`;
                     document.head.appendChild(style);
                 }
-                safetyAlert.innerHTML = `⚠️ HIGH RADIATION<br><div style="font-size:0.8em; font-weight:normal; margin-top:4px;">Safe Distance (2 mR/hr):<br>Approx. ${(safeDistCm / 100).toFixed(1)} meters</div>`;
+                safetyAlert.innerHTML = `<img src="/static/icons/warning.svg" style="width: 16px; height: 16px; vertical-align: middle; filter: brightness(0) invert(1);"> HIGH RADIATION<br><div style="font-size:0.8em; font-weight:normal; margin-top:4px;">Safe Distance (2 mR/hr):<br>Approx. ${(safeDistCm / 100).toFixed(1)} meters</div>`;
                 safetyAlert.style.display = 'block';
             } else {
                 this.elements.doseDisplay.style.color = '';
