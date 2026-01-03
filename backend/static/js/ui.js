@@ -25,6 +25,28 @@ export class AlphaHoundUI {
         };
     }
 
+    /**
+     * Get theme-aware colors from CSS variables
+     * @returns {Object} Object containing all status/confidence colors
+     */
+    getThemeColors() {
+        const styles = getComputedStyle(document.documentElement);
+        return {
+            detected: styles.getPropertyValue('--status-detected').trim() || '#10b981',
+            detectedBg: styles.getPropertyValue('--status-detected-bg').trim() || 'rgba(16, 185, 129, 0.2)',
+            stable: styles.getPropertyValue('--status-stable').trim() || '#8b5cf6',
+            stableBg: styles.getPropertyValue('--status-stable-bg').trim() || 'rgba(139, 92, 246, 0.2)',
+            undetected: styles.getPropertyValue('--status-undetected').trim() || 'rgba(255, 255, 255, 0.3)',
+            confidenceHigh: styles.getPropertyValue('--confidence-high').trim() || '#10b981',
+            confidenceMedium: styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b',
+            confidenceLow: styles.getPropertyValue('--confidence-low').trim() || '#ef4444',
+            xrfPrimary: styles.getPropertyValue('--xrf-primary').trim() || '#3b82f6',
+            xrfHigh: styles.getPropertyValue('--xrf-high').trim() || '#22c55e',
+            xrfMedium: styles.getPropertyValue('--xrf-medium').trim() || '#f59e0b',
+            xrfLow: styles.getPropertyValue('--xrf-low').trim() || '#94a3b8'
+        };
+    }
+
     showLoading(message = 'Processing...') {
         this.elements.dropZone.innerHTML = `
             <div class="upload-icon"><img src="/static/icons/hourglass.svg" class="icon spin" style="width: 48px; height: 48px;"></div>
@@ -74,10 +96,13 @@ export class AlphaHoundUI {
 
         if (!xrfData || xrfData.length === 0) return;
 
+        // Get theme-aware colors
+        const colors = this.getThemeColors();
+
         // Build HTML for each detected element
         const elementsHTML = xrfData.map((item, idx) => {
-            const confidenceColor = item.confidence === 'HIGH' ? '#22c55e' :
-                item.confidence === 'MEDIUM' ? '#f59e0b' : '#94a3b8';
+            const confidenceColor = item.confidence === 'HIGH' ? colors.xrfHigh :
+                item.confidence === 'MEDIUM' ? colors.xrfMedium : colors.xrfLow;
             const confidenceLabel = item.confidence || 'LOW';
 
             // Build energy table rows
@@ -341,11 +366,14 @@ export class AlphaHoundUI {
             // Store isotopes for click handlers
             window._isotopeData = isotopes;
 
+            // Get theme-aware colors
+            const colors = this.getThemeColors();
+
             // Render legacy peak-matching results with confidence bars and factor breakdown
             legacyList.innerHTML = isotopes.map((iso, idx) => {
                 const confidence = iso.confidence;
-                const barColor = confidence > 70 ? '#10b981' :
-                    confidence > 40 ? '#f59e0b' : '#ef4444';
+                const barColor = confidence > 70 ? colors.confidenceHigh :
+                    confidence > 40 ? colors.confidenceMedium : colors.confidenceLow;
                 const confidenceLabel = iso.confidence_label || (confidence > 70 ? 'HIGH' :
                     confidence > 40 ? 'MEDIUM' : 'LOW');
 
@@ -491,10 +519,14 @@ export class AlphaHoundUI {
     renderDecayChains(chains) {
         if (chains && chains.length > 0) {
             this.elements.decayChainsContainer.style.display = 'block';
+
+            // Get theme-aware colors
+            const colors = this.getThemeColors();
+
             this.elements.decayChainsList.innerHTML = chains.map(chain => {
                 const confidenceClass = chain.confidence_level.toLowerCase() + '-confidence';
-                const confidenceBadge = chain.confidence_level === 'HIGH' ? '<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>' :
-                    chain.confidence_level === 'MEDIUM' ? '<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f59e0b;"></span>' : '<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span>';
+                const confidenceBadge = chain.confidence_level === 'HIGH' ? `<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.confidenceHigh};"></span>` :
+                    chain.confidence_level === 'MEDIUM' ? `<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.confidenceMedium};"></span>` : `<span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.confidenceLow};"></span>`;
 
                 const membersHTML = Object.entries(chain.detected_members).map(([isotope, peaks]) => {
                     const energies = peaks.map(p => p.energy.toFixed(1)).join(', ');
@@ -555,7 +587,7 @@ export class AlphaHoundUI {
                 }).join('');
 
                 return `
-                    <div class="chain-card" style="border-left: 4px solid ${chain.confidence_level === 'HIGH' ? '#10b981' : '#f59e0b'};">
+                    <div class="chain-card" style="border-left: 4px solid ${chain.confidence_level === 'HIGH' ? colors.confidenceHigh : colors.confidenceMedium};">
                         <div class="chain-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                             <h4 style="margin: 0; color: var(--text-color);">${confidenceBadge} ${chain.chain_name}</h4>
                             <span class="${confidenceClass}" style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
@@ -572,15 +604,15 @@ export class AlphaHoundUI {
                                 ${chainGraphic}
                             </div>
                             <div style="margin-top: 0.75rem; font-size: 0.7rem; color: var(--text-secondary); display: flex; gap: 1rem;">
-                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; vertical-align: middle;"></span> Detected</span>
-                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6; vertical-align: middle;"></span> Stable End Product</span>
-                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); vertical-align: middle;"></span> Not Detected</span>
+                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.detected}; vertical-align: middle;"></span> Detected</span>
+                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.stable}; vertical-align: middle;"></span> Stable End Product</span>
+                                <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.undetected}; vertical-align: middle;"></span> Not Detected</span>
                             </div>
                         </div>
                         
                         ${chain.equilibrium_status && chain.equilibrium_status.in_equilibrium !== null ? `
-                        <div style="margin: 0.5rem 0; padding: 0.5rem; background: ${chain.equilibrium_status.in_equilibrium ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; border-radius: 6px; font-size: 0.8rem;">
-                            <span style="color: ${chain.equilibrium_status.in_equilibrium ? '#10b981' : '#f59e0b'}; font-weight: 600;">
+                        <div style="margin: 0.5rem 0; padding: 0.5rem; background: ${chain.equilibrium_status.in_equilibrium ? colors.detectedBg : 'rgba(245, 158, 11, 0.1)'}; border-radius: 6px; font-size: 0.8rem;">
+                            <span style="color: ${chain.equilibrium_status.in_equilibrium ? colors.detected : colors.confidenceMedium}; font-weight: 600;">
                                 ${chain.equilibrium_status.in_equilibrium ? '<img src="/static/icons/balance.svg" class="icon" style="width: 14px; height: 14px; margin-right: 4px;"> SECULAR EQUILIBRIUM' : '<img src="/static/icons/warning.svg" class="icon" style="width: 14px; height: 14px; margin-right: 4px; filter: invert(1);"> DISEQUILIBRIUM'}
                             </span>
                             <span style="color: var(--text-secondary); margin-left: 0.5rem;" title="${chain.equilibrium_status.details}">

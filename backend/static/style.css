@@ -17,7 +17,24 @@
     --accent-color: #38bdf8;
     --chart-annotation-color: #f59e0b;
     --chart-peak-color: #ef4444;
-    /* Orange for visibility */
+
+    /* Status Colors - Decay Chains */
+    --status-detected: #10b981;
+    --status-detected-bg: rgba(16, 185, 129, 0.2);
+    --status-stable: #8b5cf6;
+    --status-stable-bg: rgba(139, 92, 246, 0.2);
+    --status-undetected: rgba(255, 255, 255, 0.3);
+
+    /* Confidence Colors */
+    --confidence-high: #10b981;
+    --confidence-medium: #f59e0b;
+    --confidence-low: #ef4444;
+
+    /* XRF Colors */
+    --xrf-primary: #3b82f6;
+    --xrf-high: #22c55e;
+    --xrf-medium: #f59e0b;
+    --xrf-low: #94a3b8;
 }
 
 /* Light theme */
@@ -35,7 +52,16 @@
     --accent-color: #0ea5e9;
     --chart-annotation-color: #b91c1c;
     --chart-peak-color: #dc2626;
-    /* Darker Red for better visibility on light */
+    /* Status colors - darker for light bg */
+    --status-detected: #059669;
+    --status-detected-bg: rgba(5, 150, 105, 0.15);
+    --status-stable: #7c3aed;
+    --status-stable-bg: rgba(124, 58, 237, 0.15);
+    --status-undetected: rgba(0, 0, 0, 0.2);
+    --confidence-high: #059669;
+    --confidence-medium: #d97706;
+    --confidence-low: #dc2626;
+    --xrf-high: #16a34a;
 }
 
 [data-theme="light"] body {
@@ -59,7 +85,10 @@
     --accent-color: #fbbf24;
     --chart-annotation-color: #ef4444;
     --chart-peak-color: #ef4444;
-    /* Bright Red for high contrast with gold/green */
+    /* Status colors - radiation yellow theme */
+    --status-detected: #fbbf24;
+    --status-detected-bg: rgba(251, 191, 36, 0.25);
+    --confidence-high: #fbbf24;
 }
 
 [data-theme="nuclear"] body {
@@ -85,7 +114,10 @@
     --accent-color: #10b981;
     --chart-annotation-color: #d946ef;
     --chart-peak-color: #d946ef;
-    /* Magenta for max contrast against toxic green */
+    /* Status colors - bright green for toxic */
+    --status-detected: #22c55e;
+    --status-detected-bg: rgba(34, 197, 94, 0.3);
+    --confidence-high: #22c55e;
 }
 
 [data-theme="toxic"] body {
@@ -111,7 +143,10 @@
     --accent-color: #5b9eff;
     --chart-annotation-color: #fbbf24;
     --chart-peak-color: #fbbf24;
-    /* Yellow for visibility */
+    /* Status colors - cyan for sci-fi */
+    --status-detected: #06b6d4;
+    --status-detected-bg: rgba(6, 182, 212, 0.25);
+    --confidence-high: #06b6d4;
 }
 
 [data-theme="scifi"] body {
@@ -137,7 +172,10 @@
     --accent-color: #00f5ff;
     --chart-annotation-color: #ff006e;
     --chart-peak-color: #ff006e;
-    /* Magenta/pink for visibility */
+    /* Status colors - neon pink for cyberpunk */
+    --status-detected: #f472b6;
+    --status-detected-bg: rgba(244, 114, 182, 0.25);
+    --confidence-high: #f472b6;
 }
 
 [data-theme="cyberpunk"] body {
@@ -247,6 +285,10 @@
     --accent-color: #33ff66;
     --chart-annotation-color: #33ff66;
     --chart-peak-color: #00ff55;
+    /* Status colors - phosphor green */
+    --status-detected: #22c55e;
+    --status-detected-bg: rgba(34, 197, 94, 0.3);
+    --confidence-high: #22c55e;
 }
 
 [data-theme="oscilloscope"] body {
@@ -295,6 +337,10 @@
     --accent-color: #ff7700;
     --chart-annotation-color: #ff6600;
     --chart-peak-color: #ff4400;
+    /* Status colors - nixie orange glow */
+    --status-detected: #f97316;
+    --status-detected-bg: rgba(249, 115, 22, 0.25);
+    --confidence-high: #f97316;
 }
 
 [data-theme="nixie"] body {

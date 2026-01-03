@@ -235,7 +235,8 @@
                                         </div>
                                         <button id="btn-sync-time" data-device-feature="timeSync" class="btn-secondary"
                                             style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin-top: auto; white-space: nowrap;">
-                                            🕐 Sync
+                                            <img src="/static/icons/timer.svg" class="icon"
+                                                style="width: 12px; height: 12px;"> Sync
                                         </button>
                                     </div>
 
@@ -263,7 +264,8 @@
                                     <details style="margin-top: 0.5rem;" data-device-feature="energyCalibration">
                                         <summary
                                             style="cursor: pointer; font-size: 0.75rem; color: var(--text-secondary);">
-                                            ⚙️ Energy Calibration
+                                            <img src="/static/icons/settings.svg" class="icon"
+                                                style="width: 12px; height: 12px;"> Energy Calibration
                                         </summary>
                                         <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                             <input type="number" id="rc-cal-a0" step="0.001" placeholder="a0"
@@ -283,14 +285,17 @@
                                     <button id="btn-power-off" data-device-feature="powerControl" style="margin-top: 0.75rem; width: 100%; padding: 0.4rem; 
                                             background: transparent; border: 1px solid #ef4444; 
                                             color: #ef4444; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-                                        ⏻ Power Off Device
+                                        <img src="/static/icons/stop.svg" class="icon"
+                                            style="width: 12px; height: 12px; filter: invert(35%) sepia(90%) saturate(2000%) hue-rotate(340deg);">
+                                        Power Off Device
                                     </button>
 
                                     <!-- Advanced Info (Phase 3) -->
                                     <details style="margin-top: 0.5rem;" data-device-feature="advancedInfo">
                                         <summary
                                             style="cursor: pointer; font-size: 0.75rem; color: var(--text-secondary);">
-                                            📊 Advanced Diagnostics
+                                            <img src="/static/icons/chart.svg" class="icon"
+                                                style="width: 12px; height: 12px;"> Advanced Diagnostics
                                         </summary>
                                         <div
                                             style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-secondary);">
@@ -309,7 +314,8 @@
                                             </div>
                                             <button id="btn-refresh-diagnostics" class="btn-secondary"
                                                 style="margin-top: 0.4rem; font-size: 0.65rem; padding: 0.2rem 0.5rem; width: 100%;">
-                                                🔄 Refresh Diagnostics
+                                                <img src="/static/icons/refresh.svg" class="icon"
+                                                    style="width: 10px; height: 10px;"> Refresh Diagnostics
                                             </button>
                                         </div>
                                     </details>
@@ -322,7 +328,10 @@
                     <div id="rc-message-banner" data-device-feature="textMessages" style="display: none; background: linear-gradient(90deg, #f59e0b22, transparent); 
                             border-left: 3px solid #f59e0b; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; 
                             border-radius: 4px; font-size: 0.8rem;">
-                        <span style="font-weight: 600; color: #f59e0b;">⚠️ Device Alert:</span>
+                        <span style="font-weight: 600; color: #f59e0b;"><img src="/static/icons/warning.svg"
+                                class="icon"
+                                style="width: 14px; height: 14px; filter: invert(67%) sepia(95%) saturate(356%) hue-rotate(344deg);">
+                            Device Alert:</span>
                         <span id="rc-message-text" style="color: var(--text-primary); margin-left: 0.25rem;">--</span>
                         <button onclick="this.parentElement.style.display='none'"
                             style="float: right; background: none; border: none; color: #f59e0b; cursor: pointer; font-size: 1rem;">×</button>
