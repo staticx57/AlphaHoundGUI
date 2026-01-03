@@ -770,6 +770,10 @@ function setupEventListeners() {
                         rcDoseChart.destroy();
                         rcDoseChart = null;
                     }
+
+                    // Force layout reflow to ensure canvas has dimensions
+                    rcChartCanvas.offsetHeight;
+
                     rcDoseChart = new DoseRateChart(rcChartCanvas, {
                         label: 'Dose Rate',
                         colorVar: '--secondary-color', // Respect the current theme
@@ -777,10 +781,29 @@ function setupEventListeners() {
                     });
                 }
 
+                // Disable acquisition buttons during initialization
+                const acquireBtn = document.getElementById('btn-acquire-spectrum');
+                const getAccumulatedBtn = document.getElementById('btn-get-accumulated');
+                const getCurrentBtn = document.getElementById('btn-get-current');
+
+                if (acquireBtn) acquireBtn.disabled = true;
+                if (getAccumulatedBtn) getAccumulatedBtn.disabled = true;
+                if (getCurrentBtn) getCurrentBtn.disabled = true;
+
+                // Show initializing toast
+                showToast('Device initializing... (2s)', 'info');
+
                 // Start dose rate polling after a brief delay to allow device data stream to initialize
                 // The Radiacode library needs ~2 seconds after connection before data_buf() returns data
                 setTimeout(() => {
                     startRadiacodeDosePolling();
+
+                    // Re-enable acquisition buttons after initialization
+                    if (acquireBtn) acquireBtn.disabled = false;
+                    if (getAccumulatedBtn) getAccumulatedBtn.disabled = false;
+                    if (getCurrentBtn) getCurrentBtn.disabled = false;
+
+                    showToast('Device ready for acquisition', 'success');
                 }, 2000);
 
                 // Show disconnect button, hide connect button (keep connection row visible!)

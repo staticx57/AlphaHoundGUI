@@ -35,6 +35,17 @@
     --xrf-high: #22c55e;
     --xrf-medium: #f59e0b;
     --xrf-low: #94a3b8;
+
+    /* Toast Notification Colors */
+    --toast-success: #10b981;
+    --toast-warning: #f59e0b;
+    --toast-info: #3b82f6;
+    --toast-error: #ef4444;
+
+    /* UI Element Colors */
+    --error-color: #ef4444;
+    --warning-color: #f59e0b;
+    --success-color: #10b981;
 }
 
 /* Light theme */
@@ -62,6 +73,8 @@
     --confidence-medium: #d97706;
     --confidence-low: #dc2626;
     --xrf-high: #16a34a;
+    --toast-success: #059669;
+    --toast-warning: #d97706;
 }
 
 [data-theme="light"] body {
@@ -89,6 +102,8 @@
     --status-detected: #fbbf24;
     --status-detected-bg: rgba(251, 191, 36, 0.25);
     --confidence-high: #fbbf24;
+    --toast-success: #fbbf24;
+    --toast-info: #fbbf24;
 }
 
 [data-theme="nuclear"] body {
@@ -147,6 +162,9 @@
     --status-detected: #06b6d4;
     --status-detected-bg: rgba(6, 182, 212, 0.25);
     --confidence-high: #06b6d4;
+    --toast-success: #00d9ff;
+    --toast-warning: #a855f7;
+    --toast-info: #00d9ff;
 }
 
 [data-theme="scifi"] body {
@@ -176,6 +194,9 @@
     --status-detected: #f472b6;
     --status-detected-bg: rgba(244, 114, 182, 0.25);
     --confidence-high: #f472b6;
+    --toast-success: #fcee09;
+    --toast-warning: #ff006e;
+    --toast-info: #00f5ff;
 }
 
 [data-theme="cyberpunk"] body {
@@ -341,6 +362,9 @@
     --status-detected: #f97316;
     --status-detected-bg: rgba(249, 115, 22, 0.25);
     --confidence-high: #f97316;
+    --toast-success: #ff7700;
+    --toast-warning: #ff6600;
+    --toast-info: #ff7700;
 }
 
 [data-theme="nixie"] body {
@@ -1596,40 +1620,38 @@ input[type="text"]:focus {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-/* Detected State - Common but theme adjustable */
+/* Detected State - Uses theme CSS variables */
 .decay-step-box.detected {
-    background: rgba(16, 185, 129, 0.2);
-    border: 2px solid #10b981;
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
-    color: #10b981;
+    background: var(--status-detected-bg);
+    border: 2px solid var(--status-detected);
+    box-shadow: 0 0 10px var(--status-detected-bg);
+    color: var(--status-detected);
     font-weight: 700;
 }
 
 [data-theme="light"] .decay-step-box.detected {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: #059669;
-    color: #059669;
-    /* Darker green for light theme */
+    background: var(--status-detected-bg);
+    border-color: var(--status-detected);
+    color: var(--status-detected);
 }
 
-/* Detected State - Toxic Theme override */
+/* Detected State - Toxic Theme override (keep for backwards compatibility) */
 [data-theme="toxic"] .decay-step-box.detected {
     color: #d1fae5;
     background: rgba(34, 197, 94, 0.3);
 }
 
-/* Stable State */
+/* Stable State - Uses theme CSS variables */
 .decay-step-box.stable {
-    background: rgba(139, 92, 246, 0.2);
-    border: 2px dashed #8b5cf6;
-    color: #8b5cf6;
+    background: var(--status-stable-bg);
+    border: 2px dashed var(--status-stable);
+    color: var(--status-stable);
 }
 
 [data-theme="light"] .decay-step-box.stable {
-    background: rgba(139, 92, 246, 0.1);
-    border-color: #7c3aed;
-    color: #7c3aed;
-    /* Darker purple */
+    background: var(--status-stable-bg);
+    border-color: var(--status-stable);
+    color: var(--status-stable);
 }
 
 /* Device Panel Split Layout */
