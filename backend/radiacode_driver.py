@@ -42,7 +42,7 @@ if platform.system() == 'Windows':
 try:
     from radiacode import RadiaCode
     from radiacode.transports.usb import DeviceNotFound as RadiacodeNotFound
-    from radiacode.types import RealTimeData, Spectrum
+    from radiacode.types import RealTimeData, Spectrum, DisplayDirection, CTRL
     HAS_RADIACODE = True
 except ImportError:
     HAS_RADIACODE = False
@@ -50,6 +50,8 @@ except ImportError:
     RadiacodeNotFound = Exception
     RealTimeData = None
     Spectrum = None
+    DisplayDirection = None
+    CTRL = None
 
 # Try to import bleak-based transport for cross-platform BLE
 try:
@@ -238,14 +240,17 @@ class RadiacodeDevice:
             return {}
         
         try:
-            # Serial number
-            serial = getattr(self._device, 'serial_number', None)
+            # Serial number - call the method
+            serial = None
+            if hasattr(self._device, 'serial_number') and callable(self._device.serial_number):
+                serial = self._device.serial_number()
             
-            # Firmware version (if available)
-            fw_version = getattr(self._device, 'fw_version', None)
+            # Firmware version - call the method
+            fw_version = None
+            if hasattr(self._device, 'fw_version') and callable(self._device.fw_version):
+                fw_version = self._device.fw_version()
             
             # Determine model from characteristics (heuristic)
-            # Model detection isn't directly exposed, use serial prefix or calibration data
             model = "Radiacode"  # Default
             
             return {
@@ -254,7 +259,8 @@ class RadiacodeDevice:
                 "model": model,
                 "connection_type": self._connection_type or "USB"
             }
-        except Exception:
+        except Exception as e:
+            print(f"[Radiacode] Error fetching device info: {e}")
             return {}
     
     def get_device_info(self) -> Dict[str, Any]:
@@ -272,20 +278,20 @@ class RadiacodeDevice:
             return None
         
         with self._lock:
-                try:
-                    data_records = self._device.data_buf()
-                    for record in data_records:
-                        if RealTimeData and isinstance(record, RealTimeData):
-                            # RadiaCode library returns dose_rate in a unit requiring 10,000x multiplier for µSv/h
-                            raw_val = float(record.dose_rate)
-                            return raw_val * 10000
-                    return None
-                except Exception as e:
-                    import traceback
-                    print(f"[Radiacode] Error in get_dose_rate: {e}")
-                    traceback.print_exc()
-                    self._last_error = f"Failed to get dose rate: {e}"
-                    return None
+            try:
+                data_records = self._device.data_buf()
+                for record in data_records:
+                    if RealTimeData and isinstance(record, RealTimeData):
+                        # RadiaCode library returns dose_rate in a unit requiring 10,000x multiplier for µSv/h
+                        raw_val = float(record.dose_rate)
+                        return raw_val * 10000
+                return None
+            except Exception as e:
+                import traceback
+                print(f"[Radiacode] Error in get_dose_rate: {e}")
+                traceback.print_exc()
+                self._last_error = f"Failed to get dose rate: {e}"
+                return None
     
     def get_spectrum(self) -> Tuple[List[int], List[float], Dict[str, Any]]:
         """
@@ -386,6 +392,425 @@ class RadiacodeDevice:
             except Exception as e:
                 self._last_error = f"Failed to reset dose: {e}"
                 return False
+    
+    # ============================================================
+    # Device Settings (Radiacode-specific features)
+    # ============================================================
+    
+    def set_brightness(self, level: int) -> bool:
+        """
+        Set display brightness (0-9).
+        
+        Args:
+            level: Brightness level 0 (dimmest) to 9 (brightest)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._device:
+            return False
+        
+        level = max(0, min(9, level))  # Clamp to valid range
+        
+        with self._lock:
+            try:
+                self._device.set_display_brightness(level)
+                return True
+            except Exception as e:
+                self._last_error = f"Failed to set brightness: {e}"
+                return False
+    
+    def set_sound(self, enabled: bool) -> bool:
+        """
+        Enable or disable device sound alerts.
+        
+        Args:
+            enabled: True to enable sound, False to disable
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._device:
+            return False
+        
+        with self._lock:
+            try:
+                self._device.set_sound_on(enabled)
+                return True
+            except Exception as e:
+                self._last_error = f"Failed to set sound: {e}"
+                return False
+    
+    def set_vibration(self, enabled: bool) -> bool:
+        """
+        Enable or disable device vibration alerts.
+        
+        Args:
+            enabled: True to enable vibration, False to disable
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._device:
+            return False
+        
+        with self._lock:
+            try:
+                self._device.set_vibro_on(enabled)
+                return True
+            except Exception as e:
+                self._last_error = f"Failed to set vibration: {e}"
+                return False
+    
+    def set_display_off_time(self, seconds: int) -> bool:
+        """
+        Set display auto-off timeout.
+        
+        Args:
+            seconds: Seconds until display turns off (0 = never)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._device:
+            return False
+        
+        with self._lock:
+            try:
+                self._device.set_display_off_time(seconds)
+                return True
+            except Exception as e:
+                self._last_error = f"Failed to set display off time: {e}"
+                return False
+    
+    def set_language(self, language: str) -> bool:
+        """
+        Set device language.
+        
+        Args:
+            language: 'en' for English or 'ru' for Russian
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._device:
+            self._last_error = "Device not connected"
+            return False
+        
+        if language not in ['en', 'ru']:
+            self._last_error = "Language must be 'en' or 'ru'"
+            return False
+        
+        with self._lock:
+            try:
+                self._device.set_language(language)
+                print(f"[Radiacode] Language set to {language}")
+                return True
+            except Exception as e:
+                self._last_error = f"Failed to set language: {e}"
+                print(f"[Radiacode] Error setting language: {e}")
+                return False
+    
+    
+    def get_accumulated_dose(self) -> Optional[float]:
+        """
+        Get total accumulated dose in μSv.
+        
+        NOTE: The radiacode library does not expose accumulated dose via data_buf().
+        RealTimeData only provides dose_rate, not accumulated dose.
+        This feature is not available.
+        
+        Returns:
+            None - Feature not available in radiacode library
+        """
+        # Accumulated dose is not available from RealTimeData
+        # The library only exposes dose_rate, not total accumulated dose
+        return None
+    
+    def get_configuration(self) -> Optional[str]:
+        """
+        Get full device configuration dump.
+        
+        Returns:
+            Configuration string or None if unavailable
+        """
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                return self._device.configuration()
+            except Exception as e:
+                self._last_error = f"Failed to get configuration: {e}"
+                return None
+
+    # ==================== Phase 1: Quick Win Features ====================
+
+    def get_accumulated_spectrum(self) -> Optional[dict]:
+        """
+        Get accumulated spectrum data (long-term monitoring).
+        
+        Returns spectrum data accumulated over time, useful for isotope identification
+        and long-term radiation monitoring.
+        
+        Returns:
+            dict with spectrum data and metadata, or None if unavailable
+        """
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                spec = self._device.spectrum_accum()
+                return {
+                    'counts': spec.counts.tolist() if hasattr(spec.counts, 'tolist') else list(spec.counts),
+                    'duration': spec.duration.total_seconds(),
+                    'a0': spec.a0,
+                    'a1': spec.a1,
+                    'a2': spec.a2,
+                    'channels': len(spec.counts)
+                }
+            except Exception as e:
+                self._last_error = f"Failed to get accumulated spectrum: {e}"
+                return None
+
+    def set_display_direction(self, direction: str) -> bool:
+        """
+        Set the device display orientation.
+        
+        Args:
+            direction: One of 'normal', 'reversed', or 'auto'
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._device:
+            return False
+        
+        with self._lock:
+            try:
+                from radiacode.transports.usb import DisplayDirection
+                
+                direction_map = {
+                    'normal': DisplayDirection.NORMAL,
+                    'reversed': DisplayDirection.REVERSED,
+                    'auto': DisplayDirection.AUTO
+                }
+                
+                if direction.lower() not in direction_map:
+                    self._last_error = f"Invalid direction: {direction}"
+                    return False
+                
+                self._device.set_display_direction(direction_map[direction.lower()])
+                return True
+            except Exception as e:
+                self._last_error = f"Failed to set display direction: {e}"
+                return False
+
+    def sync_device_time(self) -> bool:
+        """
+        Synchronize device clock with computer time.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._device:
+            return False
+        
+        with self._lock:
+            try:
+                import datetime
+                self._device.set_local_time(datetime.datetime.now())
+                return True
+            except Exception as e:
+                self._last_error = f"Failed to sync device time: {e}"
+                return False
+
+    def get_hw_serial_number(self) -> Optional[str]:
+        """
+        Get the hardware serial number.
+        
+        Returns detailed hardware serial number (distinct from software serial).
+        
+        Returns:
+            Hardware serial number string, or None if unavailable
+        """
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                return self._device.hw_serial_number()
+            except Exception as e:
+                self._last_error = f"Failed to get hardware serial: {e}"
+                return None
+
+    # ============================================================
+    # Phase 2: Advanced Controls
+    # ============================================================
+
+    def get_energy_calibration(self) -> Optional[Dict[str, float]]:
+        """Get current energy calibration coefficients."""
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                spec = self._device.spectrum()
+                return {"a0": spec.a0, "a1": spec.a1, "a2": spec.a2}
+            except Exception as e:
+                print(f"[Radiacode] Error getting calibration: {e}")
+                self._last_error = f"Failed to get calibration: {e}"
+                return None
+
+    def set_energy_calibration(self, a0: float, a1: float, a2: float) -> bool:
+        """Set energy calibration coefficients (Energy = a0 + a1*ch + a2*ch^2)."""
+        if not self._device:
+            self._last_error = "Not connected"
+            return False
+        
+        with self._lock:
+            try:
+                self._device.set_energy_calib([a0, a1, a2])
+                print(f"[Radiacode] Set calibration: a0={a0}, a1={a1}, a2={a2}")
+                return True
+            except Exception as e:
+                print(f"[Radiacode] Error setting calibration: {e}")
+                self._last_error = f"Failed to set calibration: {e}"
+                return False
+
+    def set_sound_control(self, search: bool = False, detector: bool = False, clicks: bool = False) -> bool:
+        """Set advanced sound control flags (search/detector/clicks)."""
+        if not self._device:
+            self._last_error = "Not connected"
+            return False
+        
+        with self._lock:
+            try:
+                ctrls = []
+                if search:
+                    ctrls.append(CTRL.SEARCH)
+                if detector:
+                    ctrls.append(CTRL.DETECTOR)
+                if clicks:
+                    ctrls.append(CTRL.CLICKS)
+                self._device.set_sound_ctrl(ctrls)
+                return True
+            except Exception as e:
+                print(f"[Radiacode] Error setting sound control: {e}")
+                self._last_error = f"Failed to set sound control: {e}"
+                return False
+
+    def set_vibration_control(self, search: bool = False, detector: bool = False) -> bool:
+        """Set advanced vibration control flags (search/detector only, no clicks)."""
+        if not self._device:
+            self._last_error = "Not connected"
+            return False
+        
+        with self._lock:
+            try:
+                ctrls = []
+                if search:
+                    ctrls.append(CTRL.SEARCH)
+                if detector:
+                    ctrls.append(CTRL.DETECTOR)
+                self._device.set_vibro_ctrl(ctrls)
+                return True
+            except Exception as e:
+                print(f"[Radiacode] Error setting vibration control: {e}")
+                self._last_error = f"Failed to set vibration control: {e}"
+                return False
+
+    def power_off_device(self) -> bool:
+        """Power off the device. User must manually power back on."""
+        if not self._device:
+            self._last_error = "Not connected"
+            return False
+        
+        with self._lock:
+            try:
+                self._device.set_device_on(False)
+                print("[Radiacode] Device power off sent")
+                return True
+            except Exception as e:
+                print(f"[Radiacode] Error powering off: {e}")
+                self._last_error = f"Failed to power off: {e}"
+                return False
+
+    # ============================================================
+    # Phase 3: Info & Diagnostics
+    # ============================================================
+
+    def get_status_flags(self) -> Optional[str]:
+        """Get device status flags."""
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                return self._device.status()
+            except Exception as e:
+                print(f"[Radiacode] Error getting status: {e}")
+                self._last_error = f"Failed to get status: {e}"
+                return None
+
+    def get_firmware_signature(self) -> Optional[str]:
+        """Get firmware signature info."""
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                return self._device.fw_signature()
+            except Exception as e:
+                print(f"[Radiacode] Error getting FW signature: {e}")
+                self._last_error = f"Failed to get FW signature: {e}"
+                return None
+
+    def get_text_message(self) -> Optional[str]:
+        """Get device text message/alert."""
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                msg = self._device.text_message()
+                return msg if msg else None
+            except Exception as e:
+                print(f"[Radiacode] Error getting text message: {e}")
+                self._last_error = f"Failed to get text message: {e}"
+                return None
+
+    # ============================================================
+    # Phase 4: System Features
+    # ============================================================
+
+    def get_available_commands(self) -> Optional[str]:
+        """Get list of available SFR commands."""
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                return self._device.commands()
+            except Exception as e:
+                print(f"[Radiacode] Error getting commands: {e}")
+                self._last_error = f"Failed to get commands: {e}"
+                return None
+
+    def get_base_time(self) -> Optional[str]:
+        """Get device base time reference for timestamp conversion."""
+        if not self._device:
+            return None
+        
+        with self._lock:
+            try:
+                # _base_time is set during device initialization
+                return str(self._device._base_time) if hasattr(self._device, '_base_time') else None
+            except Exception as e:
+                print(f"[Radiacode] Error getting base time: {e}")
+                self._last_error = f"Failed to get base time: {e}"
+                return None
 
 
 # Global singleton instance

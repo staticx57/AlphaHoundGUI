@@ -316,3 +316,26 @@ async def get_acquisition_data():
     if not data:
         raise HTTPException(status_code=404, detail="No acquisition data available")
     return data
+
+
+@router.get("/capabilities")
+async def get_device_capabilities():
+    """
+    Get device capabilities for UI feature gating.
+    
+    Returns which features are supported by the AlphaHound device.
+    """
+    return {
+        "device_type": "alphahound",
+        "capabilities": {
+            "timedAcquisition": True,
+            "serverManagedAcquisition": True,
+            "temperature": True,
+            "displayModeToggle": True,
+            "clearSpectrum": True,
+            "doseReset": False,
+            "deviceSettings": False,
+            "bleConnection": False
+        }
+    }
+

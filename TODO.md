@@ -161,3 +161,13 @@
 ### Activity & Decay
 - [x] **Activity & Dose Calculator**: Bq/μCi conversion, γ dose rate (μSv/h)
 - [x] **Decay Prediction Engine**: Curie + Bateman solver, interactive Chart.js visualization
+
+### UI Themes *(Deferred Indefinitely)*
+Additional vintage test equipment themes that could be added:
+- [ ] Nuclear Chicago (industrial grey/blue)
+- [ ] Bicron (dark grey/orange accents)
+- [ ] Technical Associates
+- [ ] Jordan (UK civil defense)
+- [ ] Berthold (German professional blue/grey)
+- [ ] Saphymo (French radiation detectors)
+- [ ] CDV Series (additional Cold War era variants)

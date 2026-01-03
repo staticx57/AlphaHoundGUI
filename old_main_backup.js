@@ -6,7 +6,6 @@ import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
 import { n42MetadataEditor } from './n42_editor.js';
 import { estimatorUI } from './estimator_ui.js';
-import { updateDeviceUI, resetDeviceUI } from './device_features.js';
 
 // Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
 window.chartManager = chartManager;
@@ -67,60 +66,6 @@ async function pollRadiacodeDose() {
             // Update sparkline chart if initialized
             if (rcDoseChart) {
                 rcDoseChart.addDataPoint(dose);
-            }
-        }
-
-        // Update device info periodically (every 10 polls ~20 seconds)
-        if (!pollRadiacodeDose._pollCount) pollRadiacodeDose._pollCount = 0;
-        pollRadiacodeDose._pollCount++;
-        if (pollRadiacodeDose._pollCount % 10 === 0) {
-            try {
-                const extendedInfo = await api.getRadiacodeExtendedInfo();
-                // Update device info in settings panel
-                if (extendedInfo.device_info) {
-                    const snEl = document.getElementById('rc-serial-number');
-                    const fwEl = document.getElementById('rc-firmware-version');
-                    if (snEl && extendedInfo.device_info.serial_number) {
-                        // Serial could be string, array, or object
-                        const sn = extendedInfo.device_info.serial_number;
-                        let serialValue;
-                        if (typeof sn === 'string') {
-                            serialValue = sn;
-                        } else if (Array.isArray(sn)) {
-                            serialValue = sn.join('-');
-                        } else if (typeof sn === 'object' && sn !== null) {
-                            // Try common property names or stringify
-                            serialValue = sn.value || sn.serial || sn.number || JSON.stringify(sn);
-                        } else {
-                            serialValue = String(sn);
-                        }
-                        snEl.textContent = serialValue;
-                    }
-                    if (fwEl && extendedInfo.device_info.firmware_version) {
-                        // Firmware is nested: [[major, minor, date], [major, minor, date]]
-                        // Extract target (second element) or flatten as best we can
-                        const fw = extendedInfo.device_info.firmware_version;
-                        let fwValue;
-                        if (Array.isArray(fw) && fw.length >= 2 && Array.isArray(fw[1])) {
-                            // Format: [[boot], [target]] -> "major.minor"
-                            fwValue = `${fw[1][0]}.${fw[1][1]}`;
-                        } else if (Array.isArray(fw)) {
-                            fwValue = fw.flat().join('.');
-                        } else if (typeof fw === 'string') {
-                            fwValue = fw;
-                        } else {
-                            fwValue = JSON.stringify(fw);
-                        }
-                        fwEl.textContent = fwValue;
-                    }
-                }
-                // Fetch HW serial (Phase 1)
-                fetchHardwareSerial();
-                // Check for device messages (Phase 3)
-                checkDeviceMessages();
-            } catch (extErr) {
-                // Extended info is optional, don't break on failure
-                console.log('[Radiacode] Extended info unavailable:', extErr.message);
             }
         }
     } catch (err) {
@@ -294,194 +239,6 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
-// ==================== Phase 1: Quick Win Features ====================
-
-// Get Accumulated Spectrum
-const btnGetAccumulated = document.getElementById('btn-get-accumulated');
-if (btnGetAccumulated) {
-    btnGetAccumulated.addEventListener('click', async () => {
-        try {
-            showToast('Getting accumulated spectrum...', 'info');
-            const data = await api.getAccumulatedSpectrum();
-
-            // Backend now returns fully analyzed data with energies, counts, peaks, isotopes
-            currentData = data;
-
-            // Show dashboard if hidden (in case this is first load)
-            document.getElementById('drop-zone').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'block';
-
-            // Render full dashboard with all analysis (peaks, isotopes, XRF)
-            ui.renderDashboard(data);
-            chartManager.render(data.energies, data.counts, data.peaks || [], 'linear');
-
-            const durationMin = (data.duration / 60).toFixed(1);
-            showToast(`Accumulated spectrum: ${durationMin} min, ${(data.peaks || []).length} peaks`, 'success');
-        } catch (err) {
-            console.error('Failed to get accumulated spectrum:', err);
-            showToast(err.message || 'Failed to get accumulated spectrum', 'error');
-        }
-    });
-}
-
-// Display Orientation
-const displayDirectionSelect = document.getElementById('rc-display-direction');
-if (displayDirectionSelect) {
-    displayDirectionSelect.addEventListener('change', async (e) => {
-        try {
-            const direction = e.target.value;
-            await api.setDisplayDirection(direction);
-            showToast(`Display orientation set to ${direction}`, 'success');
-        } catch (err) {
-            console.error('Failed to set display direction:', err);
-            showToast(err.message || 'Failed to set display orientation', 'error');
-        }
-    });
-}
-
-// Sync Device Time
-const btnSyncTime = document.getElementById('btn-sync-time');
-if (btnSyncTime) {
-    btnSyncTime.addEventListener('click', async () => {
-        try {
-            await api.syncDeviceTime();
-            showToast('Device time synchronized with computer', 'success');
-        } catch (err) {
-            console.error('Failed to sync time:', err);
-            showToast(err.message || 'Failed to sync device time', 'error');
-        }
-    });
-}
-
-// Fetch HW Serial on connection (update pollRadiacodeDose to also fetch hw_serial)
-async function fetchHardwareSerial() {
-    try {
-        const result = await api.getHardwareSerial();
-        const hwSerialEl = document.getElementById('rc-hw-serial');
-        if (hwSerialEl && result.hw_serial_number) {
-            hwSerialEl.textContent = result.hw_serial_number;
-        }
-    } catch (err) {
-        console.log('[Radiacode] HW serial unavailable:', err.message);
-    }
-}
-
-// ==================== Phase 2: Advanced Controls ====================
-
-// Get Energy Calibration
-const btnGetCalibration = document.getElementById('btn-get-calibration');
-if (btnGetCalibration) {
-    btnGetCalibration.addEventListener('click', async () => {
-        try {
-            const calibration = await api.getEnergyCalibration();
-            document.getElementById('rc-cal-a0').value = calibration.a0.toFixed(4);
-            document.getElementById('rc-cal-a1').value = calibration.a1.toFixed(4);
-            document.getElementById('rc-cal-a2').value = calibration.a2.toFixed(7);
-            showToast('Calibration retrieved', 'success');
-        } catch (err) {
-            console.error('Failed to get calibration:', err);
-            showToast(err.message || 'Failed to get calibration', 'error');
-        }
-    });
-}
-
-// Set Energy Calibration
-const btnSetCalibration = document.getElementById('btn-set-calibration');
-if (btnSetCalibration) {
-    btnSetCalibration.addEventListener('click', async () => {
-        const a0 = parseFloat(document.getElementById('rc-cal-a0').value);
-        const a1 = parseFloat(document.getElementById('rc-cal-a1').value);
-        const a2 = parseFloat(document.getElementById('rc-cal-a2').value);
-
-        if (isNaN(a0) || isNaN(a1) || isNaN(a2)) {
-            showToast('Enter all calibration values', 'warning');
-            return;
-        }
-
-        try {
-            await api.setEnergyCalibration(a0, a1, a2);
-            showToast('Calibration applied', 'success');
-        } catch (err) {
-            console.error('Failed to set calibration:', err);
-            showToast(err.message || 'Failed to set calibration', 'error');
-        }
-    });
-}
-
-// Power Off Device (with confirmation)
-const btnPowerOff = document.getElementById('btn-power-off');
-if (btnPowerOff) {
-    btnPowerOff.addEventListener('click', async () => {
-        if (!confirm('Power off the Radiacode device?\n\nYou will need to manually power it back on.')) {
-            return;
-        }
-
-        try {
-            await api.powerOffDevice();
-            showToast('Device powering off...', 'warning');
-            // Reset UI since device will disconnect
-            stopRadiacodeDosePolling();
-            resetDeviceUI();
-            document.getElementById('btn-connect-radiacode').style.display = 'inline-block';
-            document.getElementById('btn-disconnect-device').style.display = 'none';
-        } catch (err) {
-            console.error('Failed to power off device:', err);
-            showToast(err.message || 'Failed to power off', 'error');
-        }
-    });
-}
-
-// ==================== End Phase 2 Features ====================
-
-// ==================== Phase 3: Diagnostics GUI ====================
-
-// Refresh Diagnostics
-const btnRefreshDiagnostics = document.getElementById('btn-refresh-diagnostics');
-if (btnRefreshDiagnostics) {
-    btnRefreshDiagnostics.addEventListener('click', async () => {
-        try {
-            // Fetch all diagnostics in parallel
-            const [statusResult, fwSigResult, baseTimeResult] = await Promise.all([
-                api.getStatusFlags().catch(e => ({ status_flags: 'Error' })),
-                api.getFirmwareSignature().catch(e => ({ fw_signature: 'Error' })),
-                api.getBaseTime().catch(e => ({ base_time: 'Error' }))
-            ]);
-
-            // Update UI
-            document.getElementById('rc-status-flags').textContent = statusResult.status_flags || '--';
-            document.getElementById('rc-fw-signature').textContent = fwSigResult.fw_signature || '--';
-            document.getElementById('rc-base-time').textContent = baseTimeResult.base_time || '--';
-
-            showToast('Diagnostics refreshed', 'success');
-        } catch (err) {
-            console.error('Failed to refresh diagnostics:', err);
-            showToast('Failed to refresh diagnostics', 'error');
-        }
-    });
-}
-
-// Check for text messages periodically (add to poll function)
-async function checkDeviceMessages() {
-    try {
-        const result = await api.getTextMessage();
-        const banner = document.getElementById('rc-message-banner');
-        const textEl = document.getElementById('rc-message-text');
-
-        if (result.has_message && result.message) {
-            textEl.textContent = result.message;
-            banner.style.display = 'block';
-        } else {
-            banner.style.display = 'none';
-        }
-    } catch (err) {
-        // Silently fail - messages are optional
-    }
-}
-
-// ==================== End Phase 3 Features ====================
-
-// ==================== End Phase 1 Features ====================
-
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
@@ -572,12 +329,6 @@ function setupEventListeners() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
 
-    // Upload button in header
-    const btnUpload = document.getElementById('btn-upload-file');
-    if (btnUpload && fileInput) {
-        btnUpload.addEventListener('click', () => fileInput.click());
-    }
-
     if (dropZone) {
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -638,39 +389,27 @@ function setupEventListeners() {
 
     // ============================================================
     // Device Type Tab Switching (AlphaHound / Radiacode)
-    // Now toggles connection rows, not entire panels
     // ============================================================
     const tabAlphahound = document.getElementById('tab-alphahound');
     const tabRadiacode = document.getElementById('tab-radiacode');
-    const alphahoundRow = document.getElementById('alphahound-connection-row');
-    const radiacodeRow = document.getElementById('radiacode-connection-row');
-    const deviceTitle = document.getElementById('device-title');
+    const panelAlphahound = document.getElementById('device-quick-panel');
+    const panelRadiacode = document.getElementById('radiacode-quick-panel');
 
-    if (tabAlphahound && tabRadiacode && alphahoundRow && radiacodeRow) {
+    if (tabAlphahound && tabRadiacode) {
         tabAlphahound.addEventListener('click', () => {
-            // Update tab active state
+            // Use CSS classes for theme-aware styling
             tabAlphahound.classList.add('active');
             tabRadiacode.classList.remove('active');
-
-            // Show AlphaHound connection, hide Radiacode
-            alphahoundRow.style.display = 'flex';
-            radiacodeRow.style.display = 'none';
-
-            // Update title
-            if (deviceTitle) deviceTitle.textContent = 'AlphaHound Device';
+            if (panelAlphahound) panelAlphahound.style.display = 'block';
+            if (panelRadiacode) panelRadiacode.style.display = 'none';
         });
 
         tabRadiacode.addEventListener('click', () => {
-            // Update tab active state
+            // Use CSS classes for theme-aware styling
             tabRadiacode.classList.add('active');
             tabAlphahound.classList.remove('active');
-
-            // Show Radiacode connection, hide AlphaHound
-            radiacodeRow.style.display = 'flex';
-            alphahoundRow.style.display = 'none';
-
-            // Update title
-            if (deviceTitle) deviceTitle.textContent = 'Radiacode Device';
+            if (panelRadiacode) panelRadiacode.style.display = 'block';
+            if (panelAlphahound) panelAlphahound.style.display = 'none';
         });
     }
 
@@ -777,22 +516,8 @@ function setupEventListeners() {
                     });
                 }
 
-                // Start dose rate polling after a brief delay to allow device data stream to initialize
-                // The Radiacode library needs ~2 seconds after connection before data_buf() returns data
-                setTimeout(() => {
-                    startRadiacodeDosePolling();
-                }, 2000);
-
-                // Show disconnect button, hide connect button (keep connection row visible!)
-                document.getElementById('btn-connect-radiacode').style.display = 'none';
-                document.getElementById('btn-disconnect-device').style.display = 'inline-block';
-
-                // Hide drop zone since Upload button in header is sufficient
-                const dropZone = document.getElementById('drop-zone');
-                if (dropZone) dropZone.style.display = 'none';
-
-                // Update UI for Radiacode device capabilities
-                updateDeviceUI('radiacode');
+                // Start dose rate polling
+                startRadiacodeDosePolling();
             } catch (err) {
                 console.error('[Radiacode] Connect error:', err);
                 showToast(`Connection failed: ${err.message}`, 'error');
@@ -815,9 +540,6 @@ function setupEventListeners() {
                 document.getElementById('btn-connect-radiacode').textContent = 'Connect';
                 document.getElementById('rc-dose-display').textContent = '--';
                 showToast('Radiacode disconnected', 'info');
-
-                // Reset device feature UI
-                resetDeviceUI();
             } catch (err) {
                 console.error('[Radiacode] Disconnect error:', err);
             }
@@ -861,20 +583,6 @@ function setupEventListeners() {
             } catch (err) {
                 console.error('[Radiacode] Clear error:', err);
                 showToast(`Failed to clear: ${err.message}`, 'error');
-            }
-        });
-    }
-
-    // Radiacode Reset Dose Button (Radiacode-only feature)
-    const btnRcResetDose = document.getElementById('btn-rc-reset-dose');
-    if (btnRcResetDose) {
-        btnRcResetDose.addEventListener('click', async () => {
-            try {
-                await api.resetRadiacodeDose();
-                showToast('Radiacode dose reset', 'info');
-            } catch (err) {
-                console.error('[Radiacode] Reset dose error:', err);
-                showToast(`Failed to reset dose: ${err.message}`, 'error');
             }
         });
     }
@@ -1167,27 +875,21 @@ function setupEventListeners() {
 
     // NOTE: Background subtraction listeners registered below with full set (btn-load-bg, btn-set-current-bg, btn-clear-bg)
 
-    // Theme Dropdown
-    const themeSelect = document.getElementById('theme-select');
-    if (themeSelect) {
-        // Set initial value from localStorage
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        themeSelect.value = savedTheme;
-        document.documentElement.setAttribute('data-theme', savedTheme);
+    // Theme Toggle
+    document.getElementById('btn-theme').addEventListener('click', () => {
+        const themes = ['dark', 'light', 'nuclear', 'toxic', 'scifi', 'cyberpunk'];
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = themes[(themes.indexOf(current) + 1) % themes.length];
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        if (currentData) {
+            const scale = chartManager.getScaleType();
+            chartManager.render(currentData.energies, currentData.counts, currentData.peaks, scale);
 
-        themeSelect.addEventListener('change', (e) => {
-            const newTheme = e.target.value;
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            if (currentData) {
-                const scale = chartManager.getScaleType();
-                chartManager.render(currentData.energies, currentData.counts, currentData.peaks, scale);
-
-                // Re-apply isotope highlights after theme change re-renders chart
-                reapplyIsotopeHighlights();
-            }
-        });
-    }
+            // Re-apply isotope highlights after theme change re-renders chart
+            reapplyIsotopeHighlights();
+        }
+    });
 
     // Chart Controls
     document.getElementById('btn-lin').addEventListener('click', (e) => {
@@ -1218,141 +920,7 @@ function setupEventListeners() {
     // Device Controls
     document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
     document.getElementById('btn-connect-device').addEventListener('click', connectDevice);
-
-    // Unified Device Control Buttons
-    // These work with both AlphaHound and Radiacode automatically
-
-    // Clear Spectrum button
-    document.getElementById('btn-clear-spectrum')?.addEventListener('click', async () => {
-        try {
-            await api.clearSpectrumUnified();
-            showToast('Spectrum cleared', 'success');
-        } catch (err) {
-            showToast(err.message || 'Failed to clear spectrum', 'error');
-        }
-    });
-
-    // Reset Dose button (Radiacode only)
-    document.getElementById('btn-reset-dose')?.addEventListener('click', async () => {
-        try {
-            await api.resetDoseUnified();
-            showToast('Dose reset successfully', 'success');
-        } catch (err) {
-            showToast(err.message || 'Failed to reset dose', 'error');
-        }
-    });
-
-    // Disconnect button (unified)
-    document.getElementById('btn-disconnect-device').addEventListener('click', async () => {
-        try {
-            // Stop polling FIRST (before API call) - critical for clean disconnect
-            stopRadiacodeDosePolling();
-            await api.disconnectUnified();
-            ui.setDeviceConnected(false);
-            stopAcquisition();
-            resetDeviceUI();
-
-            // Show connect button, hide disconnect button (keep connection row visible!)
-            document.getElementById('btn-connect-radiacode').style.display = 'inline-block';
-            document.getElementById('btn-disconnect-device').style.display = 'none';
-        } catch (err) {
-            console.error('Disconnect error:', err);
-        }
-    });
-
-    // Radiacode Settings Event Handlers
-    const rcBrightness = document.getElementById('rc-brightness');
-    if (rcBrightness) {
-        // Live update brightness value display
-        rcBrightness.addEventListener('input', (e) => {
-            const valueEl = document.getElementById('rc-brightness-value');
-            if (valueEl) valueEl.textContent = e.target.value;
-        });
-
-        // Send to device on change complete
-        rcBrightness.addEventListener('change', async (e) => {
-            try {
-                await api.setRadiacodeBrightness(parseInt(e.target.value));
-                console.log(`[Radiacode] Brightness set to ${e.target.value}`);
-            } catch (err) {
-                console.error('[Radiacode] Failed to set brightness:', err);
-                showToast(`Failed to set brightness: ${err.message}`, 'error');
-            }
-        });
-    }
-
-    const rcSound = document.getElementById('rc-sound');
-    if (rcSound) {
-        rcSound.addEventListener('change', async (e) => {
-            try {
-                await api.setRadiacodeSound(e.target.checked);
-                console.log(`[Radiacode] Sound ${e.target.checked ? 'enabled' : 'disabled'}`);
-            } catch (err) {
-                console.error('[Radiacode] Failed to set sound:', err);
-                showToast(`Failed to set sound: ${err.message}`, 'error');
-                e.target.checked = !e.target.checked; // Revert on error
-            }
-        });
-    }
-
-    const rcVibration = document.getElementById('rc-vibration');
-    if (rcVibration) {
-        rcVibration.addEventListener('change', async (e) => {
-            try {
-                await api.setRadiacodeVibration(e.target.checked);
-                console.log(`[Radiacode] Vibration ${e.target.checked ? 'enabled' : 'disabled'}`);
-            } catch (err) {
-                console.error('[Radiacode] Failed to set vibration:', err);
-                showToast(`Failed to set vibration: ${err.message}`, 'error');
-                e.target.checked = !e.target.checked; // Revert on error
-            }
-        });
-    }
-
-    const rcDisplayTimeout = document.getElementById('rc-display-timeout');
-    if (rcDisplayTimeout) {
-        rcDisplayTimeout.addEventListener('blur', async (e) => {
-            try {
-                const seconds = parseInt(e.target.value) || 0;
-                await api.setRadiacodeDisplayTimeout(seconds);
-                console.log(`[Radiacode] Display timeout set to ${seconds}s`);
-            } catch (err) {
-                console.error('[Radiacode] Failed to set display timeout:', err);
-                showToast(`Failed to set timeout: ${err.message}`, 'error');
-            }
-        });
-    }
-
-    const rcLanguage = document.getElementById('rc-language');
-    if (rcLanguage) {
-        rcLanguage.addEventListener('change', async (e) => {
-            try {
-                await api.setRadiacodeLanguage(e.target.value);
-                console.log(`[Radiacode] Language set to ${e.target.value}`);
-                showToast('Language updated on device', 'success');
-            } catch (err) {
-                console.error('[Radiacode] Failed to set language:', err);
-                showToast(`Failed to set language: ${err.message}`, 'error');
-            }
-        });
-    }
-
-    const btnViewConfig = document.getElementById('btn-view-config');
-    if (btnViewConfig) {
-        btnViewConfig.addEventListener('click', async () => {
-            try {
-                const info = await api.getRadiacodeExtendedInfo();
-                if (info.configuration) {
-                    alert(`Radiacode Configuration:\n\n${info.configuration}`);
-                } else {
-                    alert('Configuration data not available');
-                }
-            } catch (err) {
-                console.error('[Radiacode] Failed to get configuration:', err);
-                showToast(`Failed to get configuration: ${err.message}`, 'error');
-            }
-        });
-    }
+    document.getElementById('btn-disconnect-device').addEventListener('click', disconnectDevice);
 
     document.getElementById('btn-start-acquire').addEventListener('click', startAcquisition);
     document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
@@ -2139,73 +1707,6 @@ function getToastColors(type, theme) {
             warning: { bg: '#ff006e', border: '#fcee09', shadow: '0 0 20px rgba(255, 0, 110, 0.6), 0 0 40px rgba(252, 238, 9, 0.3)' },
             info: { bg: '#00f5ff', border: '#fcee09', shadow: '0 0 20px rgba(0, 245, 255, 0.6), 0 0 40px rgba(252, 238, 9, 0.3)' },
             error: { bg: '#ff006e', border: '#ef4444', shadow: '0 0 20px rgba(255, 0, 110, 0.6), 0 0 40px rgba(239, 68, 68, 0.3)' }
-        },
-        // Vintage Equipment Themes
-        'eberline': {
-            success: { bg: '#c9a227', border: '#e07b39', shadow: 'rgba(201, 162, 39, 0.4)' },
-            warning: { bg: '#e07b39', border: '#ff6b35', shadow: 'rgba(224, 123, 57, 0.4)' },
-            info: { bg: '#c9a227', border: '#e07b39', shadow: 'rgba(201, 162, 39, 0.4)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'fluke': {
-            success: { bg: '#ffc107', border: '#ff9800', shadow: 'rgba(255, 193, 7, 0.4)' },
-            warning: { bg: '#ff9800', border: '#ff5722', shadow: 'rgba(255, 152, 0, 0.4)' },
-            info: { bg: '#ffc107', border: '#ff9800', shadow: 'rgba(255, 193, 7, 0.4)' },
-            error: { bg: '#ff5722', border: '#f44336', shadow: 'rgba(255, 87, 34, 0.4)' }
-        },
-        'oscilloscope': {
-            success: { bg: '#33ff66', border: '#00cc44', shadow: 'rgba(51, 255, 102, 0.5)' },
-            warning: { bg: '#66cc88', border: '#33ff66', shadow: 'rgba(102, 204, 136, 0.4)' },
-            info: { bg: '#00cc44', border: '#33ff66', shadow: 'rgba(0, 204, 68, 0.5)' },
-            error: { bg: '#ff6666', border: '#ff3333', shadow: 'rgba(255, 102, 102, 0.5)' }
-        },
-        'nixie': {
-            success: { bg: '#ff9500', border: '#ff6a00', shadow: '0 0 15px rgba(255, 149, 0, 0.6)' },
-            warning: { bg: '#ff6a00', border: '#ff4400', shadow: '0 0 15px rgba(255, 106, 0, 0.6)' },
-            info: { bg: '#ff7700', border: '#ff9500', shadow: '0 0 15px rgba(255, 119, 0, 0.6)' },
-            error: { bg: '#ff4400', border: '#cc0000', shadow: '0 0 15px rgba(255, 68, 0, 0.6)' }
-        },
-        'civildefense': {
-            success: { bg: '#ffd000', border: '#ffaa00', shadow: 'rgba(255, 208, 0, 0.5)' },
-            warning: { bg: '#ffaa00', border: '#ff6600', shadow: 'rgba(255, 170, 0, 0.5)' },
-            info: { bg: '#ffd000', border: '#ffaa00', shadow: 'rgba(255, 208, 0, 0.5)' },
-            error: { bg: '#ff4400', border: '#cc0000', shadow: 'rgba(255, 68, 0, 0.5)' }
-        },
-        'tektronix': {
-            success: { bg: '#00a2e8', border: '#66ccff', shadow: 'rgba(0, 162, 232, 0.5)' },
-            warning: { bg: '#66ccff', border: '#00a2e8', shadow: 'rgba(102, 204, 255, 0.4)' },
-            info: { bg: '#00a2e8', border: '#66ccff', shadow: 'rgba(0, 162, 232, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'keithley': {
-            success: { bg: '#4a90d9', border: '#7eb8f0', shadow: 'rgba(74, 144, 217, 0.4)' },
-            warning: { bg: '#7eb8f0', border: '#4a90d9', shadow: 'rgba(126, 184, 240, 0.4)' },
-            info: { bg: '#4a90d9', border: '#7eb8f0', shadow: 'rgba(74, 144, 217, 0.4)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'ludlum': {
-            success: { bg: '#d4915c', border: '#c44536', shadow: 'rgba(212, 145, 92, 0.5)' },
-            warning: { bg: '#c44536', border: '#ff5c47', shadow: 'rgba(196, 69, 54, 0.5)' },
-            info: { bg: '#d4915c', border: '#c44536', shadow: 'rgba(212, 145, 92, 0.5)' },
-            error: { bg: '#ff5c47', border: '#cc0000', shadow: 'rgba(255, 92, 71, 0.5)' }
-        },
-        'hp': {
-            success: { bg: '#d4a574', border: '#e8c49a', shadow: 'rgba(212, 165, 116, 0.5)' },
-            warning: { bg: '#e8c49a', border: '#d4a574', shadow: 'rgba(232, 196, 154, 0.4)' },
-            info: { bg: '#d4a574', border: '#e8c49a', shadow: 'rgba(212, 165, 116, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'victoreen': {
-            success: { bg: '#7cb68a', border: '#9ed4aa', shadow: 'rgba(124, 182, 138, 0.5)' },
-            warning: { bg: '#9ed4aa', border: '#7cb68a', shadow: 'rgba(158, 212, 170, 0.4)' },
-            info: { bg: '#7cb68a', border: '#9ed4aa', shadow: 'rgba(124, 182, 138, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'canberra': {
-            success: { bg: '#26a69a', border: '#4dd0c5', shadow: 'rgba(38, 166, 154, 0.5)' },
-            warning: { bg: '#4dd0c5', border: '#26a69a', shadow: 'rgba(77, 208, 197, 0.4)' },
-            info: { bg: '#26a69a', border: '#4dd0c5', shadow: 'rgba(38, 166, 154, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
         }
     };
 
@@ -2381,9 +1882,6 @@ async function connectDevice() {
             },
             (status) => ui.updateConnectionStatus(status)
         );
-
-        // Update UI for AlphaHound device capabilities
-        updateDeviceUI('alphahound');
     } catch (err) {
         alert(err.message);
     }
@@ -2418,9 +1916,6 @@ async function disconnectDevice() {
         await api.disconnectDevice();
         ui.setDeviceConnected(false);
         stopAcquisition();
-
-        // Reset device feature UI
-        resetDeviceUI();
     } catch (err) {
         console.error(err);
     }
@@ -2605,8 +2100,13 @@ async function getCurrentSpectrum() {
     try {
         showToast('Fetching current spectrum from device...', 'info');
 
-        // Use unified API wrapper
-        const data = await api.getCurrentSpectrumUnified();
+        const response = await fetch('/device/spectrum/current');
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to get spectrum');
+        }
+
+        const data = await response.json();
         currentData = data;
 
         // Show dashboard if hidden

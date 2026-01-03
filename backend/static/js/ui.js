@@ -15,7 +15,7 @@ export class AlphaHoundUI {
             isotopesTbody: document.getElementById('isotopes-tbody'),
             decayChainsContainer: document.getElementById('decay-chains-container'),
             decayChainsList: document.getElementById('decay-chains-list'),
-            deviceConnected: document.getElementById('device-connected'),
+            deviceConnected: document.getElementById('unified-device-controls'),
             portSelectParent: document.getElementById('port-select')?.parentElement,
             btns: {
                 refresh: document.getElementById('btn-refresh-ports'),
@@ -727,19 +727,19 @@ export class AlphaHoundUI {
     }
 
     setDeviceConnected(isConnected) {
+        // Connection row visibility - show connect UI when disconnected
         if (isConnected) {
-            if (this.elements.deviceConnected) this.elements.deviceConnected.style.display = 'block';
             if (this.elements.portSelectParent) this.elements.portSelectParent.style.display = 'none';
             if (this.elements.btns.refresh) this.elements.btns.refresh.style.display = 'none';
             if (this.elements.btns.connect) this.elements.btns.connect.style.display = 'none';
             if (this.elements.btns.advanced) this.elements.btns.advanced.style.display = 'none';
         } else {
-            if (this.elements.deviceConnected) this.elements.deviceConnected.style.display = 'none';
             if (this.elements.portSelectParent) this.elements.portSelectParent.style.display = 'flex';
             if (this.elements.btns.refresh) this.elements.btns.refresh.style.display = 'block';
             if (this.elements.btns.connect) this.elements.btns.connect.style.display = 'block';
             if (this.elements.btns.advanced) this.elements.btns.advanced.style.display = 'block';
         }
+        // Note: Panel always visible, device_features.js handles greyed/enabled state
     }
 
     populatePorts(ports) {

@@ -160,6 +160,373 @@
     box-shadow: 0 0 15px rgba(252, 238, 9, 0.5);
 }
 
+/* ========================================
+   Vintage Test Equipment Themes
+   ======================================== */
+
+/* Eberline theme (Classic Radiological Instrument - Beige/Brown/Orange) */
+[data-theme="eberline"] {
+    --bg-color: #2c2416;
+    --bg-secondary: rgba(62, 51, 35, 0.9);
+    --card-bg: rgba(74, 62, 44, 0.85);
+    --primary-color: #e07b39;
+    --secondary-color: #c9a227;
+    --text-color: #f5e6d3;
+    --text-primary: #f5e6d3;
+    --text-secondary: #c9b896;
+    --border-color: rgba(224, 123, 57, 0.4);
+    --input-bg: rgba(44, 36, 22, 0.8);
+    --accent-color: #e07b39;
+    --chart-annotation-color: #e07b39;
+    --chart-peak-color: #ff6b35;
+}
+
+[data-theme="eberline"] body {
+    background-color: #1e1a12;
+    background-image:
+        linear-gradient(180deg, rgba(74, 62, 44, 0.3) 0%, transparent 50%),
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.03) 2px, rgba(0, 0, 0, 0.03) 4px);
+}
+
+[data-theme="eberline"] .card-bg,
+[data-theme="eberline"] .upload-container,
+[data-theme="eberline"] .chart-container {
+    border: 2px solid rgba(224, 123, 57, 0.5);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Fluke theme (Classic Yellow/Grey Multimeter) */
+[data-theme="fluke"] {
+    --bg-color: #2a2a2a;
+    --bg-secondary: rgba(50, 50, 50, 0.9);
+    --card-bg: rgba(60, 60, 60, 0.9);
+    --primary-color: #ffc107;
+    --secondary-color: #ff9800;
+    --text-color: #ffffff;
+    --text-primary: #ffffff;
+    --text-secondary: #b0b0b0;
+    --border-color: rgba(255, 193, 7, 0.5);
+    --input-bg: rgba(30, 30, 30, 0.9);
+    --accent-color: #ffc107;
+    --chart-annotation-color: #ff5722;
+    --chart-peak-color: #ff5722;
+}
+
+[data-theme="fluke"] body {
+    background-color: #1a1a1a;
+    background-image:
+        linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, transparent 50%);
+}
+
+[data-theme="fluke"] .card-bg,
+[data-theme="fluke"] .upload-container,
+[data-theme="fluke"] .chart-container {
+    border: 3px solid #ffc107;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="fluke"] button.btn-primary {
+    background: linear-gradient(180deg, #ffc107 0%, #e6a800 100%);
+    color: #1a1a1a;
+    font-weight: 700;
+}
+
+/* Oscilloscope theme (CRT Phosphor Green) */
+[data-theme="oscilloscope"] {
+    --bg-color: #0a0f0a;
+    --bg-secondary: rgba(15, 25, 15, 0.9);
+    --card-bg: rgba(20, 35, 20, 0.85);
+    --primary-color: #33ff66;
+    --secondary-color: #00cc44;
+    --text-color: #b3ffcc;
+    --text-primary: #b3ffcc;
+    --text-secondary: #66cc88;
+    --border-color: rgba(51, 255, 102, 0.3);
+    --input-bg: rgba(10, 15, 10, 0.9);
+    --accent-color: #33ff66;
+    --chart-annotation-color: #33ff66;
+    --chart-peak-color: #00ff55;
+}
+
+[data-theme="oscilloscope"] body {
+    background-color: #050805;
+    background-image:
+        radial-gradient(ellipse at center, rgba(51, 255, 102, 0.08) 0%, transparent 70%),
+        repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(51, 255, 102, 0.02) 1px, rgba(51, 255, 102, 0.02) 2px);
+}
+
+[data-theme="oscilloscope"] .card-bg,
+[data-theme="oscilloscope"] .upload-container,
+[data-theme="oscilloscope"] .chart-container {
+    border: 1px solid rgba(51, 255, 102, 0.4);
+    box-shadow: 0 0 20px rgba(51, 255, 102, 0.1), inset 0 0 30px rgba(0, 0, 0, 0.5);
+}
+
+/* CRT scanline effect for oscilloscope */
+[data-theme="oscilloscope"] .chart-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.1) 2px,
+            rgba(0, 0, 0, 0.1) 4px);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Nixie theme (Vintage Nixie Tube Display - Warm Orange Glow) */
+[data-theme="nixie"] {
+    --bg-color: #1a1410;
+    --bg-secondary: rgba(35, 28, 22, 0.9);
+    --card-bg: rgba(45, 36, 28, 0.9);
+    --primary-color: #ff6a00;
+    --secondary-color: #ff9500;
+    --text-color: #ffd4b3;
+    --text-primary: #ffd4b3;
+    --text-secondary: #cc9966;
+    --border-color: rgba(255, 106, 0, 0.4);
+    --input-bg: rgba(26, 20, 16, 0.9);
+    --accent-color: #ff7700;
+    --chart-annotation-color: #ff6600;
+    --chart-peak-color: #ff4400;
+}
+
+[data-theme="nixie"] body {
+    background-color: #0d0a08;
+    background-image:
+        radial-gradient(ellipse at 30% 20%, rgba(255, 106, 0, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 80%, rgba(255, 149, 0, 0.08) 0%, transparent 50%);
+}
+
+[data-theme="nixie"] .card-bg,
+[data-theme="nixie"] .upload-container,
+[data-theme="nixie"] .chart-container {
+    border: 2px solid rgba(255, 106, 0, 0.3);
+    box-shadow: 0 0 15px rgba(255, 106, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="nixie"] .stat-value,
+[data-theme="nixie"] #dose-display,
+[data-theme="nixie"] #rc-dose-display {
+    text-shadow: 0 0 10px rgba(255, 106, 0, 0.8), 0 0 20px rgba(255, 106, 0, 0.4);
+}
+
+/* Civil Defense theme (Cold War Era - Yellow/Black Warning) */
+[data-theme="civildefense"] {
+    --bg-color: #1a1a0a;
+    --bg-secondary: rgba(40, 40, 15, 0.9);
+    --card-bg: rgba(50, 50, 20, 0.9);
+    --primary-color: #ffd000;
+    --secondary-color: #ffaa00;
+    --text-color: #fff8dc;
+    --text-primary: #fff8dc;
+    --text-secondary: #cccc99;
+    --border-color: rgba(255, 208, 0, 0.5);
+    --input-bg: rgba(26, 26, 10, 0.9);
+    --accent-color: #ffd000;
+    --chart-annotation-color: #ff6600;
+    --chart-peak-color: #ff4400;
+}
+
+[data-theme="civildefense"] body {
+    background-color: #0d0d05;
+    background-image:
+        repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255, 208, 0, 0.03) 20px, rgba(255, 208, 0, 0.03) 40px);
+}
+
+[data-theme="civildefense"] .card-bg,
+[data-theme="civildefense"] .upload-container,
+[data-theme="civildefense"] .chart-container {
+    border: 3px solid #ffd000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* HP theme (Classic Hewlett-Packard - Warm Brown/Amber) */
+[data-theme="hp"] {
+    --bg-color: #2a2320;
+    --bg-secondary: rgba(55, 48, 42, 0.9);
+    --card-bg: rgba(70, 60, 52, 0.9);
+    --primary-color: #d4a574;
+    --secondary-color: #e8c49a;
+    --text-color: #f5ebe0;
+    --text-primary: #f5ebe0;
+    --text-secondary: #c9b8a8;
+    --border-color: rgba(212, 165, 116, 0.4);
+    --input-bg: rgba(42, 35, 32, 0.9);
+    --accent-color: #d4a574;
+    --chart-annotation-color: #d4a574;
+    --chart-peak-color: #e8c49a;
+}
+
+[data-theme="hp"] body {
+    background-color: #1a1815;
+    background-image:
+        linear-gradient(180deg, rgba(212, 165, 116, 0.06) 0%, transparent 40%);
+}
+
+[data-theme="hp"] .card-bg,
+[data-theme="hp"] .upload-container,
+[data-theme="hp"] .chart-container {
+    border: 2px solid rgba(212, 165, 116, 0.4);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Tektronix theme (Classic Blue/Grey Lab Equipment) */
+[data-theme="tektronix"] {
+    --bg-color: #1a2530;
+    --bg-secondary: rgba(35, 50, 65, 0.9);
+    --card-bg: rgba(45, 65, 85, 0.85);
+    --primary-color: #00a2e8;
+    --secondary-color: #66ccff;
+    --text-color: #e8f4fc;
+    --text-primary: #e8f4fc;
+    --text-secondary: #99c2db;
+    --border-color: rgba(0, 162, 232, 0.4);
+    --input-bg: rgba(26, 37, 48, 0.9);
+    --accent-color: #00a2e8;
+    --chart-annotation-color: #00a2e8;
+    --chart-peak-color: #66ccff;
+}
+
+[data-theme="tektronix"] body {
+    background-color: #0f1820;
+    background-image:
+        linear-gradient(180deg, rgba(0, 162, 232, 0.05) 0%, transparent 30%);
+}
+
+[data-theme="tektronix"] .card-bg,
+[data-theme="tektronix"] .upload-container,
+[data-theme="tektronix"] .chart-container {
+    border: 2px solid rgba(0, 162, 232, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Keithley theme (Professional Grey/Blue Precision Instruments) */
+[data-theme="keithley"] {
+    --bg-color: #2a2d32;
+    --bg-secondary: rgba(55, 60, 68, 0.9);
+    --card-bg: rgba(70, 75, 85, 0.9);
+    --primary-color: #4a90d9;
+    --secondary-color: #7eb8f0;
+    --text-color: #f0f2f5;
+    --text-primary: #f0f2f5;
+    --text-secondary: #a8b0bc;
+    --border-color: rgba(74, 144, 217, 0.4);
+    --input-bg: rgba(42, 45, 50, 0.9);
+    --accent-color: #4a90d9;
+    --chart-annotation-color: #4a90d9;
+    --chart-peak-color: #7eb8f0;
+}
+
+[data-theme="keithley"] body {
+    background-color: #1e2024;
+    background-image:
+        linear-gradient(135deg, rgba(74, 144, 217, 0.03) 0%, transparent 50%);
+}
+
+[data-theme="keithley"] .card-bg,
+[data-theme="keithley"] .upload-container,
+[data-theme="keithley"] .chart-container {
+    border: 1px solid rgba(74, 144, 217, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Ludlum theme (Radiological Survey Meter - Brown/Tan/Red) */
+[data-theme="ludlum"] {
+    --bg-color: #2a2218;
+    --bg-secondary: rgba(55, 45, 35, 0.9);
+    --card-bg: rgba(70, 58, 45, 0.9);
+    --primary-color: #d4915c;
+    --secondary-color: #c44536;
+    --text-color: #f5ebe0;
+    --text-primary: #f5ebe0;
+    --text-secondary: #c9b8a8;
+    --border-color: rgba(212, 145, 92, 0.5);
+    --input-bg: rgba(42, 34, 24, 0.9);
+    --accent-color: #c44536;
+    --chart-annotation-color: #c44536;
+    --chart-peak-color: #ff5c47;
+}
+
+[data-theme="ludlum"] body {
+    background-color: #1a1610;
+    background-image:
+        linear-gradient(180deg, rgba(212, 145, 92, 0.08) 0%, transparent 40%);
+}
+
+[data-theme="ludlum"] .card-bg,
+[data-theme="ludlum"] .upload-container,
+[data-theme="ludlum"] .chart-container {
+    border: 2px solid rgba(212, 145, 92, 0.4);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Victoreen theme (Classic CDV-700 Geiger Counter - Grey/Green) */
+[data-theme="victoreen"] {
+    --bg-color: #1e2420;
+    --bg-secondary: rgba(45, 55, 48, 0.9);
+    --card-bg: rgba(58, 70, 62, 0.9);
+    --primary-color: #7cb68a;
+    --secondary-color: #9ed4aa;
+    --text-color: #e8f0ea;
+    --text-primary: #e8f0ea;
+    --text-secondary: #a8c0ae;
+    --border-color: rgba(124, 182, 138, 0.4);
+    --input-bg: rgba(30, 36, 32, 0.9);
+    --accent-color: #7cb68a;
+    --chart-annotation-color: #7cb68a;
+    --chart-peak-color: #9ed4aa;
+}
+
+[data-theme="victoreen"] body {
+    background-color: #141816;
+    background-image:
+        linear-gradient(180deg, rgba(124, 182, 138, 0.05) 0%, transparent 35%);
+}
+
+[data-theme="victoreen"] .card-bg,
+[data-theme="victoreen"] .upload-container,
+[data-theme="victoreen"] .chart-container {
+    border: 2px solid rgba(124, 182, 138, 0.4);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* Canberra theme (High-End Spectroscopy - Professional Grey/Teal) */
+[data-theme="canberra"] {
+    --bg-color: #1a2225;
+    --bg-secondary: rgba(38, 52, 58, 0.9);
+    --card-bg: rgba(48, 65, 72, 0.9);
+    --primary-color: #26a69a;
+    --secondary-color: #4dd0c5;
+    --text-color: #e0f2f1;
+    --text-primary: #e0f2f1;
+    --text-secondary: #99c2bf;
+    --border-color: rgba(38, 166, 154, 0.4);
+    --input-bg: rgba(26, 34, 37, 0.9);
+    --accent-color: #26a69a;
+    --chart-annotation-color: #26a69a;
+    --chart-peak-color: #4dd0c5;
+}
+
+[data-theme="canberra"] body {
+    background-color: #0f1618;
+    background-image:
+        linear-gradient(135deg, rgba(38, 166, 154, 0.04) 0%, transparent 50%);
+}
+
+[data-theme="canberra"] .card-bg,
+[data-theme="canberra"] .upload-container,
+[data-theme="canberra"] .chart-container {
+    border: 1px solid rgba(38, 166, 154, 0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
 /* Sci-Fi glassmorphism - ENHANCED */
 [data-theme="scifi"] .card-bg,
 [data-theme="scifi"] .upload-container,
@@ -1356,4 +1723,74 @@ input[type="text"]:focus {
     margin-top: 4px;
     padding: 0 2px;
     font-variant-numeric: tabular-nums;
+}
+
+/* ========================================
+   Device Feature Gating Styles
+   ======================================== */
+
+/* Entire controls panel disabled when no device connected */
+.device-disconnected {
+    opacity: 0.5;
+    filter: grayscale(30%);
+}
+
+.device-disconnected button,
+.device-disconnected input,
+.device-disconnected select,
+.device-disconnected canvas {
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.device-disconnected .status-dot {
+    background: var(--text-secondary) !important;
+}
+
+/* Disabled features - greyed out, unclickable */
+.feature-disabled {
+    opacity: 0.4;
+    cursor: not-allowed !important;
+    pointer-events: auto;
+    /* Keep pointer events for tooltip */
+    filter: grayscale(50%);
+}
+
+.feature-disabled:hover {
+    background: inherit !important;
+    opacity: 0.4;
+}
+
+/* Prevent clicks on disabled buttons */
+button.feature-disabled,
+input.feature-disabled,
+select.feature-disabled {
+    pointer-events: none;
+}
+
+/* Wrapper for disabled elements that need tooltip */
+.feature-disabled-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.feature-disabled-wrapper>.feature-disabled {
+    pointer-events: none;
+}
+
+/* Keep wrapper interactive for hover effects */
+.feature-disabled-wrapper:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 1000;
+    border: 1px solid var(--border-color);
 }

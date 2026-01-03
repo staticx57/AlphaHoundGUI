@@ -455,9 +455,17 @@ export class AlphaHoundChart {
             this.chart.resetZoom();
 
             // Re-apply full spectrum limits manually to ensure they stick
-            const fullMax = this.fullMaxEnergy || 3000;
+            const fullMaxX = this.fullMaxEnergy || 3000;
+
+            // Recalculate Y-axis max from CURRENT chart data
+            const chartData = this.chart.data.datasets[0]?.data || [];
+            const currentMaxY = chartData.length > 0
+                ? Math.max(...chartData.map(p => p.y)) * 1.15
+                : 100;
+
             this.chart.options.scales.x.min = 0;
-            this.chart.options.scales.x.max = fullMax;
+            this.chart.options.scales.x.max = fullMaxX;
+            this.chart.options.scales.y.max = currentMaxY;
 
             // Notify UI via button state if possible (main.js handles the button usually)
             const btn = document.getElementById('btn-auto-scale');
