@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## [Session 2026-01-04] - Theme Color System Overhaul
+
+### Added
+- **Complete Theme CSS Reference**: Created `complete_themes_css.md` with 35 proposed new themes:
+  - 8 Sci-Fi themes (Alien Isolation, Pip-Boy, Blade Runner, Tron, Matrix, LCARS, Halo UNSC, Stranger Things)
+  - 7 Vintage Test Equipment themes (Beckman, General Radio, Heathkit, Simpson, Lambda, Boonton, Wavetek)
+  - 8 Vintage Computing themes (Apple II, C64, IBM 5150, Amiga, VT-100, BBC Micro, Atari ST, ZX Spectrum)
+  - 6 Vintage Radiological themes (Canberra Packard, Bicron, TASC, Nuclear Data, Radiation Alert, Radon Scout)
+  - 6 Vacuum Tube Display themes (Magic Eye, Dekatron, Numitron, VFD, Cold Cathode, Panaplex)
+
+- **Theme-Responsive Chart Colors**: Main spectrum chart and zoom scrubber now dynamically update when theme changes
+  - Added `hexToRgba()` helper method for proper color conversion with transparency
+  - Chart line color, fill color, and scrubber mini-preview all use `--primary-color` CSS variable
+  - `updateThemeColors()` method refreshes all chart colors on theme switch
+
+- **Status/Confidence Color Variables**: Added theme-specific overrides for 5 vintage equipment themes:
+  - Ludlum: Warm tan/orange earth tones (`#d4915c`, `#b87a4a`)
+  - Eberline: Vintage orange/gold (`#e07b39`, `#c9a227`)
+  - Fluke: Professional yellow/orange (`#ffc107`, `#ff9800`)
+  - Keithley: Cool professional blue (`#4a90d9`, `#7eb8f0`)
+  - Tektronix: Blue/cyan instrument tones (`#00a2e8`, `#66ccff`)
+
+### Changed
+- **`charts.js`**: 
+  - Added `hexToRgba()` method for converting hex colors to rgba with opacity
+  - `render()` now re-reads `--primary-color` from CSS at render time
+  - `updateThemeColors()` now refreshes both main chart and zoom scrubber mini-preview
+  - Chart dataset backgroundColor uses `hexToRgba(primaryColor, 0.1)` instead of invalid hex concatenation
+
+- **`main.js`**:
+  - Theme change handler now calls `chartManager.updateThemeColors()` before re-rendering
+  - Bumped charts.js import version to 4.5 for cache busting
+
+- **`style.css`**:
+  - Fixed zoom scrubber selection overlay to use `color-mix(in srgb, var(--primary-color) 25%, transparent)`
+  - Added `--status-detected`, `--status-stable`, `--confidence-high/medium/low`, `--xrf-high/medium/low` variables to 5 vintage themes
+
+### Fixed
+- **Chart Color Stuck on Initial Theme**: Charts now properly update colors when switching themes without page reload
+- **Zoom Scrubber Color Mismatch**: Mini-preview now redraws with correct theme color on theme change
+- **Green Confidence Bars in Vintage Themes**: Added theme-appropriate color overrides preventing fallback to green defaults
+
+---
+
 ## [Session 2025-12-22] - ML Isotope Identification Improvements
 
 ### Added

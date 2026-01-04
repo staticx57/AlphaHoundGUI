@@ -1,7 +1,7 @@
 // Updated: 2024-12-14 17:00 - N42 Export Fixed
 import { api } from './api.js';
 import { ui } from './ui.js?v=2.9';
-import { chartManager, DoseRateChart } from './charts.js?v=3.8';
+import { chartManager, DoseRateChart } from './charts.js?v=4.5';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
 import { n42MetadataEditor } from './n42_editor.js';
@@ -24,6 +24,10 @@ let rcDoseChart = null; // Radiacode dose rate chart instance
 let lastCheckpointTime = 0; // Checkpoint save tracking
 const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
 let radiacodeDoseInterval = null;  // Radiacode dose rate polling interval
+
+// Multi-line chart colors - hardcoded for visual distinction across different data series
+// NOTE: These cannot use CSS variables as Chart.js colors are set at initialization time,
+// not dynamically updated on theme change. Would require destroying/recreating all charts on theme switch.
 const colors = ['#38bdf8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 // ============================================================
@@ -1202,6 +1206,10 @@ function setupEventListeners() {
             const newTheme = e.target.value;
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
+
+            // Update chart colors for new theme
+            chartManager.updateThemeColors();
+
             if (currentData) {
                 const scale = chartManager.getScaleType();
                 chartManager.render(currentData.energies, currentData.counts, currentData.peaks, scale);
@@ -1944,8 +1952,11 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
         // Confidence Bar
         if (data.confidence !== undefined) {
             const confPercent = Math.round(data.confidence * 100);
-            const confColor = data.confidence > 0.7 ? '#10b981' :
-                data.confidence > 0.4 ? '#f59e0b' : '#ef4444';
+            // Get theme-aware confidence color
+            const styles = getComputedStyle(document.documentElement);
+            const confColor = data.confidence > 0.7 ? styles.getPropertyValue('--confidence-high').trim() || '#10b981' :
+                data.confidence > 0.4 ? styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b' :
+                    styles.getPropertyValue('--confidence-low').trim() || '#ef4444';
 
             htmlOutput += `
                 <div style="margin-top: 0.5rem;">
@@ -1977,9 +1988,11 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
 
                 if (ratioResponse.ok) {
                     const ratioData = await ratioResponse.json();
-                    const categoryColor = ratioData.category === 'Natural Uranium' ? '#22c55e' :
-                        ratioData.category === 'Depleted Uranium' ? '#f59e0b' :
-                            '#ef4444';
+                    // Get theme-aware category colors
+                    const styles = getComputedStyle(document.documentElement);
+                    const categoryColor = ratioData.category === 'Natural Uranium' ? styles.getPropertyValue('--xrf-high').trim() || '#22c55e' :
+                        ratioData.category === 'Depleted Uranium' ? styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b' :
+                            styles.getPropertyValue('--confidence-low').trim() || '#ef4444';
 
                     htmlOutput += `
                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
@@ -2072,10 +2085,11 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
         }
         const data = await response.json();
 
-        // Color based on category
-        let categoryColor = '#10b981';  // Natural = green
-        if (data.category === 'Depleted Uranium') categoryColor = '#f59e0b';  // Yellow
-        if (data.category === 'Enriched Uranium') categoryColor = '#ef4444';  // Red
+        // Color based on category (theme-aware)
+        const styles = getComputedStyle(document.documentElement);
+        let categoryColor = styles.getPropertyValue('--xrf-high').trim() || '#10b981';  // Natural = green
+        if (data.category === 'Depleted Uranium') categoryColor = styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b';  // Yellow
+        if (data.category === 'Enriched Uranium') categoryColor = styles.getPropertyValue('--confidence-low').trim() || '#ef4444';  // Red
 
         resultsDiv.innerHTML = `
                 <div style="margin-bottom: 0.75rem;">
@@ -2120,6 +2134,10 @@ document.getElementById('btn-clear-highlight')?.addEventListener('click', () => 
 
 /**
  * Gets theme-aware colors for toast notifications.
+ * NOTE: While CSS variables (--toast-*) exist for major themes, this function provides
+ * hardcoded fallbacks for 11 vintage equipment themes that haven't defined toast variables yet.
+ * These fallbacks ensure toasts match each theme's aesthetic. Ideally, all themes would
+ * define --toast-success/warning/info/error, but that requires adding 44 more color definitions to style.css.
  * @param {'success'|'warning'|'info'} type - The type of toast notification
  * @param {string} theme - The current theme name (dark, light, nuclear, toxic, scifi, cyberpunk)
  * @returns {{bg: string, border: string, shadow: string}} Color configuration object

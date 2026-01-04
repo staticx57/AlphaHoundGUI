@@ -2,12 +2,44 @@ export class AlphaHoundChart {
     constructor() {
         this.ctx = document.getElementById('spectrumChart')?.getContext('2d');
         this.chart = null;
-        this.primaryColor = '#38bdf8'; // Default, should read from CSS
+        // Read primary color from theme CSS variable
+        this.updateThemeColors();
         this.autoScale = true; // Default to auto-scale (zoom to data)
         this.decimationThreshold = 2048; // Decimate spectra larger than this
         this.isSyncing = false; // Unified guard for all chart updates and event reactions
         this.annotations = {}; // Master state for annotations (source of truth)
         this.labelOffsets = {}; // Track vertical offsets for label stacking { xValue: offset }
+    }
+
+    /**
+     * Convert hex color to rgba with specified opacity
+     */
+    hexToRgba(hex, alpha = 1) {
+        const h = hex.replace('#', '');
+        const r = parseInt(h.substring(0, 2), 16);
+        const g = parseInt(h.substring(2, 4), 16);
+        const b = parseInt(h.substring(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    /**
+     * Update theme-dependent colors from CSS variables
+     * Call this when theme changes to refresh chart colors
+     */
+    updateThemeColors() {
+        this.primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#38bdf8';
+
+        // Update existing chart dataset color if chart exists
+        if (this.chart && this.chart.data.datasets[0]) {
+            this.chart.data.datasets[0].borderColor = this.primaryColor;
+            this.chart.data.datasets[0].backgroundColor = this.hexToRgba(this.primaryColor, 0.1);
+            this.chart.update('none'); // Update without animation
+        }
+
+        // Redraw zoom scrubber mini preview with new theme colors
+        if (this.previewCanvas && this.fullCounts) {
+            this.drawMiniPreview();
+        }
     }
 
     /**
@@ -107,9 +139,11 @@ export class AlphaHoundChart {
         const chartData = labels.map((l, i) => ({ x: l, y: dataPoints[i] })); this.labelOffsets = {};
         const peakData = (peaks || []).map(p => ({ x: p.energy, y: p.counts || p.count || 0 }));
 
-        // Get theme colors for peaks
+        // Get theme colors for peaks and chart line
         const styles = getComputedStyle(document.documentElement);
         const peakColor = styles.getPropertyValue('--chart-peak-color').trim() || '#ef4444';
+        // Re-read primary color at render time to ensure theme-correct colors
+        this.primaryColor = styles.getPropertyValue('--primary-color').trim() || '#38bdf8';
 
         // Auto-Scale / Zoom Logic
         const fullMaxEnergy = labels.length > 0 ? labels[labels.length - 1] : 3000;
@@ -288,7 +322,7 @@ export class AlphaHoundChart {
                             label: 'Counts',
                             data: chartData,
                             borderColor: this.primaryColor,
-                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                            backgroundColor: this.hexToRgba(this.primaryColor, 0.1),
                             borderWidth: 1.5,
                             pointRadius: 0,
                             fill: true,
@@ -957,11 +991,11 @@ export class AlphaHoundChart {
         }
         ctx.stroke();
 
-        // Fill
+        // Fill with 12% opacity of line color
         ctx.lineTo(width, height);
         ctx.lineTo(0, height);
         ctx.closePath();
-        ctx.fillStyle = lineColor + '20';
+        ctx.fillStyle = this.hexToRgba(lineColor, 0.12);
         ctx.fill();
     }
 

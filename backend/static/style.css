@@ -238,6 +238,17 @@
     --accent-color: #e07b39;
     --chart-annotation-color: #e07b39;
     --chart-peak-color: #ff6b35;
+    /* Status and confidence colors - vintage orange tones */
+    --status-detected: #e07b39;
+    --status-detected-bg: rgba(224, 123, 57, 0.25);
+    --status-stable: #c9a227;
+    --status-stable-bg: rgba(201, 162, 39, 0.25);
+    --confidence-high: #e07b39;
+    --confidence-medium: #c9a227;
+    --confidence-low: #c44536;
+    --xrf-high: #e07b39;
+    --xrf-medium: #c9a227;
+    --xrf-low: #c44536;
 }
 
 [data-theme="eberline"] body {
@@ -269,6 +280,17 @@
     --accent-color: #ffc107;
     --chart-annotation-color: #ff5722;
     --chart-peak-color: #ff5722;
+    /* Status and confidence colors - Fluke yellow/orange */
+    --status-detected: #ffc107;
+    --status-detected-bg: rgba(255, 193, 7, 0.25);
+    --status-stable: #ff9800;
+    --status-stable-bg: rgba(255, 152, 0, 0.25);
+    --confidence-high: #ffc107;
+    --confidence-medium: #ff9800;
+    --confidence-low: #ff5722;
+    --xrf-high: #ffc107;
+    --xrf-medium: #ff9800;
+    --xrf-low: #ff5722;
 }
 
 [data-theme="fluke"] body {
@@ -306,10 +328,18 @@
     --accent-color: #33ff66;
     --chart-annotation-color: #33ff66;
     --chart-peak-color: #00ff55;
-    /* Status colors - phosphor green */
+    /* Status colors - monochrome phosphor green like real CRT */
     --status-detected: #22c55e;
     --status-detected-bg: rgba(34, 197, 94, 0.3);
+    --status-stable: #4ade80;
+    /* Lighter green for stable */
+    --status-stable-bg: rgba(74, 222, 128, 0.25);
     --confidence-high: #22c55e;
+    /* Green */
+    --confidence-medium: #84cc16;
+    /* Yellow-green */
+    --toast-success: #22c55e;
+    --toast-info: #33ff66;
 }
 
 [data-theme="oscilloscope"] body {
@@ -358,10 +388,20 @@
     --accent-color: #ff7700;
     --chart-annotation-color: #ff6600;
     --chart-peak-color: #ff4400;
-    /* Status colors - nixie orange glow */
-    --status-detected: #f97316;
-    --status-detected-bg: rgba(249, 115, 22, 0.25);
-    --confidence-high: #f97316;
+    /* Status colors - nixie orange/amber glow (no green allowed) */
+    --status-detected: #ff6a00;
+    --status-detected-bg: rgba(255, 106, 0, 0.25);
+    --status-stable: #ffb347;
+    --status-stable-bg: rgba(255, 179, 71, 0.25);
+    /* Confidence colors - all amber tones */
+    --confidence-high: #ff6a00;
+    --confidence-medium: #ff9500;
+    --confidence-low: #ffb347;
+    /* XRF colors - amber */
+    --xrf-high: #ff6a00;
+    --xrf-medium: #ff9500;
+    --xrf-low: #ffb347;
+    /* Toast colors */
     --toast-success: #ff7700;
     --toast-warning: #ff6600;
     --toast-info: #ff7700;
@@ -432,6 +472,9 @@
     --accent-color: #d4a574;
     --chart-annotation-color: #d4a574;
     --chart-peak-color: #e8c49a;
+    /* Override stable with darker tan - vintage HP aesthetic */
+    --status-stable: #b8936d;
+    --status-stable-bg: rgba(184, 147, 109, 0.25);
 }
 
 [data-theme="hp"] body {
@@ -462,6 +505,17 @@
     --accent-color: #00a2e8;
     --chart-annotation-color: #00a2e8;
     --chart-peak-color: #66ccff;
+    /* Status and confidence colors - Tektronix blue/cyan */
+    --status-detected: #00a2e8;
+    --status-detected-bg: rgba(0, 162, 232, 0.25);
+    --status-stable: #66ccff;
+    --status-stable-bg: rgba(102, 204, 255, 0.25);
+    --confidence-high: #00a2e8;
+    --confidence-medium: #66ccff;
+    --confidence-low: #f5a623;
+    --xrf-high: #00a2e8;
+    --xrf-medium: #66ccff;
+    --xrf-low: #f5a623;
 }
 
 [data-theme="tektronix"] body {
@@ -492,6 +546,17 @@
     --accent-color: #4a90d9;
     --chart-annotation-color: #4a90d9;
     --chart-peak-color: #7eb8f0;
+    /* Status and confidence colors - Keithley blue */
+    --status-detected: #4a90d9;
+    --status-detected-bg: rgba(74, 144, 217, 0.25);
+    --status-stable: #7eb8f0;
+    --status-stable-bg: rgba(126, 184, 240, 0.25);
+    --confidence-high: #4a90d9;
+    --confidence-medium: #7eb8f0;
+    --confidence-low: #f5a623;
+    --xrf-high: #4a90d9;
+    --xrf-medium: #7eb8f0;
+    --xrf-low: #f5a623;
 }
 
 [data-theme="keithley"] body {
@@ -522,6 +587,17 @@
     --accent-color: #c44536;
     --chart-annotation-color: #c44536;
     --chart-peak-color: #ff5c47;
+    /* Status and confidence colors - warm earth tones */
+    --status-detected: #d4915c;
+    --status-detected-bg: rgba(212, 145, 92, 0.25);
+    --status-stable: #b87a4a;
+    --status-stable-bg: rgba(184, 122, 74, 0.25);
+    --confidence-high: #d4915c;
+    --confidence-medium: #e8a86b;
+    --confidence-low: #c44536;
+    --xrf-high: #d4915c;
+    --xrf-medium: #e8a86b;
+    --xrf-low: #c44536;
 }
 
 [data-theme="ludlum"] body {
@@ -1720,7 +1796,7 @@ input[type="text"]:focus {
     position: absolute;
     top: 0;
     height: 100%;
-    background: rgba(56, 189, 248, 0.25);
+    background: color-mix(in srgb, var(--primary-color) 25%, transparent);
     border-left: 2px solid var(--primary-color);
     border-right: 2px solid var(--primary-color);
     pointer-events: none;

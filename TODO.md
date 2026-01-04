@@ -162,12 +162,16 @@
 - [x] **Activity & Dose Calculator**: Bq/μCi conversion, γ dose rate (μSv/h)
 - [x] **Decay Prediction Engine**: Curie + Bateman solver, interactive Chart.js visualization
 
-### UI Themes *(Deferred Indefinitely)*
-Additional vintage test equipment themes that could be added:
-- [ ] Nuclear Chicago (industrial grey/blue)
-- [ ] Bicron (dark grey/orange accents)
-- [ ] Technical Associates
-- [ ] Jordan (UK civil defense)
-- [ ] Berthold (German professional blue/grey)
-- [ ] Saphymo (French radiation detectors)
-- [ ] CDV Series (additional Cold War era variants)
+### UI Themes (2026-01-04)
+- [x] **Theme Color System Overhaul**: Charts and UI elements now fully theme-responsive
+  - Added `hexToRgba()` helper for proper color conversion
+  - Chart line, fill, and zoom scrubber update dynamically on theme switch
+  - Fixed hardcoded cyan colors in charts.js
+- [x] **Vintage Theme Color Overrides**: Added status/confidence colors to 5 themes:
+  - Ludlum, Eberline, Fluke, Keithley, Tektronix
+- [x] **35 New Theme Proposals**: Complete CSS in `complete_themes_css.md` (artifacts folder):
+  - 8 Sci-Fi (Alien, Pip-Boy, Blade Runner, Tron, Matrix, LCARS, UNSC, Stranger Things)
+  - 7 Test Equipment (Beckman, GenRad, Heathkit, Simpson, Lambda, Boonton, Wavetek)
+  - 8 Computing (Apple II, C64, IBM 5150, Amiga, VT-100, BBC Micro, Atari ST, ZX Spectrum)
+  - 6 Radiological (Canberra Packard, Bicron, TASC, Nuclear Data, Radiation Alert, Radon Scout)
+  - 6 Vacuum Tube (Magic Eye, Dekatron, Numitron, VFD, Cold Cathode, Panaplex)
