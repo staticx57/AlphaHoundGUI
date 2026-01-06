@@ -1693,10 +1693,16 @@ function setupEventListeners() {
             const data = await response.json();
 
             if (data.predictions && data.predictions.length > 0) {
+                // Get theme-aware confidence colors
+                const styles = getComputedStyle(document.documentElement);
+                const confHigh = styles.getPropertyValue('--confidence-high').trim() || '#10b981';
+                const confMed = styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b';
+                const confLow = styles.getPropertyValue('--confidence-low').trim() || '#8b5cf6';
+
                 mlList.innerHTML = data.predictions.map(pred => {
                     const confidence = pred.confidence;
-                    const barColor = confidence > 70 ? '#10b981' :
-                        confidence > 40 ? '#f59e0b' : '#8b5cf6';
+                    const barColor = confidence > 70 ? confHigh :
+                        confidence > 40 ? confMed : confLow;
                     const confidenceLabel = confidence > 70 ? 'HIGH' :
                         confidence > 40 ? 'MEDIUM' : 'LOW';
 
@@ -1708,7 +1714,7 @@ function setupEventListeners() {
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                                        <div style="width: ${Math.min(confidence, 100)}%; height: 100%; background: linear-gradient(90deg, #8b5cf6, ${barColor}); border-radius: 3px; transition: width 0.3s ease;"></div>
+                                        <div style="width: ${Math.min(confidence, 100)}%; height: 100%; background: linear-gradient(90deg, ${confLow}, ${barColor}); border-radius: 3px; transition: width 0.3s ease;"></div>
                                     </div>
                                     <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 50px;">${confidence.toFixed(1)}%</span>
                                 </div>
