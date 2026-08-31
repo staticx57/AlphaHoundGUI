@@ -114,3 +114,39 @@ def test_decay_result_shape_is_consistent(client, engine, isotope):
     if parent:
         assert parent[0] == pytest.approx(1000.0, rel=0.02)
         assert parent[-1] <= parent[0] * 1.0001
+
+
+CSV_PLAIN = b"\n".join(b"%d,%d" % (ch, n) for ch, n in
+                       [(0, 100), (1, 150), (2, 900), (3, 150), (4, 100)]) + b"\n"
+
+CSV_WITH_ENERGY = (b"Energy (keV),Counts\n" +
+                   b"\n".join(b"%.1f,%d" % (e, n) for e, n in
+                              [(10.0, 100), (20.0, 150), (30.0, 900),
+                               (40.0, 150), (50.0, 100)]) + b"\n")
+
+
+@pytest.mark.parametrize("name,body", [
+    ("spec.csv", CSV_PLAIN),
+    ("spec_with_energy.csv", CSV_WITH_ENERGY),
+])
+def test_upload_non_n42_formats_do_not_500(client, name, body):
+    """Every parser branch must reach the shared analysis pipeline.
+
+    Three call sites still referenced the pre-rename name
+    `_analyze_spectrum_peaks`, so the CSV, CHN/SPE and generic
+    SandiaSpecUtils branches all raised NameError -> HTTP 500. Only the
+    N42 branch used the imported name and worked.
+    """
+    response = client.post("/upload", files={"file": (name, body, "text/csv")})
+    assert response.status_code != 500, response.text
+    assert response.status_code == 200, response.text
+    assert "counts" in response.json()
+
+
+def test_analysis_pipeline_name_is_bound():
+    """Guard the rename directly: no stale underscore-prefixed references."""
+    import pathlib
+    src = pathlib.Path(__file__).resolve().parents[1] / "routers" / "analysis.py"
+    text = src.read_text(encoding="utf-8")
+    assert "_analyze_spectrum_peaks(" not in text, \
+        "stale reference to the pre-rename analysis function"

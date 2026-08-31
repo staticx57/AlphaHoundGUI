@@ -217,7 +217,7 @@ async def upload_file(file: UploadFile = File(...)):
             
             # Use common analysis pipeline
             is_calibrated = result.get("is_calibrated", False)
-            result = _analyze_spectrum_peaks(result, is_calibrated)
+            result = analyze_spectrum_peaks(result, is_calibrated)
             
             print(f"[CSV Upload] After analysis: peaks={len(result.get('peaks', []))}, isotopes={len(result.get('isotopes', []))}")
             if result.get('peaks'):
@@ -251,7 +251,7 @@ async def upload_file(file: UploadFile = File(...)):
                 
                 # Use common analysis pipeline
                 is_calibrated = result.get('is_calibrated', False)
-                result = _analyze_spectrum_peaks(result, is_calibrated)
+                result = analyze_spectrum_peaks(result, is_calibrated)
                 return result
             finally:
                 os.unlink(tmp_path)
@@ -301,7 +301,7 @@ async def upload_file(file: UploadFile = File(...)):
 
                 # Use common analysis pipeline
                 live_time = result.get('live_time', 0.0)
-                result = _analyze_spectrum_peaks(result, is_calibrated, live_time)
+                result = analyze_spectrum_peaks(result, is_calibrated, live_time)
                 return result
                 
             finally:
