@@ -29,3 +29,6 @@ backend/tmp/
 *.pdf
 test_connection_simple.py
 output/
+
+# Cloned reference tools (not part of this project)
+external_tools/

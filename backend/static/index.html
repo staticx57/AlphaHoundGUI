@@ -1109,6 +1109,20 @@
                             difference for peak matching</p>
                     </div>
 
+                    <div style="margin-top: 1.5rem; margin-bottom: 1.5rem; padding-top: 1rem; border-top: 1px dashed var(--border-color);">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                            <span>Decay Calculation Engine:</span>
+                        </label>
+                        <select id="decay-engine-select" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                            <option value="auto">Auto (Recommended - Best Available)</option>
+                            <option value="radioactivedecay">RadioactiveDecay (ICRP-107 Dataset)</option>
+                            <option value="curie">Curie (ENSDF / Experimental Data)</option>
+                            <option value="pyne">PyNE (Nuclear Engineering)</option>
+                            <option value="builtin">Built-in Bateman Solver (NumPy Fallback)</option>
+                        </select>
+                        <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Select the backend nuclear data & decay prediction engine</p>
+                    </div>
+
                     <button id="btn-reset-defaults"
                         style="padding: 0.5rem 1rem; border-radius: 6px; margin-right: 0.5rem;">Reset to
                         Defaults</button>

@@ -173,13 +173,6 @@ async def acquire_spectrum(request: SpectrumRequest):
         }
     })
 
-@router.post("/clear")
-async def clear_device_spectrum():
-    if not alphahound_device.is_connected():
-        raise HTTPException(status_code=400, detail="Device not connected")
-    alphahound_device.clear_spectrum()
-    return {"status": "cleared"}
-
 # ============================================================
 # Server-Side Acquisition Endpoints (Browser-Independent)
 # ============================================================

@@ -608,27 +608,3 @@ async def get_base_time():
     
     base_time = radiacode_device.get_base_time()
     return {"base_time": base_time}
-
-
-
-
-@router.get("/capabilities")
-async def get_radiacode_capabilities():
-    """
-    Get device capabilities for UI feature gating.
-    
-    Returns which features are supported by the Radiacode device.
-    """
-    return {
-        "device_type": "radiacode",
-        "capabilities": {
-            "timedAcquisition": True,
-            "serverManagedAcquisition": True,
-            "temperature": False,
-            "displayModeToggle": False,
-            "clearSpectrum": True,
-            "doseReset": True,
-            "deviceSettings": True,
-            "bleConnection": radiacode_device.is_ble_available
-        }
-    }

@@ -672,38 +672,7 @@ async def snip_background_endpoint(request: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/analyze/decay-prediction")
-async def decay_prediction_endpoint(request: dict):
-    """
-    Predict radioactive decay chain evolution over time.
-    
-    Uses Custom Bateman Solver (backend/decay_calculator.py).
-    Arguments:
-    - isotope (str): Parent isotope (e.g., "U-238", "Th-232")
-    - initial_activity_bq (float): Starting activity
-    - duration_days (float): Time span to simulate
-    """
-    try:
-        from decay_calculator import predict_decay_chain
-        
-        isotope = request.get("isotope", "U-238")
-        activity = float(request.get("initial_activity_bq", 1000.0))
-        duration = float(request.get("duration_days", 365.0))
-        
-        result = predict_decay_chain(isotope, activity, duration)
-        
-        if not result:
-            raise HTTPException(status_code=400, detail=f"Unsupported chain for isotope: {isotope}")
-            
-        return result
-        
-    except Exception as e:
-        print(f"Decay prediction error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # === ROI Analysis Endpoints ===
-# (Reload Triggered)
 
 @router.post("/analyze/roi")
 async def analyze_roi_endpoint(request: ROIAnalysisRequest):
@@ -1150,65 +1119,30 @@ class ActivityRequest(BaseModel):
 
 class DecayPredictionRequest(BaseModel):
     """Request model for decay chain prediction."""
-    parent_isotope: str = Field(..., min_length=2, max_length=20)
+    parent_isotope: Optional[str] = None
+    isotope: Optional[str] = None
     initial_activity_bq: float = Field(default=1000.0, ge=0)
-    time_hours: float = Field(default=24.0, ge=0.001, le=8760)  # up to 1 year
+    time_hours: Optional[float] = None
+    duration_days: Optional[float] = None
+    engine: Optional[str] = Field(default="auto", description="Decay engine to use (auto, radioactivedecay, curie, pyne, builtin)")
 
 class IsotopeInfoRequest(BaseModel):
     """Request model for isotope information lookup."""
     isotope: str = Field(..., min_length=2, max_length=20)
 
 
-@router.post("/analyze/dose-rate")
-async def calculate_dose_rate_endpoint(request: DoseRateRequest):
+@router.get("/analyze/decay-engines")
+async def get_decay_engines_endpoint():
     """
-    Calculate gamma dose rate from isotope activity at specified distance.
-    
-    Uses gamma dose constants from IAEA/NIST standards.
-    Returns dose rate in μSv/h, mrem/h, and mSv/h.
+    Get available radioactive decay calculation engines and current system defaults.
     """
     try:
-        from activity_calculator import calculate_dose_rate
-        
-        result = calculate_dose_rate(
-            isotope=request.isotope,
-            activity_bq=request.activity_bq,
-            distance_m=request.distance_m
-        )
-        
-        return result
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        from decay_engine import decay_engine_manager
+        return {
+            "engines": decay_engine_manager.list_engines(),
+            "default": decay_engine_manager.get_default_engine_name()
+        }
     except Exception as e:
-        print(f"[Dose Rate] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/analyze/calculate-activity")
-async def calculate_activity_endpoint(request: ActivityRequest):
-    """
-    Calculate source activity from net peak counts.
-    
-    Uses the standard activity equation: A = N / (ε × Iγ × t)
-    Returns activity in Bq, μCi, mCi with uncertainty estimates.
-    """
-    try:
-        from activity_calculator import calculate_activity
-        
-        result = calculate_activity(
-            net_counts=request.net_counts,
-            efficiency=request.efficiency,
-            branching_ratio=request.branching_ratio,
-            live_time_s=request.live_time_s
-        )
-        
-        return result
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        print(f"[Activity] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1216,17 +1150,27 @@ async def calculate_activity_endpoint(request: ActivityRequest):
 async def predict_decay_endpoint(request: DecayPredictionRequest):
     """
     Predict decay chain activity evolution over time.
-    
-    Uses Bateman equations to calculate how parent and daughter
-    isotope activities change. Returns chart data for visualization.
+    Supports multi-engine selection (radioactivedecay, curie, pyne, builtin).
     """
     try:
-        from decay_calculator import predict_decay_series
+        from decay_engine import decay_engine_manager
         
-        result = predict_decay_series(
-            parent_isotope=request.parent_isotope,
-            initial_activity_bq=request.initial_activity_bq,
-            time_hours=request.time_hours
+        target_isotope = request.isotope or request.parent_isotope or "Cs-137"
+        
+        # Calculate duration in seconds
+        if request.duration_days is not None:
+            duration_s = request.duration_days * 86400
+        elif request.time_hours is not None:
+            duration_s = request.time_hours * 3600
+        else:
+            duration_s = 24 * 3600 # 1 day default
+
+        engine_name = request.engine or "auto"
+        result = decay_engine_manager.predict_decay(
+            isotope=target_isotope,
+            activity=request.initial_activity_bq,
+            duration_seconds=duration_s,
+            engine_name=engine_name
         )
         
         return result
@@ -1605,33 +1549,4 @@ async def calculate_dose_rate_endpoint(request: DoseRateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# === Decay Prediction ===
-
-class DecayPredictionRequest(BaseModel):
-    isotope: str
-    initial_activity_bq: float
-    duration_days: float
-
-@router.post("/analyze/decay-prediction")
-async def decay_prediction_endpoint(request: DecayPredictionRequest):
-    """
-    Predict radioactive decay chain evolution.
-    Delegates to decay_calculator (Bateman equations).
-    """
-    try:
-        result = predict_decay_chain(
-            parent_isotope=request.isotope,
-            initial_activity_bq=request.initial_activity_bq,
-            duration_days=request.duration_days
-        )
-        
-        if result is None:
-             raise HTTPException(status_code=400, detail=f"Chain prediction not supported for {request.isotope}. Only U-238/Th-232 supported.")
-            
-        return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 

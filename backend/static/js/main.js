@@ -516,6 +516,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('btn-run-decay')) {
         document.getElementById('btn-run-decay').addEventListener('click', runDecayPrediction);
     }
+    loadDecayEngines();
     isotopeUI.init();
 });
 
@@ -2914,11 +2915,48 @@ function applyCalibration(slope, intercept) {
 // Globals for Decay Chart
 let decayChartInstance = null;
 
+/**
+ * Populate the decay engine selector from the backend, marking engines whose
+ * library is not installed. Without this the menu offers engines that silently
+ * fall back to the built-in solver.
+ */
+async function loadDecayEngines() {
+    const select = document.getElementById('decay-engine-select');
+    if (!select) return;
+
+    try {
+        const response = await fetch('/analyze/decay-engines');
+        if (!response.ok) return;
+        const { engines, default: defaultEngine } = await response.json();
+
+        select.innerHTML = '';
+        const auto = document.createElement('option');
+        auto.value = 'auto';
+        auto.textContent = `Auto (${defaultEngine})`;
+        select.appendChild(auto);
+
+        for (const engine of engines) {
+            const option = document.createElement('option');
+            option.value = engine.name;
+            option.textContent = engine.available
+                ? engine.description
+                : `${engine.description} — not installed`;
+            option.disabled = !engine.available;
+            select.appendChild(option);
+        }
+        select.value = 'auto';
+    } catch (e) {
+        console.warn('Could not load decay engines, keeping static list:', e);
+    }
+}
+
 
 async function runDecayPrediction() {
     const isotope = document.getElementById('decay-isotope').value;
     const activity = parseFloat(document.getElementById('decay-activity').value);
     const duration = parseFloat(document.getElementById('decay-duration').value);
+    const engineSelect = document.getElementById('decay-engine-select');
+    const engine = engineSelect ? engineSelect.value : 'auto';
 
     try {
         const response = await fetch('/analyze/decay-prediction', {
@@ -2927,7 +2965,8 @@ async function runDecayPrediction() {
             body: JSON.stringify({
                 isotope: isotope,
                 initial_activity_bq: activity,
-                duration_days: duration * 365.25 // input is years
+                duration_days: duration * 365.25, // input is years
+                engine: engine
             })
         });
 
@@ -2998,7 +3037,8 @@ function renderDecayChart(result) {
             plugins: {
                 title: {
                     display: true,
-                    text: `Decay Chain: ${result.isotopes[0]} over ${labels[labels.length - 1]} Years`,
+                    text: `Decay Chain: ${result.isotopes[0]} over ${labels[labels.length - 1]} Years`
+                        + (result.engine_used ? `  ·  engine: ${result.engine_used}` : ''),
                     color: '#94a3b8'
                 },
                 legend: {
