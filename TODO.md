@@ -92,6 +92,7 @@
 ### Low Priority / Future
 - [x] **Radiacode Device Integration** ✅ Implemented in `radiacode_driver.py` + `routers/device_radiacode.py` - USB connection, spectrum, dose rate polling
 - [x] **Radiacode Bluetooth on Windows**: ✅ Implemented using `bleak` library. Added BLE device scanning, device selection dropdown, and cross-platform BLE connectivity (Windows/macOS/Linux).
+- [x] **Radiacode BLE Scan Fix (Windows)**: Fixed `pyserial`/`pywin32` COM STA conflict that silently broke BLE scan/connect on Windows (`allow_sta()` in `radiacode_bleak_transport.py`).
 
 ---
 
@@ -139,6 +140,7 @@
 - [x] **v2.0 Analysis Robustness**: Dual-mode engine (Strict for live, Robust for uploads)
 
 ### Code Quality
+- [x] **Test Infrastructure**: Fixed broken imports in `backend/tests/` enabling the suite of 20 unit tests to run and pass.
 - [x] **Refactoring**: Application layer threshold filtering, CSV parser module, ES6 modules, JSDoc comments
 - [x] **COUNT TIME Fix**: Backend capture + frontend display
 - [x] **Auto-Save CSV**: Automatic saves to `data/acquisitions/`

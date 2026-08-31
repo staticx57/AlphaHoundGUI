@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [Session 2026-08-31] - Radiacode BLE Scan Fix (Windows)
+
+### Fixed
+- **Windows BLE Scan/Connect Silently Failing**: `pyserial`'s Windows USB-detection backend imports `pythoncom`/`win32com`, which puts the process in STA COM mode. Bleak's WinRT backend refuses to run BLE callbacks on an STA thread unless explicitly allowed, so `radiacode_bleak_transport.py`'s scan returned `[]` and connect attempts raised `Device ... was not found` even with a Radiacode device in range. Fixed by calling `bleak.backends.winrt.util.allow_sta()` at import time (Windows only).
+- **Broken Test Imports**: `backend/tests/test_analysis.py`, `test_isotope.py`, and `test_parsers.py` imported modules as `backend.<module>` instead of `<module>`, breaking the test suite when run from `backend/`. Fixed imports so the 20-test suite runs and passes.
+
+### Documentation
+- Documented the Curie nuclear-database zero-size DB issue and manual-download workaround in `README.md` and `INSTALL.md`.
+- Documented the Windows BLE/pywin32 STA conflict and its fix in `README.md`.
+
+---
+
 ## [Session 2026-01-04] - Theme Color System Overhaul
 
 ### Added

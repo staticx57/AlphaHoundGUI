@@ -37,6 +37,10 @@ run.bat
 - TensorFlow (~150MB)
 - ONNX (~25MB)
 
+> [!WARNING]
+> **Curie Database Initialization Issue**  
+> If the backend crashes on startup with `ValueError: ... ziegler.db exists but is of zero size`, the `curie` package failed to download its nuclear databases. You must manually download them into your `site-packages/curie/data/` folder. Please refer to the README.md Troubleshooting section for the python script to fix this.
+
 ## 🔄 Switching Modes
 
 You can always upgrade from lightweight to full:

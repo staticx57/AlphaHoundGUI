@@ -175,6 +175,10 @@
   - Cross-platform (Windows, macOS, Linux)
   - BLE device scanning with automatic discovery
   - Device selection dropdown for multiple nearby units
+
+  > [!WARNING]
+  > **Windows: BLE Scan Finds No Devices**
+  > On Windows, `pyserial`'s USB-detection code imports `pywin32` (`pythoncom`/`win32com`) for COM-port lookup, which initializes COM in STA mode on the process. Bleak's WinRT backend refuses to run BLE callbacks on an STA thread unless told it's safe, so `/radiacode/scan-ble` silently returns `[]` and connect attempts fail with `Device ... was not found`, even though the device is in range. This is fixed in `backend/radiacode_bleak_transport.py` by calling `bleak.backends.winrt.util.allow_sta()` on import (Windows only). If you see this symptom on an older checkout, update to the latest commit.
 - **Real-Time Dose Rate**: μSv/h streaming with live updates
 - **Spectrum Acquisition**: 1024-channel spectrum with device calibration
 - **Device Control**: Clear spectrum, reset dose accumulator
@@ -293,6 +297,18 @@
    ```bash
    pip install -r requirements.txt
    ```
+
+   > [!WARNING]
+   > **Curie Database Issue (Import Error)**  
+   > If you encounter a `ValueError: ... ziegler.db exists but is of zero size` or `sqlite3.OperationalError: no such table: compounds` when starting the app, this is due to a known bug in the `curie` package's database initialization. You must manually download the databases. Run this script in your terminal (or create a python file with it and run it):
+   > ```python
+   > import urllib.request, os
+   > addr={'decay':'wwd6b1gk2ge5tgt', 'endf':'tkndjqs036piojm', 'tendl':'zkoi6t2jicc9yqs', 'tendl_d_rp':'x2vfjr7uv7ffex5', 'tendl_n_rp':'n0jjc0dv61j9of9', 'tendl_p_rp':'ib2a5lrhiwkcro5', 'ziegler':'kq07684wtp890v5', 'iaea_monitors':'lzn8zs6y8zu3v0s', 'IRDFF':'34sgcvt8n57b0aw'}
+   > # Find your site-packages curie/data path (e.g. env/Lib/site-packages/curie/data)
+   > import curie; path = os.path.join(os.path.dirname(curie.__file__), "data")
+   > [urllib.request.urlretrieve(f'https://www.dropbox.com/s/{v}/{k}.db?dl=1', os.path.join(path, f'{k}.db')) for k, v in addr.items()]
+   > ```
+   > If `import curie` fails completely, manually locate your `site-packages/curie/data` folder and specify the path directly in the script.
 
 3. **Launch Application**:
    - **Windows**: Double-click **`run.bat`** in the root directory
