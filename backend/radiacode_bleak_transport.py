@@ -47,6 +47,17 @@ except ImportError:
     BleakScanner = None
     BleakError = Exception
 
+if HAS_BLEAK and platform.system() == "Windows":
+    # pyserial's Windows backend (used for AlphaHound USB detection) imports
+    # pywin32, which initializes COM in STA mode on whatever thread imports it.
+    # Bleak's WinRT backend refuses to run BLE callbacks on an STA thread unless
+    # told it's safe, so tell it here before any scan/connect is attempted.
+    try:
+        from bleak.backends.winrt.util import allow_sta
+        allow_sta()
+    except ImportError:
+        pass
+
 
 class BytesBuffer:
     """A buffer for reading binary data with position tracking.
