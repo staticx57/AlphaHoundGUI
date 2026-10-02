@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 import os
 import asyncio
 from alphahound_serial import device as alphahound_device
-from routers import device, analysis, isotopes, device_radiacode
+from routers import device, analysis, isotopes, device_radiacode, nuclear, export
 
 # Track active WebSocket connections for session management
 active_websockets = set()
@@ -36,6 +36,8 @@ if _cors_origins:
 app.include_router(device.router)
 app.include_router(device_radiacode.router)
 app.include_router(analysis.router)
+app.include_router(nuclear.router)
+app.include_router(export.router)
 app.include_router(isotopes.router)
 
 

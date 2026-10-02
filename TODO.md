@@ -26,6 +26,9 @@
 - [ ] Confirm the UI still works with CORS off (same-origin, incl. from another LAN device); set `ALPHAHOUND_CORS_ORIGINS` if a separate frontend is used
 - [ ] Refresh the page while an AlphaHound is connected; device should stay connected (10s WebSocket reconnect grace)
 - [ ] ROI results show "activity ± uncertainty Bq" (new `activity_uncertainty_bq`, 1σ counting uncertainty; `main.js` ~line 1941) and render correctly when the field is absent
+- [ ] PDF export button downloads a working report (`/export/pdf` was broken: missing import; also forced matplotlib to headless `Agg`)
+- [ ] Dose-rate calculator in the UI still works (`/analyze/dose-rate` now enforces the validated request model: activity ≥ 0, distance 0.01–1000 m)
+- [ ] Exports (N42/CSV/checkpoint) and N42 metadata editor still work after moving to `routers/export.py`
 - [ ] Nothing depended on the deleted `js/main_restored_temp.js` (was unreferenced; recoverable from git history)
 
 ### ML & Analysis
@@ -35,6 +38,8 @@
 - [ ] Add background-dominated mixture training
 
 ### Technical Debt
+- [x] Split `routers/analysis.py` (1500+ lines) into `analysis.py`, `export.py`, `nuclear.py` (same 37 routes)
+- [ ] Split `static/js/main.js` (3,100 lines) into feature modules *(needs browser to verify)*
 - [ ] Add unit tests for frontend JavaScript modules
 - [x] Add unit tests for backend API endpoints ✅ (`backend/tests/test_api_endpoints.py`; 59 tests pass)
 - [ ] Implement TypeScript for type safety

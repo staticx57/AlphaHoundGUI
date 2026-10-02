@@ -96,3 +96,15 @@ def test_roi_reports_activity_uncertainty(client):
     rel_activity = body["activity_uncertainty_bq"] / body["activity_bq"]
     rel_counts = body["uncertainty_sigma"] / body["net_counts"]
     assert rel_activity == pytest.approx(rel_counts, rel=0.05)
+
+
+def test_pdf_export_returns_pdf(client):
+    """Regression: generate_pdf_report was never imported, so /export/pdf always 500'd."""
+    response = client.post("/export/pdf", json={
+        "filename": "unit",
+        "energies": [float(i) for i in range(50)],
+        "counts": [10.0 + (i == 25) * 200 for i in range(50)],
+    })
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")

@@ -6,6 +6,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 import io
 import datetime
+import matplotlib
+matplotlib.use("Agg")  # headless: reports render on server worker threads, never a GUI
 import matplotlib.pyplot as plt
 
 def generate_pdf_report(data):
