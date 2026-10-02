@@ -41,9 +41,9 @@ def test_synthetic_cs137_and_thorium_are_identified(trained):
     assert trained.identify(cs)[0]["isotope"] == "Cs-137"
     th = trained.synthesize(trained._lines("Tl-208", [583.2, 2614.5, 510.8]) + trained._lines("Ac-228", [338.3, 911.2, 969.0])
                             + trained._lines("Pb-212", [238.6, 300.1]), rng)
-    assert trained.identify(th)[0]["isotope"] in ("ThoriumMantle", "Th-232")
+    assert trained.identify(th)[0]["isotope"] in ("Th-232 series", "Th-232")
 
 
 def test_series_daughters_are_not_standalone_classes(trained):
     assert "Pb-214" not in trained.classes_ and "Ac-228" not in trained.classes_
-    assert "ThoriumMantle" in trained.classes_
+    assert "Th-232 series" in trained.classes_

@@ -368,68 +368,71 @@ class MLIdentifier:
             "K-40": 3.0, "Cs-137": 2.0, "Co-60": 2.0,
             # Many-line artificial isotopes soak up noisy natural spectra: keep their prior low
             "Eu-152": 0.4, "Se-75": 0.4, "Ir-192": 0.4, "Ba-133": 0.6,
+            "Tl-201": 0.4, "Tc-99m": 0.5, "Co-57": 0.5, "F-18": 0.5, "I-131": 0.5,
             # Default weight = 1.0
         }
         
         # Define realistic multi-isotope mixtures (common real-world sources)
         # CRITICAL: Natural uranium mixtures should NOT include U-235 prominently
         mixtures = {
-            'UraniumGlass': {  # Uranium glass / Fiestaware - U-238 chain ONLY
+            'U-238 series': {  # Uranium glass / Fiestaware: U-238 series, Bi-214 dominant
                 'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'Th-234'],
                 'ratios': [10.0, 2.0, 1.0, 0.5, 0.4],  # Bi-214@609keV dominates
                 'weight': 3.0  # More training samples for this common source
             },
-            'UraniumGlassWeak': {  # Weaker uranium glass sample
+            'U-238 series (weak)': {  # Weaker uranium glass sample
                 'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Th-234'],
                 'ratios': [5.0, 1.5, 0.7, 0.3],
+                'label': 'U-238 series',
                 'weight': 2.0
             },
-            'UraniumMineral': {  # Pitchblende, autunite - U-238 chain
+            'U-238 series (ore)': {  # Pitchblende, autunite - U-238 chain
                 'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'U-238'],
                 'ratios': [8.0, 2.0, 1.5, 0.8, 0.3],
+                'label': 'U-238 series',
                 'weight': 1.5
             },
-            'RadiumDial': {  # Vintage watch dials - Ra-226 dominant
+            'Ra-226 series': {  # Ra-226 (watch dials, radium sources), radon daughters present
                 'isotopes': ['Ra-226', 'Bi-214', 'Pb-214'],
                 'ratios': [1.0, 5.0, 1.5],
                 'weight': 1.5
             },
-            'ThoriumMantle': {  # Th-232 series in secular equilibrium (mantles, thoriated lenses/glass/rods)
+            'Th-232 series': {  # Th-232 series in secular equilibrium (mantles, thoriated lenses/glass/rods)
                 'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228', 'Th-232'],
                 'ratios': [1.0, 1.0, 1.0, 0.36, 1.0, 1.0, 0.05],  # Tl-208 only 36% of Bi-212 decays
                 'weight': 3.0
             },
-            'ThoriumMantleAged': {  # Ra-228 / Ac-228 depleted (older purified thorium): Th-228 end dominates
+            'ThoriumSeriesAged': {  # Ra-228 / Ac-228 depleted (older purified thorium): Th-228 end dominates
                 'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
                 'ratios': [0.3, 1.0, 1.0, 0.36, 1.0, 1.0],
-                'label': 'ThoriumMantle', 'weight': 2.0
+                'label': 'Th-232 series', 'weight': 2.0
             },
-            'ThoriumMantleFresh': {  # Ac-228 enriched (fresh Ra-228 ingrowth)
+            'ThoriumSeriesFresh': {  # Ac-228 enriched (fresh Ra-228 ingrowth)
                 'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
                 'ratios': [1.0, 0.6, 0.6, 0.22, 0.6, 0.6],
-                'label': 'ThoriumMantle', 'weight': 1.5
+                'label': 'Th-232 series', 'weight': 1.5
             },
-            'RadiumEquilibrium': {  # Ra-226 with radon retained: Pb-214 / Bi-214 at full strength
+            'Ra-226 series (equilibrium)': {  # Ra-226 with radon retained: Pb-214 / Bi-214 at full strength
                 'isotopes': ['Ra-226', 'Pb-214', 'Bi-214'],
                 'ratios': [0.3, 1.0, 1.0],
-                'label': 'RadiumDial', 'weight': 3.0
+                'label': 'Ra-226 series', 'weight': 3.0
             },
-            'MedicalWaste': {  # Hospital nuclear medicine waste
+            'Tc-99m + I-131 + Mo-99': {  # Hospital nuclear medicine waste
                 'isotopes': ['Tc-99m', 'I-131', 'Mo-99'],
                 'ratios': [1.0, 0.5, 0.3],
                 'weight': 1.0
             },
-            'IndustrialGauge': {  # Level/density gauges
+            'Cs-137 + Co-60': {  # Level/density gauges
                 'isotopes': ['Cs-137', 'Co-60'],
                 'ratios': [1.0, 0.8],
                 'weight': 1.5
             },
-            'CalibrationSource': {  # Multi-isotope check source
+            'Am-241 + Ba-133 + Cs-137 + Co-60': {  # Multi-isotope check source
                 'isotopes': ['Am-241', 'Ba-133', 'Cs-137', 'Co-60'],
                 'ratios': [0.7, 1.0, 0.9, 0.8],
                 'weight': 1.0
             },
-            'NaturalBackground': {  # Typical background radiation
+            'Natural background (K-40, Ra/Th daughters)': {  # Typical background radiation
                 'isotopes': ['K-40', 'Bi-214', 'Tl-208', 'Pb-214'],
                 'ratios': [1.0, 0.3, 0.1, 0.2],
                 'weight': 2.0

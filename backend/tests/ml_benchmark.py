@@ -18,9 +18,9 @@ sys.path.insert(0, str(BACKEND))
 sys.path.insert(0, str(BACKEND / "tests"))
 import real_benchmark as rb  # noqa: E402
 
-U238 = {"U-238", "Th-234", "Pa-234m", "U-234", "Ra-226", "Pb-214", "Bi-214", "Pb-210", "UraniumGlass",
-        "UraniumGlassWeak", "UraniumMineral", "RadiumDial", "U-235", "Th-231", "Th-227", "Ra-223"}
-TH232 = {"Th-232", "Ac-228", "Pb-212", "Bi-212", "Tl-208", "ThoriumMantle"}
+U238 = {"U-238", "Th-234", "Pa-234m", "U-234", "Ra-226", "Pb-214", "Bi-214", "Pb-210", "U-238 series",
+        "Ra-226 series", "U-235", "Th-231", "Th-227", "Ra-223"}
+TH232 = {"Th-232", "Ac-228", "Pb-212", "Bi-212", "Tl-208", "Th-232 series"}
 SERIES = {"U-238": U238, "Th-232": TH232}
 
 

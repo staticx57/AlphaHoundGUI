@@ -226,9 +226,9 @@ class RealSpectrumLoader:
             r'bismuth|bi-?214|bi214': 'Bi-214',
             r'europium|eu-?152|eu152': 'Eu-152',
             r'iodine|i-?131|i131': 'I-131',
-            r'fiesta|vaseline|uranium.?glass': 'UraniumGlass',
-            r'mantle|thoriated': 'ThoriumMantle',
-            r'radium.?dial|watch': 'RadiumDial',
+            r'fiesta|vaseline|uranium.?glass': 'U-238 series',
+            r'mantle|thoriated': 'Th-232 series',
+            r'radium.?dial|watch': 'Ra-226 series',
             r'background|bg': 'Background'
         }
         

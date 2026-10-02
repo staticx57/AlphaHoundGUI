@@ -380,7 +380,8 @@ def ml_identify(request: MLIdentifyRequest):
             
             if high_conf_names & NATURAL_CHAIN_ISOTOPES:
                 # Natural chain detected by Peak Matching - suppress conflicts
-                MEDICAL_ISOTOPES = {'Cs-137', 'I-131', 'F-18', 'Tc-99m', 'Co-60'}
+                MEDICAL_ISOTOPES = {'Cs-137', 'I-131', 'F-18', 'Tc-99m', 'Co-60',
+                                    'Tc-99m + I-131 + Mo-99', 'Cs-137 + Co-60'}
                 for r in results:
                     if r['isotope'] in MEDICAL_ISOTOPES:
                         r['confidence'] *= 0.1
