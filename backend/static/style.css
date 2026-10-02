@@ -32,6 +32,8 @@
 
     /* XRF Colors */
     --xrf-primary: #3b82f6;
+    --xrf-text: #93c5fd;
+    --xrf-accent: #60a5fa;
     --xrf-high: #22c55e;
     --xrf-medium: #f59e0b;
     --xrf-low: #94a3b8;
@@ -73,6 +75,9 @@
     --confidence-medium: #d97706;
     --confidence-low: #dc2626;
     --xrf-high: #16a34a;
+    --xrf-text: #1e40af;
+    --xrf-accent: #1d4ed8;
+    --xrf-low: #475569;
     --toast-success: #059669;
     --toast-warning: #d97706;
 }

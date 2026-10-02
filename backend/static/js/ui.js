@@ -96,18 +96,16 @@ export class AlphaHoundUI {
 
         if (!xrfData || xrfData.length === 0) return;
 
-        // Get theme-aware colors
-        const colors = this.getThemeColors();
-
         // Build HTML for each detected element
         const elementsHTML = xrfData.map((item, idx) => {
-            const confidenceColor = item.confidence === 'HIGH' ? colors.xrfHigh :
-                item.confidence === 'MEDIUM' ? colors.xrfMedium : colors.xrfLow;
+            // Reference the CSS variables (not resolved values) so the badge follows theme switches
+            const confidenceColor = item.confidence === 'HIGH' ? 'var(--xrf-high)' :
+                item.confidence === 'MEDIUM' ? 'var(--xrf-medium)' : 'var(--xrf-low)';
             const confidenceLabel = item.confidence || 'LOW';
 
             // Build energy table rows
             const energyRows = (item.lines || []).map(line => `
-                <tr style="font-size: 0.75rem; color: #93c5fd;">
+                <tr style="font-size: 0.75rem; color: var(--xrf-text);">
                     <td style="padding: 2px 6px;">${line.shell}</td>
                     <td style="padding: 2px 6px; text-align: right;">${line.peak_energy?.toFixed(1) || '-'} keV</td>
                     <td style="padding: 2px 6px; text-align: right;">${line.xrf_energy?.toFixed(1) || '-'} keV</td>
@@ -116,7 +114,7 @@ export class AlphaHoundUI {
             `).join('');
 
             const interpretation = item.interpretation ?
-                `<div style="font-size: 0.75rem; color: #93c5fd; font-style: italic; margin-top: 0.5rem;">${item.interpretation}</div>` : '';
+                `<div style="font-size: 0.75rem; color: var(--xrf-text); font-style: italic; margin-top: 0.5rem;">${item.interpretation}</div>` : '';
 
             return `
                 <div class="xrf-element" data-xrf-index="${idx}" style="
@@ -128,9 +126,9 @@ export class AlphaHoundUI {
                     transition: all 0.2s ease;
                 ">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="color: #60a5fa; font-size: 1rem;">${item.element}</strong>
+                        <strong style="color: var(--xrf-accent); font-size: 1rem;">${item.element}</strong>
                         <span style="
-                            background: ${confidenceColor}20;
+                            background: color-mix(in srgb, ${confidenceColor} 20%, transparent);
                             color: ${confidenceColor};
                             padding: 2px 8px;
                             border-radius: 4px;
@@ -139,14 +137,14 @@ export class AlphaHoundUI {
                             text-transform: uppercase;
                         ">${confidenceLabel}</span>
                     </div>
-                    <div style="font-size: 0.8rem; color: #93c5fd; margin-top: 0.25rem;">
+                    <div style="font-size: 0.8rem; color: var(--xrf-text); margin-top: 0.25rem;">
                         ${(item.lines || []).map(l => l.shell).join(', ')}
                     </div>
                     ${interpretation}
                     <div class="xrf-details" style="display: none; margin-top: 0.75rem; border-top: 1px solid rgba(59, 130, 246, 0.3); padding-top: 0.5rem;">
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead>
-                                <tr style="font-size: 0.65rem; color: #60a5fa; text-transform: uppercase;">
+                                <tr style="font-size: 0.65rem; color: var(--xrf-accent); text-transform: uppercase;">
                                     <th style="padding: 2px 6px; text-align: left;">Shell</th>
                                     <th style="padding: 2px 6px; text-align: right;">Detected</th>
                                     <th style="padding: 2px 6px; text-align: right;">Reference</th>
@@ -169,13 +167,13 @@ export class AlphaHoundUI {
                 margin-top: 1rem;
             ">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #60a5fa;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: var(--xrf-accent);">
                         <img src="/static/icons/bolt.svg" class="icon" style="width: 16px; height: 16px;"> XRF / Fluorescence Detected
                     </div>
                     <button id="btn-clear-xrf-highlight" style="
                         background: transparent;
                         border: 1px solid #3b82f6;
-                        color: #60a5fa;
+                        color: var(--xrf-accent);
                         padding: 2px 8px;
                         border-radius: 4px;
                         font-size: 0.7rem;
@@ -183,7 +181,7 @@ export class AlphaHoundUI {
                         display: none;
                     ">Clear Highlights</button>
                 </div>
-                <div style="font-size: 0.75rem; color: #93c5fd; opacity: 0.8; margin-bottom: 0.75rem; font-style: italic;">
+                <div style="font-size: 0.75rem; color: var(--xrf-text); margin-bottom: 0.75rem; font-style: italic;">
                     Click an element to highlight its peaks on the chart.
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
