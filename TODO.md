@@ -22,6 +22,9 @@
 - [ ] Upload a real CSV spectrum and confirm peaks/isotopes look the same as before (parser-level detection removed; only automated tests ran, on tiny synthetic CSVs)
 - [ ] `POST /upload` with a malformed CSV now returns 400 (was 500); confirm the UI shows a sensible error toast
 - [ ] Full UI/UX visual sweep across themes and mobile widths (needs a real browser)
+- [ ] Run a long upload/analysis while the live dose sparkline is running; confirm the sparkline no longer stalls (analysis and Radiacode routes now run in the threadpool)
+- [ ] Confirm the UI still works with CORS off (same-origin, incl. from another LAN device); set `ALPHAHOUND_CORS_ORIGINS` if a separate frontend is used
+- [ ] Refresh the page while an AlphaHound is connected; device should stay connected (10s WebSocket reconnect grace)
 - [ ] Nothing depended on the deleted `js/main_restored_temp.js` (was unreferenced; recoverable from git history)
 
 ### ML & Analysis
@@ -37,6 +40,7 @@
 - [x] **Centralize Peak Detection** ✅ (csv_parser.py no longer detects peaks/isotopes; all formats go through `analyze_spectrum_peaks()` in `analysis_utils.py`) — original note: Remove `detect_peaks()` calls from individual parsers (csv_parser.py, etc.) and have all peak detection happen in `_analyze_spectrum_peaks()` in `analysis.py`. This ensures consistent detection across all file formats (N42, CSV, CHN, SPE, SPC, PCF, etc.) and simplifies threshold tuning.
 
 ### Performance Optimization
+- [x] Analysis + Radiacode routes moved off the event loop (sync handlers run in threadpool)
 - [ ] Lazy load Chart.js and other heavy libraries *(Deferred: already loaded with `defer`; modules use the globals at init, so lazy loading needs a browser to verify)*
 - [ ] Implement WebWorkers for ML training
 - [ ] Optimize large spectrum rendering

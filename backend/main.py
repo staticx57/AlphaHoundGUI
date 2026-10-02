@@ -12,6 +12,7 @@ from routers import device, analysis, isotopes, device_radiacode
 
 # Track active WebSocket connections for session management
 active_websockets = set()
+WS_DISCONNECT_GRACE_S = 10  # seconds to wait for a reconnect before releasing the device
 
 # Rate limiter: 60 requests per minute per IP
 limiter = Limiter(key_func=get_remote_address)
@@ -19,14 +20,17 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS: the UI is served from this same origin, so cross-origin access is off by
+# default. Set ALPHAHOUND_CORS_ORIGINS="http://host1:3000,http://host2" to allow others.
+_cors_origins = [o.strip() for o in os.environ.get("ALPHAHOUND_CORS_ORIGINS", "").split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Routers
 app.include_router(device.router)
@@ -67,9 +71,12 @@ async def websocket_dose_stream(websocket: WebSocket):
         print(f"[WebSocket] Client disconnected. Active connections: {len(active_websockets)}")
         
         # Auto-disconnect device if no active sessions (prevents zombie connections)
+        # Grace period so a page refresh (disconnect then immediate reconnect) keeps the device.
         if len(active_websockets) == 0 and alphahound_device.is_connected():
-            print("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
-            alphahound_device.disconnect()
+            await asyncio.sleep(WS_DISCONNECT_GRACE_S)
+            if len(active_websockets) == 0 and alphahound_device.is_connected():
+                print("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
+                alphahound_device.disconnect()
         
         # Safely attempt to close - may already be closed by client
         try:

@@ -27,7 +27,7 @@ class RadiacodeConnectRequest(BaseModel):
 
 
 @router.get("/available")
-async def check_radiacode_available():
+def check_radiacode_available():
     """Check if Radiacode library is installed and available."""
     return {
         "available": radiacode_device.is_available,
@@ -65,7 +65,7 @@ async def scan_radiacode_ble(timeout: float = 5.0) -> List[Dict[str, Any]]:
 
 
 @router.post("/connect")
-async def connect_radiacode(request: RadiacodeConnectRequest):
+def connect_radiacode(request: RadiacodeConnectRequest):
     """
     Connect to a Radiacode device.
     
@@ -97,7 +97,7 @@ async def connect_radiacode(request: RadiacodeConnectRequest):
 
 
 @router.post("/disconnect")
-async def disconnect_radiacode():
+def disconnect_radiacode():
     """Disconnect from Radiacode device."""
     if not radiacode_device.is_connected():
         return {"status": "not_connected"}
@@ -107,7 +107,7 @@ async def disconnect_radiacode():
 
 
 @router.get("/status")
-async def get_radiacode_status():
+def get_radiacode_status():
     """Get current Radiacode connection status and device info."""
     return {
         "connected": radiacode_device.is_connected(),
@@ -118,7 +118,7 @@ async def get_radiacode_status():
 
 
 @router.get("/dose")
-async def get_radiacode_dose():
+def get_radiacode_dose():
     """
     Get current dose rate from Radiacode device.
     
@@ -140,7 +140,7 @@ async def get_radiacode_dose():
 
 
 @router.get("/spectrum")
-async def get_radiacode_spectrum(analyze: bool = True):
+def get_radiacode_spectrum(analyze: bool = True):
     """
     Get current spectrum from Radiacode device.
     
@@ -185,7 +185,7 @@ async def get_radiacode_spectrum(analyze: bool = True):
 
 
 @router.post("/clear")
-async def clear_radiacode_spectrum():
+def clear_radiacode_spectrum():
     """Clear/reset accumulated spectrum on Radiacode device."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -200,7 +200,7 @@ async def clear_radiacode_spectrum():
 
 
 @router.post("/reset-dose")
-async def reset_radiacode_dose():
+def reset_radiacode_dose():
     """Reset dose accumulator on Radiacode device."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -227,7 +227,7 @@ class RadiacodeSettingsRequest(BaseModel):
 
 
 @router.post("/settings")
-async def update_radiacode_settings(request: RadiacodeSettingsRequest):
+def update_radiacode_settings(request: RadiacodeSettingsRequest):
     """
     Update Radiacode device settings.
     
@@ -264,7 +264,7 @@ async def update_radiacode_settings(request: RadiacodeSettingsRequest):
 
 
 @router.get("/configuration")
-async def get_radiacode_configuration():
+def get_radiacode_configuration():
     """Get full device configuration dump (for debugging/advanced users)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -279,7 +279,7 @@ async def get_radiacode_configuration():
 
 
 @router.get("/capabilities")
-async def get_radiacode_capabilities():
+def get_radiacode_capabilities():
     """
     Get device capabilities for UI feature gating.
     
@@ -305,7 +305,7 @@ async def get_radiacode_capabilities():
 # ============================================================
 
 @router.post("/settings/brightness")
-async def set_radiacode_brightness(level: int):
+def set_radiacode_brightness(level: int):
     """Set Radiacode display brightness (0-9)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -318,7 +318,7 @@ async def set_radiacode_brightness(level: int):
 
 
 @router.post("/settings/sound")
-async def set_radiacode_sound(enabled: bool):
+def set_radiacode_sound(enabled: bool):
     """Enable or disable sound alerts."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -331,7 +331,7 @@ async def set_radiacode_sound(enabled: bool):
 
 
 @router.post("/settings/vibration")
-async def set_radiacode_vibration(enabled: bool):
+def set_radiacode_vibration(enabled: bool):
     """Enable or disable vibration alerts."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -344,7 +344,7 @@ async def set_radiacode_vibration(enabled: bool):
 
 
 @router.post("/settings/display-timeout")
-async def set_radiacode_display_timeout(seconds: int):
+def set_radiacode_display_timeout(seconds: int):
     """Set display auto-off timeout."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -357,7 +357,7 @@ async def set_radiacode_display_timeout(seconds: int):
 
 
 @router.post("/settings/language")
-async def set_radiacode_language(language: str):
+def set_radiacode_language(language: str):
     """Set device language ('en' or 'ru')."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -374,7 +374,7 @@ async def set_radiacode_language(language: str):
 # ============================================================
 
 @router.get("/spectrum/accumulated")
-async def get_accumulated_spectrum(analyze: bool = True):
+def get_accumulated_spectrum(analyze: bool = True):
     """Get long-term accumulated spectrum from device memory (persists across clears)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -417,7 +417,7 @@ async def get_accumulated_spectrum(analyze: bool = True):
 
 
 @router.post("/settings/display-direction")
-async def set_display_direction(direction: str):
+def set_display_direction(direction: str):
     """Set device display orientation (normal/reversed/auto)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -430,7 +430,7 @@ async def set_display_direction(direction: str):
 
 
 @router.post("/time/sync")
-async def sync_device_time():
+def sync_device_time():
     """Synchronize device clock with computer time."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -443,7 +443,7 @@ async def sync_device_time():
 
 
 @router.get("/info/hw-serial")
-async def get_hw_serial():
+def get_hw_serial():
     """Get hardware serial number."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -462,7 +462,7 @@ async def get_hw_serial():
 # ============================================================
 
 @router.get("/calibration/energy")
-async def get_energy_calibration():
+def get_energy_calibration():
     """Get current energy calibration coefficients."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -477,7 +477,7 @@ async def get_energy_calibration():
 
 
 @router.post("/calibration/energy")
-async def set_energy_calibration(a0: float, a1: float, a2: float):
+def set_energy_calibration(a0: float, a1: float, a2: float):
     """Set energy calibration coefficients (Energy = a0 + a1*channel + a2*channel^2)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -490,7 +490,7 @@ async def set_energy_calibration(a0: float, a1: float, a2: float):
 
 
 @router.post("/settings/sound-control")
-async def set_sound_control(search: bool = False, detector: bool = False, clicks: bool = False):
+def set_sound_control(search: bool = False, detector: bool = False, clicks: bool = False):
     """Set advanced sound control flags."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -503,7 +503,7 @@ async def set_sound_control(search: bool = False, detector: bool = False, clicks
 
 
 @router.post("/settings/vibration-control")
-async def set_vibration_control(search: bool = False, detector: bool = False):
+def set_vibration_control(search: bool = False, detector: bool = False):
     """Set advanced vibration control flags (clicks not supported for vibration)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -516,7 +516,7 @@ async def set_vibration_control(search: bool = False, detector: bool = False):
 
 
 @router.post("/power/off")
-async def power_off_device():
+def power_off_device():
     """Power off the Radiacode device. User must manually power back on."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -532,7 +532,7 @@ async def power_off_device():
 
 
 @router.get("/info/extended")
-async def get_radiacode_extended_info():
+def get_radiacode_extended_info():
     """
     Get extended device information including accumulated dose and configuration.
     
@@ -557,7 +557,7 @@ async def get_radiacode_extended_info():
 # ============================================================
 
 @router.get("/status/flags")
-async def get_status_flags():
+def get_status_flags():
     """Get device status flags (battery, alarms, etc.)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -567,7 +567,7 @@ async def get_status_flags():
 
 
 @router.get("/info/fw-signature")
-async def get_firmware_signature():
+def get_firmware_signature():
     """Get firmware signature info."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -577,7 +577,7 @@ async def get_firmware_signature():
 
 
 @router.get("/messages")
-async def get_text_message():
+def get_text_message():
     """Get device text message/alert."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -591,7 +591,7 @@ async def get_text_message():
 # ============================================================
 
 @router.get("/capabilities/commands")
-async def get_available_commands():
+def get_available_commands():
     """Get list of supported SFR commands (for auto-detection)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
@@ -601,7 +601,7 @@ async def get_available_commands():
 
 
 @router.get("/info/base-time")
-async def get_base_time():
+def get_base_time():
     """Get device time reference for timestamp conversion."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")

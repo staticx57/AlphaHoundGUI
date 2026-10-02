@@ -60,3 +60,19 @@ def test_post_endpoints_validate_body(client, url):
 def test_upload_rejects_unsupported_garbage(client):
     response = client.post("/upload", files={"file": ("x.csv", b"", "text/csv")})
     assert response.status_code in (400, 422), response.text
+
+
+def test_cors_disabled_by_default(client):
+    """The UI is same-origin; no wildcard CORS unless ALPHAHOUND_CORS_ORIGINS is set."""
+    response = client.get("/settings", headers={"Origin": "http://evil.example"})
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_cpu_bound_analysis_routes_run_in_threadpool():
+    """Sync `def` handlers run in FastAPI's threadpool; `async def` would block the loop."""
+    import inspect
+    from routers import analysis
+    for route in analysis.router.routes:
+        if route.path == "/upload":
+            continue  # awaits file.read()
+        assert not inspect.iscoroutinefunction(route.endpoint), route.path

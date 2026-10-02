@@ -138,16 +138,16 @@ class UraniumRatioRequest(BaseModel):
 
 
 @router.get("/settings")
-async def get_settings():
+def get_settings():
     return DEFAULT_SETTINGS
 
 @router.get("/detectors")
-async def get_detectors():
+def get_detectors():
     """Get list of available detector profiles."""
     return {"detectors": get_detector_names()}
 
 @router.post("/analyze/mda")
-async def analyze_mda(request: dict):
+def analyze_mda(request: dict):
     """
     Calculate Minimum Detectable Activity (MDA) for a specific ROI.
     """
@@ -316,7 +316,7 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=500, detail=f"Generic parser error: {str(e)}")
 
 @router.post("/analyze/fit-peaks")
-async def analyze_fit_peaks(request: AnalysisRequest):
+def analyze_fit_peaks(request: AnalysisRequest):
     try:
         peak_centers = []
         for p in request.peaks:
@@ -328,7 +328,7 @@ async def analyze_fit_peaks(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analyze/calibrate")
-async def analyze_calibrate(request: CalibrationRequest):
+def analyze_calibrate(request: CalibrationRequest):
     try:
         calibrated_energies, params = calibrate_energy(request.channels, request.known_energies, request.channels)
         return {"calibrated_energies": calibrated_energies, "params": params}
@@ -336,7 +336,7 @@ async def analyze_calibrate(request: CalibrationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/export/pdf")
-async def export_pdf(request: ReportRequest):
+def export_pdf(request: ReportRequest):
     try:
         pdf_bytes = generate_pdf_report(request.dict())
         filename = f"{request.filename}_report.pdf"
@@ -352,7 +352,7 @@ async def export_pdf(request: ReportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analyze/subtract-background")
-async def analyze_subtract_background(request: BackgroundSubtractionRequest):
+def analyze_subtract_background(request: BackgroundSubtractionRequest):
     try:
         net_counts = subtract_background(
             request.source_counts, 
@@ -364,7 +364,7 @@ async def analyze_subtract_background(request: BackgroundSubtractionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/export/n42")
-async def export_n42(request: N42ExportRequest):
+def export_n42(request: N42ExportRequest):
     """Export spectrum data as standards-compliant N42 XML file."""
     print(f"[N42 Export] Endpoint called")
     try:
@@ -404,7 +404,7 @@ async def export_n42(request: N42ExportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analyze/ml-identify")
-async def ml_identify(request: MLIdentifyRequest):
+def ml_identify(request: MLIdentifyRequest):
     """
     Machine Learning isotope identification using PyRIID.
     
@@ -477,7 +477,7 @@ async def ml_identify(request: MLIdentifyRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/export/csv-auto")
-async def export_csv_auto(request: dict):
+def export_csv_auto(request: dict):
     """Auto-save spectrum to CSV with timestamped filename"""
     try:
         import os
@@ -515,7 +515,7 @@ async def export_csv_auto(request: dict):
 
 
 @router.post("/export/n42-auto")
-async def export_n42_auto(request: dict):
+def export_n42_auto(request: dict):
     """Auto-save spectrum to N42 with timestamped filename (default format)"""
     try:
         import os
@@ -550,7 +550,7 @@ async def export_n42_auto(request: dict):
 
 
 @router.post("/export/n42-checkpoint")
-async def export_n42_checkpoint(request: dict):
+def export_n42_checkpoint(request: dict):
     """Save spectrum to overwriting checkpoint file during acquisition.
     
     This provides crash recovery - if acquisition fails, the most recent
@@ -582,7 +582,7 @@ async def export_n42_checkpoint(request: dict):
 
 
 @router.delete("/export/n42-checkpoint")
-async def delete_n42_checkpoint():
+def delete_n42_checkpoint():
     """Delete checkpoint file after successful acquisition completion"""
     try:
         import os
@@ -599,7 +599,7 @@ async def delete_n42_checkpoint():
 # === SNIP Background Subtraction ===
 
 @router.post("/analyze/snip-background")
-async def snip_background_endpoint(request: dict):
+def snip_background_endpoint(request: dict):
     """
     Apply SNIP (Sensitive Nonlinear Iterative Peak) background estimation.
     
@@ -677,7 +677,7 @@ async def snip_background_endpoint(request: dict):
 # === ROI Analysis Endpoints ===
 
 @router.post("/analyze/roi")
-async def analyze_roi_endpoint(request: ROIAnalysisRequest):
+def analyze_roi_endpoint(request: ROIAnalysisRequest):
     """
     Perform ROI (Region-of-Interest) analysis for a specific isotope.
     
@@ -733,7 +733,7 @@ async def analyze_roi_endpoint(request: ROIAnalysisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analyze/uranium-ratio")
-async def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
+def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
     """
     Analyze uranium enrichment using 186 keV / 93 keV peak ratio.
     
@@ -765,7 +765,7 @@ async def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analyze/roi-isotopes")
-async def get_roi_isotopes():
+def get_roi_isotopes():
     """Get list of available isotopes for ROI analysis."""
     try:
         from isotope_roi_database import get_roi_isotope_names, ISOTOPE_ROI_DATABASE
@@ -787,7 +787,7 @@ async def get_roi_isotopes():
 
 
 @router.post("/analyze/identify-source")
-async def identify_source_endpoint(request: UraniumRatioRequest):
+def identify_source_endpoint(request: UraniumRatioRequest):
     """
     Identify the source type based on spectral signatures.
     
@@ -822,7 +822,7 @@ async def identify_source_endpoint(request: UraniumRatioRequest):
 
 
 @router.get("/analyze/source-types")
-async def get_source_types():
+def get_source_types():
     """Get list of known source types for the dropdown selector."""
     try:
         from source_identification import SOURCE_SIGNATURES
@@ -856,7 +856,7 @@ async def get_source_types():
 
 
 @router.get("/analyze/detectors")
-async def get_detectors():
+def get_detectors():
     """Get list of available AlphaHound AB+G detector configurations."""
     try:
         from detector_efficiency import DETECTOR_DATABASE
@@ -883,7 +883,7 @@ async def get_detectors():
 # === Model Export Endpoints ===
 
 @router.post("/analyze/export-model")
-async def export_model_endpoint(request: dict):
+def export_model_endpoint(request: dict):
     """
     Export trained ML model to ONNX or TFLite format.
     
@@ -941,7 +941,7 @@ async def export_model_endpoint(request: dict):
 # === Spectrum Algebra Endpoints ===
 
 @router.post("/analyze/spectrum-algebra")
-async def spectrum_algebra_endpoint(request: dict):
+def spectrum_algebra_endpoint(request: dict):
     """
     Perform spectrum algebra operations.
     
@@ -996,7 +996,7 @@ async def spectrum_algebra_endpoint(request: dict):
 # === Anomaly Detection Endpoint ===
 
 @router.post("/analyze/anomaly-detection")
-async def anomaly_detection_endpoint(request: dict):
+def anomaly_detection_endpoint(request: dict):
     """
     Detect anomalous spectra that don't match expected patterns.
     
@@ -1134,7 +1134,7 @@ class IsotopeInfoRequest(BaseModel):
 
 
 @router.get("/analyze/decay-engines")
-async def get_decay_engines_endpoint():
+def get_decay_engines_endpoint():
     """
     Get available radioactive decay calculation engines and current system defaults.
     """
@@ -1149,7 +1149,7 @@ async def get_decay_engines_endpoint():
 
 
 @router.post("/analyze/decay-prediction")
-async def predict_decay_endpoint(request: DecayPredictionRequest):
+def predict_decay_endpoint(request: DecayPredictionRequest):
     """
     Predict decay chain activity evolution over time.
     Supports multi-engine selection (radioactivedecay, curie, pyne, builtin).
@@ -1185,7 +1185,7 @@ async def predict_decay_endpoint(request: DecayPredictionRequest):
 
 
 @router.post("/analyze/isotope-info")
-async def get_isotope_info_endpoint(request: IsotopeInfoRequest):
+def get_isotope_info_endpoint(request: IsotopeInfoRequest):
     """
     Get comprehensive information about an isotope.
     
@@ -1207,7 +1207,7 @@ async def get_isotope_info_endpoint(request: IsotopeInfoRequest):
 
 
 @router.get("/analyze/gamma-constants")
-async def get_gamma_constants():
+def get_gamma_constants():
     """
     Get list of isotopes with known gamma dose constants.
     
@@ -1227,7 +1227,7 @@ async def get_gamma_constants():
 
 
 @router.post("/analyze/multiplet")
-async def analyze_multiplet_endpoint(request: dict):
+def analyze_multiplet_endpoint(request: dict):
     """
     Deconvolve overlapping peaks using multiplet fitting.
     
@@ -1306,7 +1306,7 @@ async def analyze_multiplet_endpoint(request: dict):
 
 
 @router.get("/analyze/search-gamma")
-async def search_gamma_line_endpoint(
+def search_gamma_line_endpoint(
     energy: float,
     delta: float = 5.0,
     intensity_min: Optional[float] = None
@@ -1343,7 +1343,7 @@ async def search_gamma_line_endpoint(
 
 
 @router.get("/analyze/search-xray")
-async def search_xray_line_endpoint(
+def search_xray_line_endpoint(
     energy: float,
     delta: float = 2.0
 ):
@@ -1375,7 +1375,7 @@ async def search_xray_line_endpoint(
 
 
 @router.get("/analyze/decay-chain")
-async def decay_chain_spectrum_endpoint(
+def decay_chain_spectrum_endpoint(
     parent: str,
     intensity_min: float = 1.0
 ):
@@ -1404,7 +1404,7 @@ async def decay_chain_spectrum_endpoint(
 
 
 @router.get("/analyze/isotope-lines")
-async def get_isotope_lines_endpoint(
+def get_isotope_lines_endpoint(
     isotope: str,
     intensity_min: Optional[float] = None
 ):
@@ -1443,7 +1443,7 @@ class N42MetadataRequest(BaseModel):
     metadata: Dict = None
 
 @router.post("/n42/metadata")
-async def get_n42_metadata(request: N42MetadataRequest):
+def get_n42_metadata(request: N42MetadataRequest):
     """Get current metadata from an N42 file."""
     try:
         from n42_metadata_editor import N42MetadataEditor
@@ -1466,7 +1466,7 @@ class N42UpdateRequest(BaseModel):
     longitude: Optional[float] = None
 
 @router.post("/n42/update-metadata")
-async def update_n42_metadata(request: N42UpdateRequest):
+def update_n42_metadata(request: N42UpdateRequest):
     """Update metadata in an N42 file and return modified XML."""
     try:
         from n42_metadata_editor import N42MetadataEditor
@@ -1516,7 +1516,7 @@ class TimeEstimatorRequest(BaseModel):
     source_type: Optional[str] = None
 
 @router.post("/analyze/estimate-time")
-async def estimate_acquisition_time_endpoint(request: TimeEstimatorRequest):
+def estimate_acquisition_time_endpoint(request: TimeEstimatorRequest):
     """Estimate acquisition time from spectrum counts."""
     try:
         from time_estimator import estimate_time_from_spectrum
@@ -1537,7 +1537,7 @@ class DoseRateRequest(BaseModel):
     distance_m: float = 1.0
 
 @router.post("/analyze/dose-rate")
-async def calculate_dose_rate_endpoint(request: DoseRateRequest):
+def calculate_dose_rate_endpoint(request: DoseRateRequest):
     """Calculate gamma dose rate at specified distance."""
     try:
         from activity_calculator import calculate_dose_rate
