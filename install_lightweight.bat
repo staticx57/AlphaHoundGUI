@@ -4,7 +4,7 @@ echo AlphaHound GUI - Lightweight Install
 echo ========================================
 echo.
 echo This installs ONLY core dependencies.
-echo ML features (PyRIID) will NOT be available.
+echo AI identification (scikit-learn) will NOT be available.
 echo.
 echo Installing core packages...
 python -m pip install --upgrade pip

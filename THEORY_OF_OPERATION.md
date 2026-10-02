@@ -32,7 +32,7 @@ flowchart TB
             DecayEng[decay_calculator.py]
             ActCalc[activity_calculator.py]
             PeakFit[peak_detection.py]
-            PyRIID[ml_analysis.py]
+            MLID[ml_analysis.py]
         end
         
         subgraph Parsers["Data Ingestion"]
@@ -60,7 +60,7 @@ flowchart TB
     
     RouteAna --> Parsers
     RouteAna --> Engines
-    RouteAna --> PyRIID
+    RouteAna --> MLID
 ```
 
 ### API Routing Architecture
@@ -104,7 +104,7 @@ graph LR
 | **Isotopes Router** | `routers/isotopes.py` | Custom isotope management (CRUD operations) |
 | **Peak Detection** | `peak_detection.py` | Scipy-based peak finding algorithm |
 | **Isotope Database** | `isotope_database.py` | 100+ isotopes with gamma energies from IAEA/NNDC |
-| **ML Analysis** | `ml_analysis.py` | PyRIID neural network training and prediction |
+| **ML Analysis** | `ml_analysis.py` | scikit-learn MLP training (synthetic spectra) and prediction |
 | **Core Settings** | `core.py` | Default thresholds and confidence filtering logic |
 
 ---
@@ -371,7 +371,9 @@ abundance_weights = {
 
 ---
 
-## 🤖 ML Integration (PyRIID)
+## 🤖 ML Integration (scikit-learn)
+
+See [ML_GUIDE.md](ML_GUIDE.md) for the current training pipeline (physics-based synthesiser, energy-grid resampling, series classes). The diagram and snippet below are the original PyRIID-era design and are kept for history.
 
 ### Training Pipeline
 
@@ -672,7 +674,7 @@ channel,counts,energy
 - **LBNL**: Lawrence Berkeley National Lab isotope data
 
 ### Libraries
-- **PyRIID 2.2.0**: Sandia National Laboratories ML framework
+- **scikit-learn**: MLP classifier for AI identification
 - **scipy.signal**: Peak detection algorithms
 - **FastAPI**: Modern Python web framework
 - **Chart.js**: Frontend visualization

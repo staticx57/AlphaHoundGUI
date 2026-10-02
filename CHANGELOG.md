@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [Session 2026-10-02] - PyRIID removal, ML rework, N42 acquisition info, Radiacode fixes
+
+### Changed
+- **PyRIID removed**: its numpy 1.26 / scipy 1.13 / TensorFlow 2.16 pins conflict with this app. `ml_analysis.py` now uses a scikit-learn MLP; `riid` and `tensorflow` dropped from requirements. Old guides moved to `archive/planning_docs/`; see `ML_GUIDE.md`.
+- **ML training rework**: one calibration error per training spectrum (was per line), physics-based synthesiser, natural series trained as mixtures, spectra resampled onto the model energy grid from the device calibration, classes named for what a spectrum shows (`Th-232 series`, ...). Real-spectra scorecard: `backend/tests/ml_benchmark.py`.
+- **Isotope cap applied after the spectrum fit**: false U-238 daughters no longer push real Pb-212 / Tl-208 out of the list.
+
+### Added
+- **N42 acquisition info**: exposure, device duration and time notes are written to `<SpectrumExtension><AcquisitionInfo>` and read back by the parser.
+- **Radiacode**: UI state restored after page refresh; device alarm events logged (`GET /radiacode/events`) and toasted; alarm limits (`GET /radiacode/alarm-limits`, read register by register because the batch read fails over BLE); total dose shown next to the live dose rate; connect step timings logged.
+
+### Fixed
+- Radiacode connect button read "Connected" after Disconnect; a lost connection was never noticed.
+- `DS_uR` warning logged once per connection instead of every poll.
+- `ui_smoke.py` no longer depends on a real Radiacode being (dis)connected on the server.
+
 ## [Session 2026-08-31] - Radiacode BLE Scan Fix (Windows)
 
 ### Fixed

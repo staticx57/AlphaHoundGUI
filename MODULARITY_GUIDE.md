@@ -32,7 +32,7 @@ Before you begin, make sure you have:
 | **Pydantic** | Data validation | Request/response models |
 | **Chart.js** | JavaScript charting | Spectrum visualization |
 | **WebSockets** | Real-time communication | Live dose rate streaming |
-| **PyRIID** | Machine learning | Isotope identification |
+| **scikit-learn** | Machine learning | Isotope identification |
 
 ### Key Concepts
 
@@ -185,7 +185,7 @@ AlphaHoundGUI/
 │   ├── alphahound_serial.py    # Device communication driver
 │   ├── isotope_database.py     # Isotope energy lookup
 │   ├── peak_detection.py       # Peak finding algorithm
-│   ├── ml_analysis.py          # PyRIID ML integration
+│   ├── ml_analysis.py          # ML identification (scikit-learn)
 │   ├── n42_parser.py           # N42/XML file parser
 │   ├── csv_parser.py           # CSV file parser
 │   ├── detector_efficiency.py  # Detector calibration data
@@ -204,7 +204,7 @@ AlphaHoundGUI/
 │           ├── calibration.js  # Calibration UI
 │           └── isotopes_ui.js  # Isotope management UI
 ├── THEORY_OF_OPERATION.md      # System architecture docs
-├── PYRIID_GUIDE.md             # ML integration guide
+├── ML_GUIDE.md                 # ML identification guide
 ├── CALIBRATION_GUIDE.md        # Calibration instructions
 └── requirements.txt            # Python dependencies
 ```
@@ -765,7 +765,7 @@ npm test
 ## 📚 Related Documentation
 
 - [Theory of Operation](THEORY_OF_OPERATION.md) - System architecture
-- [PyRIID Guide](PYRIID_GUIDE.md) - ML integration details
+- [ML Guide](ML_GUIDE.md) - ML identification details
 - [Calibration Guide](CALIBRATION_GUIDE.md) - Energy calibration
 - [README](README.md) - Quick start guide
 

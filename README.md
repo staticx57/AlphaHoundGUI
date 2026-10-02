@@ -382,7 +382,7 @@ To access the application from other devices on your network:
 | [Theory of Operation](THEORY_OF_OPERATION.md) | System architecture, data flow, algorithms, and technical details |
 | [Modularity Guide](MODULARITY_GUIDE.md) | How to extend: add devices, isotopes, analysis methods, detector profiles |
 | [Calibration Guide](CALIBRATION_GUIDE.md) | Energy calibration, accuracy improvement, reference energy tables |
-| [PyRIID Guide](PYRIID_GUIDE.md) | Machine learning integration, training, extension, detector tuning |
+| [ML Guide](ML_GUIDE.md) | AI identification: how the model is trained, classes, benchmark, extension |
 | [Radiacode Integration](RADIACODE_INTEGRATION_PLAN.md) | Radiacode device support details and implementation notes |
 | [AlphaHound Commands](docs/ALPHAHOUND_SERIAL_COMMANDS.md) | Serial command reference for AlphaHound device communication |
 | [TODO.md](TODO.md) | Roadmap for future features and open tasks |
@@ -458,7 +458,7 @@ AlphaHoundGUI/
 ├── THEORY_OF_OPERATION.md               # System architecture documentation
 ├── MODULARITY_GUIDE.md                  # Extension guide for developers
 ├── CALIBRATION_GUIDE.md                 # Calibration and accuracy guide
-├── PYRIID_GUIDE.md                      # ML integration documentation
+├── ML_GUIDE.md                          # AI identification documentation
 ├── RADIACODE_INTEGRATION_PLAN.md        # Radiacode device support
 ├── CHANGELOG.md                         # Detailed version history
 ├── TODO.md                              # Roadmap and open tasks
@@ -545,19 +545,11 @@ pip install -r requirements.txt
   - Server-managed acquisition system with crash recovery
   - ROI analysis with activity/dose calculations and enrichment ratios
   - Source-specific analysis (lenses, dials, ore, calibration sources)
-- **AI/ML Integration**: PyRIID 2.2.0 (Sandia National Laboratories)
+- **AI/ML Integration**: scikit-learn
 - **Development Assistance**: Built with AI assistance from Google Gemini
 
 ### Machine Learning Framework
-- **PyRIID** (Python Radioisotope Identification Dataset):
-  - **Author**: Sandia National Laboratories
-  - **License**: Apache 2.0
-  - **Repository**: [https://github.com/sandialabs/PyRIID](https://github.com/sandialabs/PyRIID)
-  - **Citation**: If you use PyRIID features in academic work, please cite:
-    ```
-    Darren Holland et al. (2024). PyRIID: Machine Learning-based 
-    Radioisotope Identification. Sandia National Laboratories.
-    ```
+- **scikit-learn** (BSD-3-Clause): MLP classifier for AI identification, trained on spectra synthesised from the isotope database. PyRIID (Sandia) was evaluated and dropped: its numpy 1.26 / scipy 1.13 / TensorFlow 2.16 pins cannot coexist with this app's dependencies.
   - **Integration**: Neural network trained on 90+ isotopes with multi-isotope mixture support
 
 ### Device Integration
@@ -583,11 +575,11 @@ pip install -r requirements.txt
 
 ### Special Thanks
 - **Nick Conner** (RadView Detection) - For creating the AlphaHound device and supporting the community
-- **Sandia National Laboratories** - For developing and open-sourcing PyRIID
+- **Sandia National Laboratories** - SandiaSpecUtils spectrum-format support
 - **cdump** - For the Radiacode Python library and community contributions
 - **Jonathan Morrell** - For the curie nuclear data library
 - **IAEA, NNDC, LBNL, USGS** - For maintaining authoritative gamma-ray and nuclear databases
-- **Open Source Community** - FastAPI, numpy, scipy, Chart.js, TensorFlow, bleak, matplotlib, reportlab contributors
+- **Open Source Community** - FastAPI, numpy, scipy, Chart.js, scikit-learn, bleak, matplotlib, reportlab contributors
 
 ---
 
@@ -596,7 +588,7 @@ pip install -r requirements.txt
 This project is provided under **Apache License 2.0**. See [LICENSE](LICENSE) for details.
 
 **Third-Party Licenses:**
-- PyRIID: Apache 2.0
+- scikit-learn: BSD-3-Clause
 - Radiacode SDK: MIT License
 - Curie: BSD 3-Clause
 - All other dependencies: See individual package licenses

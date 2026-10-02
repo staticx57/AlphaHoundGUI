@@ -2,7 +2,7 @@
 
 ## 📘 Overview
 
-This guide covers energy calibration fundamentals, AlphaHound device calibration, and techniques to improve detection accuracy for both PyRIID machine learning and manual peak detection methods.
+This guide covers energy calibration fundamentals, AlphaHound device calibration, and techniques to improve detection accuracy for both the machine-learning identifier and manual peak detection methods.
 
 ---
 
@@ -84,7 +84,7 @@ A 6-hour uranium glass spectrum (190,623 counts) was used to verify calibration:
 
 ---
 
-## 📊 Adding Reference Spectra for PyRIID
+## 📊 Adding Reference Spectra for the ML Model
 
 ### Why Add More Training Spectra?
 
@@ -301,7 +301,7 @@ def get_tolerance(energy_keV, base_resolution=0.10):
 
 ---
 
-## 🎯 Improving PyRIID ML Accuracy
+## 🎯 Improving ML Accuracy
 
 ### Training Parameters
 
@@ -447,7 +447,7 @@ for isotope in isotopes:
 
 - [ ] Adjust energy tolerance for your detector type
 - [ ] Add missing isotope energies to database
-- [ ] Consider adding training spectra for PyRIID
+- [ ] Consider adding labelled spectra to the ML benchmark
 - [ ] Tune peak detection parameters for source strength
 
 ---
@@ -455,7 +455,7 @@ for isotope in isotopes:
 ## 📚 Related Documentation
 
 - [Theory of Operation](THEORY_OF_OPERATION.md) - System architecture
-- [PyRIID Guide](PYRIID_GUIDE.md) - ML integration details
+- [ML Guide](ML_GUIDE.md) - ML identification details
 - [Modularity Guide](MODULARITY_GUIDE.md) - Extending the application
 - [README](README.md) - Quick start guide
 
