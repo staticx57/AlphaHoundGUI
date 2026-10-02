@@ -271,3 +271,46 @@ def test_radiacode_adapter_exposes_device_duration(monkeypatch):
     dev = d.RadiacodeAcquisitionDevice()
     assert dev.get_spectrum() == [(1, 1.0), (2, 2.0), (3, 3.0)]
     assert dev.device_duration_s == 61.5
+
+
+def test_radiacode_logs_device_events_and_flags_alarms(monkeypatch):
+    import radiacode_driver as rd
+
+    class Ev:
+        def __init__(self, name, param=0):
+            self.event = type("E", (), {"name": name})()
+            self.dt = None
+            self.event_param1 = param
+            self.flags = 0
+
+    monkeypatch.setattr(rd, "Event", Ev)
+    batches = [[Ev("DOSE_RATE_ALARM1"), Ev("DOSE_RESET")], [Ev("CHARGE_START")]]
+
+    class Dev:
+        def data_buf(self):
+            return batches.pop(0)
+
+    drv = rd.RadiacodeDevice()
+    drv._device = Dev()
+    drv.get_dose_rate()
+    evs = drv.get_events()
+    assert [(e["name"], e["alarm"]) for e in evs] == [("DOSE_RATE_ALARM1", True), ("DOSE_RESET", False)]
+    drv.get_dose_rate()
+    assert [e["name"] for e in drv.get_events(since_id=2)] == ["CHARGE_START"]
+
+
+def test_radiacode_alarm_limits_passthrough():
+    import radiacode_driver as rd
+
+    class Lim:
+        l1_count_rate, l2_count_rate, count_unit = 1, 2, "cps"
+        l1_dose_rate, l2_dose_rate, l1_dose, l2_dose, dose_unit = 20.0, 40.0, 1.0, 2.0, "R"
+
+    class Dev:
+        def get_alarm_limits(self):
+            return Lim()
+
+    drv = rd.RadiacodeDevice()
+    assert drv.get_alarm_limits() is None
+    drv._device = Dev()
+    assert drv.get_alarm_limits()["l2_dose_rate"] == 40.0

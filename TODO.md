@@ -20,8 +20,8 @@ Last push: `3a8aa0d`. **Uncommitted** (all tests pass: 159 backend, 23 UI smoke,
 - Untracked user data (not committed): `backend/data/acquisitions/spectrum_2026-10-02_{09-53-28,11-12-13,11-20-16}.n42` (RC-110 + Takumar lens; 09-53-28 carries the old wrong AlphaHound label).
 Open items:
 - [ ] Verify RC-110 end to end after a fresh connect: Dose row shows "(session)" total; compare with the device screen (device DS_uR register and RareData are not served by firmware 4.14 over BLE: see `/radiacode/diagnostics/dose-sources`).
-- [ ] Restore Radiacode UI state on page refresh while the server is still connected (AlphaHound has `checkDeviceStatus`; Radiacode does not).
-- [ ] Real alarm events (dose-rate/dose thresholds) from `data_buf` `Event` records are not shown; alarm limits readable via `get_alarm_limits()` (device: dose-rate alarm 40 uR/h).
+- [x] Restore Radiacode UI state on page refresh while the server is still connected (`checkRadiacodeStatus`, ui_smoke section H).
+- [x] Device alarm events: driver logs `Event` records; `GET /radiacode/events?since_id=` and `/radiacode/alarm-limits`; UI toasts new alarms. Not yet verified against a real alarm on the RC-110 (lower the dose-rate limit or expose to a source to trigger one).
 - [ ] PyRIID / AI Identify: not installed; PyRIID pins numpy 1.26 / scipy 1.13 / TF 2.16 vs numpy 2.2 here: needs a separate Python environment.
 - [ ] Tooling notes: servers are restarted with `powershell -File $TEMP/restart.ps1`-style (kill port 3200, start `python main.py` in backend); a restart drops the Radiacode BLE link. Browser tests: `python backend/tests/ui_smoke.py`, `ui_theme_sweep.py` (set PYTHONIOENCODING=utf-8 on Windows); real-spectrum benchmark: `python backend/tests/real_benchmark.py`.
 ### Pending Manual Verification (needs local browser / Radiacode hardware)

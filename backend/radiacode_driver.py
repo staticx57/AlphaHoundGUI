@@ -51,6 +51,10 @@ try:
         from radiacode.types import VSFR
     except ImportError:
         VSFR = None
+    try:
+        from radiacode.types import Event
+    except ImportError:
+        Event = None
     HAS_RADIACODE = True
 except ImportError:
     HAS_RADIACODE = False
@@ -59,6 +63,7 @@ except ImportError:
     RealTimeData = None
     RareData = None
     VSFR = None
+    Event = None
     Spectrum = None
     DisplayDirection = None
     CTRL = None
@@ -132,6 +137,8 @@ class RadiacodeDevice:
         self._last_rare_duration_s: Optional[float] = None  # RareData.duration (s since dose reset)
         self._last_rare_time: Optional[float] = None
         self._record_type_counts: Dict[str, int] = {}  # data_buf record types seen since connect
+        self._events: List[Dict[str, Any]] = []  # device Event records seen since connect (bounded)
+        self._event_seq = 0
         self._session_reset()
         self._last_error: Optional[str] = None
         self._connection_type: str = ""  # "USB", "BLE", or "Bluetooth"
@@ -330,6 +337,45 @@ class RadiacodeDevice:
     DOSE_RATE_CACHE_S = 10.0
     DOSE_SCALE = 10000.0  # library raw units -> uSv (dose) and uSv/h (dose rate)
 
+    MAX_EVENTS = 200
+    ALARM_EVENT_PREFIXES = ("DOSE_RATE_ALARM", "DOSE_ALARM", "COUNT_RATE_ALARM", "DOSE_RATE_OFFSCALE",
+                            "DOSE_OFFSCALE", "COUNT_RATE_OFFSCALE", "BATTERY_EMPTY_ALARM",
+                            "LOW_BATTERY_SHUTOWN", "TEMPERATURE_TOO_")
+
+    def _log_event(self, record) -> None:
+        """Remember a device Event record (caller holds the lock)."""
+        ev = getattr(record, "event", None)
+        name = getattr(ev, "name", None) or str(ev)
+        dt = getattr(record, "dt", None)
+        self._event_seq += 1
+        self._events.append({
+            "id": self._event_seq,
+            "name": name,
+            "alarm": name.startswith(self.ALARM_EVENT_PREFIXES),
+            "time": dt.isoformat() if hasattr(dt, "isoformat") else None,
+            "param": getattr(record, "event_param1", None),
+        })
+        del self._events[:-self.MAX_EVENTS]
+
+    def get_events(self, since_id: int = 0) -> List[Dict[str, Any]]:
+        """Device events (alarms, power, dose reset...) with id > since_id."""
+        with self._lock:
+            return [e for e in self._events if e["id"] > since_id]
+
+    def get_alarm_limits(self) -> Optional[Dict[str, Any]]:
+        """The device's alarm thresholds (units as configured on the device), or None."""
+        if not self._device:
+            return None
+        with self._lock:
+            try:
+                lim = self._device.get_alarm_limits()
+                return {k: getattr(lim, k) for k in (
+                    "l1_count_rate", "l2_count_rate", "count_unit",
+                    "l1_dose_rate", "l2_dose_rate", "l1_dose", "l2_dose", "dose_unit")}
+            except Exception as e:
+                self._last_error = f"Failed to read alarm limits: {e}"
+                return None
+
     def get_dose_rate(self) -> Optional[float]:
         """
         Get current dose rate in μSv/h.
@@ -351,6 +397,8 @@ class RadiacodeDevice:
                     self._record_type_counts[name] = self._record_type_counts.get(name, 0) + 1
                     if RealTimeData and isinstance(record, RealTimeData):
                         newest = record
+                    elif Event and isinstance(record, Event):
+                        self._log_event(record)
                     elif RareData and isinstance(record, RareData):
                         # Periodic record carrying the device's cumulative dose counter
                         self._last_rare_dose_raw = float(record.dose)

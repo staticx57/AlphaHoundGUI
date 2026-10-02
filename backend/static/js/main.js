@@ -147,6 +147,7 @@ async function pollRadiacodeDose() {
             }
         }
         pollRadiacodeDose._notConnectedCount = 0;
+        await pollRadiacodeEvents();
     } catch (err) {
         // Don't spam errors - just log once
         if (!pollRadiacodeDose._hasError) {
@@ -185,6 +186,24 @@ function showRadiacodeDisconnectedUI() {
     if (doseEl) doseEl.textContent = '--';
     const dropZone = document.getElementById('drop-zone');
     if (dropZone) dropZone.style.display = '';
+}
+
+/** Toasts new device alarm events (dose-rate / dose / count-rate thresholds, battery, temperature). */
+async function pollRadiacodeEvents() {
+    try {
+        const { events } = await api.getRadiacodeEvents(pollRadiacodeEvents._lastId || 0);
+        const first = pollRadiacodeEvents._lastId === undefined;
+        for (const ev of events) {
+            pollRadiacodeEvents._lastId = Math.max(pollRadiacodeEvents._lastId || 0, ev.id);
+            // Events logged before this page loaded are history: do not replay them as toasts.
+            if (ev.alarm && !first) {
+                showToast(`Radiacode alarm: ${ev.name.replace(/_/g, ' ').toLowerCase()}`, 'error');
+            }
+        }
+        if (first) pollRadiacodeEvents._lastId = pollRadiacodeEvents._lastId || 0;
+    } catch (err) {
+        // events are optional; never break dose polling
+    }
 }
 
 function handleRadiacodeLost() {
@@ -561,6 +580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await refreshPorts();
     await checkDeviceStatus();
+    await checkRadiacodeStatus();
     // Duplicate check removed
     setupEventListeners();
     // Decay Tool Logic Inlined
@@ -2555,6 +2575,46 @@ async function checkDeviceStatus() {
         }
     } catch (err) {
         console.error(err);
+    }
+}
+
+/**
+ * Restores the Radiacode UI after a page refresh while the server is still connected.
+ * Mirrors the post-connect setup in the Connect handler, without toasts or the init delay.
+ * @returns {Promise<void>}
+ */
+async function checkRadiacodeStatus() {
+    try {
+        const status = await api.getRadiacodeStatus();
+        if (!status.connected) return;
+        const connectedPanel = document.getElementById('radiacode-connected');
+        if (connectedPanel) connectedPanel.style.display = 'grid';
+        const modelSpan = document.getElementById('rc-device-model');
+        if (modelSpan && status.device_info) {
+            modelSpan.textContent = status.device_info.model || 'Radiacode';
+        }
+        const connectBtn = document.getElementById('btn-connect-radiacode');
+        if (connectBtn) {
+            connectBtn.textContent = 'Connected';
+            connectBtn.style.display = 'none';
+        }
+        const disconnectBtn = document.getElementById('btn-disconnect-device');
+        if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
+        const dropZone = document.getElementById('drop-zone');
+        if (dropZone) dropZone.style.display = 'none';
+        const rcChartCanvas = document.getElementById('rcDoseRateChart');
+        if (rcChartCanvas && !rcDoseChart) {
+            rcDoseChart = new DoseRateChart(rcChartCanvas, {
+                label: 'Dose Rate',
+                colorVar: '--secondary-color',
+                maxPoints: 60
+            });
+        }
+        ui.setDeviceConnected(true);
+        updateDeviceUI('radiacode');
+        startRadiacodeDosePolling();
+    } catch (err) {
+        console.error('[Radiacode] Status restore error:', err);
     }
 }
 

@@ -346,6 +346,16 @@ export class AlphaHoundAPI {
     }
 
     /**
+     * Gets device events (alarms etc.) newer than sinceId.
+     * @returns {Promise<{events: Array}>}
+     */
+    async getRadiacodeEvents(sinceId = 0) {
+        const response = await fetch(`/radiacode/events?since_id=${sinceId}`);
+        if (!response.ok) throw new Error('Failed to get events');
+        return await response.json();
+    }
+
+    /**
      * Gets current dose rate from Radiacode.
      * @returns {Promise<{dose_rate_uSv_h: number}>}
      * @throws {Error} If device not connected

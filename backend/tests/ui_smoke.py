@@ -165,6 +165,25 @@ with sync_playwright() as p:
     check("G lost connection (server says 'not connected') resets the UI by itself",
           pg.inner_text("#btn-connect-radiacode") == "Connect" and pg.inner_text("#rc-dose-display") == "--")
     ctx_g.close()
+    # H. Page refresh while the server is still connected to a Radiacode restores the UI
+    ctx_h = browser.new_context(viewport={"width": 1400, "height": 1000})
+    ph = ctx_h.new_page()
+    ph.route("**/radiacode/status", lambda route, request: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"connected": True, "available": True, "device_info": {"model": "RadiaCode-110"}, "last_error": None})))
+    ph.route("**/radiacode/dose", lambda route, request: route.fulfill(
+        status=200, content_type="application/json", body=_json.dumps({"dose_rate_uSv_h": 0.12})))
+    ph.route("**/radiacode/info/extended", lambda route, request: route.fulfill(
+        status=200, content_type="application/json", body="{}"))
+    ph.goto(URL, wait_until="networkidle")
+    ph.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
+    check("H refresh restores connected state", ph.inner_text("#device-conn-label") == "Connected")
+    ph.click("#tab-radiacode")
+    check("H refresh shows Disconnect and hides Connect",
+          ph.is_visible("#btn-disconnect-device") is True and not ph.is_visible("#btn-connect-radiacode"))
+    ph.wait_for_function("document.getElementById('rc-dose-display').textContent !== '--'", timeout=8000)
+    check("H refresh resumes dose polling", ph.inner_text("#rc-dose-display") != "--")
+    ctx_h.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

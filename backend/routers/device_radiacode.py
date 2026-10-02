@@ -469,6 +469,25 @@ ACCUMULATED_ANALYZED_NOTE = (
 )
 
 
+@router.get("/events")
+def get_radiacode_events(since_id: int = 0):
+    """Device events (alarms, power, dose reset...) recorded since connect, newer than since_id."""
+    if not radiacode_device.is_connected():
+        raise HTTPException(status_code=400, detail="Radiacode not connected")
+    return {"events": radiacode_device.get_events(since_id)}
+
+
+@router.get("/alarm-limits")
+def get_radiacode_alarm_limits():
+    """The device's configured alarm thresholds."""
+    if not radiacode_device.is_connected():
+        raise HTTPException(status_code=400, detail="Radiacode not connected")
+    limits = radiacode_device.get_alarm_limits()
+    if limits is None:
+        raise HTTPException(status_code=500, detail=radiacode_device.get_last_error() or "Alarm limits unavailable")
+    return limits
+
+
 @router.get("/diagnostics/dose-sources")
 def dose_source_diagnostics():
     """Which dose sources this unit actually provides: register reads and data_buf record types."""
