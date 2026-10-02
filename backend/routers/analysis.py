@@ -212,7 +212,6 @@ async def upload_file(file: UploadFile = File(...)):
         try:
             result = parse_csv_spectrum(content, filename)
             print(f"[CSV Upload] Parsed: {len(result.get('counts', []))} counts, {len(result.get('energies', []))} energies")
-            print(f"[CSV Upload] Parser peaks: {len(result.get('peaks', []))}, isotopes: {len(result.get('isotopes', []))}")
             print(f"[CSV Upload] is_calibrated: {result.get('is_calibrated', False)}")
             
             # Use common analysis pipeline
@@ -224,6 +223,9 @@ async def upload_file(file: UploadFile = File(...)):
                 peak_energies = [p.get('energy', 0) for p in result['peaks'][:5]]
                 print(f"[CSV Upload] First 5 peak energies: {peak_energies}")
             return result
+        except ValueError as e:
+            # Unparseable CSV is a client error, not a server fault
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             print(f"[CSV Upload] Error: {e}")
             import traceback
@@ -1212,7 +1214,7 @@ async def get_gamma_constants():
     Returns dictionary of isotope names to gamma constants (μSv·m²/h per MBq).
     """
     try:
-        from activity_calculator import GAMMA_CONSTANTS
+        from activity_calculator import GAMMA_DOSE_CONSTANTS as GAMMA_CONSTANTS
         
         return {
             "constants": GAMMA_CONSTANTS,

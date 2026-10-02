@@ -1,7 +1,5 @@
 import os
 import tempfile
-from peak_detection import detect_peaks
-from isotope_database import identify_isotopes
 
 # Try to import becquerel
 try:
@@ -146,12 +144,6 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
         if all(abs(d - 1.0) < 0.01 for d in diffs) and energies[0] == 0:
              is_calibrated = False
 
-    # Detect peaks
-    peaks = detect_peaks(energies, counts)
-    
-    # Identify isotopes
-    isotopes = identify_isotopes(peaks) if peaks else []
-
     # Cleanup temp file
     if os.path.exists(tmp_path):
         try:
@@ -162,8 +154,8 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     return {
         "counts": counts,
         "energies": energies,
-        "peaks": peaks,
-        "isotopes": isotopes,
+        "peaks": [],  # filled by analyze_spectrum_peaks()
+        "isotopes": [],
         "is_calibrated": is_calibrated,
         "metadata": {
             "live_time": live_time,
