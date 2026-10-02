@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## [Session 2026-10-02 PM] - AlphaHound modernization: CPS channels, display replica, remote control
+
+### Added
+- **Gamma / beta / alpha count rates** from the device's `P` command (the manufacturer's AlphaView page uses it): `GET /device/cps`, `cps` in `/device/status` and the dose WebSocket, shown in a new AlphaHound details panel.
+- **Display replica**: the AB+G's 128x128 OLED redrawn in the browser, with its modes (1-7, 9-12) built from the data the serial link carries. Modes 5-7 say what they would need. See `docs/ALPHAHOUND_SERIAL.md`.
+- **AlphaHound details panel**: port, temperature, compensation factor, dose (uRem/h and uSv/h), CPS per channel, dose-log size, spectrum auto-refresh, a read-only command probe (`POST /device/probe`).
+- **Dose log**: one averaged row per second with the gamma/beta/alpha CPS, `GET /device/dose/log(.csv)`, clear with `POST /device/dose/log/clear`, buttons in the panel.
+- **Disconnect button for the AlphaHound** (the only Disconnect button lived in the hidden Radiacode row), and the page notices a connection that disappears (three "not connected" answers).
+- **`backend/tools/devctl.py`**: connect / disconnect / restart / ensure / probe from the command line, for unattended work. Server opt-ins `ALPHAHOUND_AUTOCONNECT_PORT` and `ALPHAHOUND_KEEP_CONNECTED`.
+- Port errors are readable (409 "in use by another program") instead of a bare 500.
+
+### Fixed
+- **Real-time dose spikes**: the device streams its own dose value (~5 per second) and answers `D`/`DA`/`DB` and `P` with values ~10x larger (nSv/h scale). The driver treated every bare number as the dose, so each `DB` reply briefly put a 10x spike in the readout. `DB` is now only a fallback for firmware without the stream.
+- **Dead dose sparkline for the AlphaHound** (the chart was created without a canvas).
+- **Spectrum request that is never answered** stalled all polling for good; it now times out after 10 s.
+- Temperature and compensation factor are fetched once after connecting (the device only reports them with a spectrum).
+
 ## [Session 2026-10-02] - PyRIID removal, ML rework, N42 acquisition info, Radiacode fixes
 
 ### Changed

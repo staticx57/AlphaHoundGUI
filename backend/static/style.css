@@ -2014,3 +2014,97 @@ select.feature-disabled {
     opacity: 1;
     outline: none;
 }
+
+/* ---- AlphaHound details panel + display replica ---- */
+.ah-details-grid {
+    display: grid;
+    grid-template-columns: 276px 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (max-width: 760px) {
+    .ah-details-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ah-screen-canvas {
+    display: block;
+    width: 256px;
+    height: 256px;
+    background: #000;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    image-rendering: pixelated;
+}
+
+.ah-screen-controls,
+.ah-screen-options,
+.ah-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.ah-screen-controls select {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+}
+
+.ah-screen-options label,
+.ah-actions label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.ah-screen-note {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    margin: 0.5rem 0 0;
+    max-width: 256px;
+}
+
+.ah-kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 0.75rem;
+    margin: 0;
+    font-size: 0.8rem;
+}
+
+.ah-kv dt {
+    color: var(--text-secondary);
+}
+
+.ah-kv dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ah-probe {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.ah-probe summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.ah-probe-output {
+    margin: 0.5rem 0 0;
+    padding: 0.5rem;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    min-height: 2.5rem;
+    white-space: pre-wrap;
+}

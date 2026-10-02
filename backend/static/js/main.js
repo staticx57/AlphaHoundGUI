@@ -7,6 +7,7 @@ import { isotopeUI } from './isotopes_ui.js';
 import { n42MetadataEditor } from './n42_editor.js';
 import { estimatorUI } from './estimator_ui.js';
 import { updateDeviceUI, resetDeviceUI } from './device_features.js';
+import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
 
 // Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
 window.chartManager = chartManager;
@@ -21,6 +22,10 @@ let compareMode = false;
 let backgroundData = null; // New background state
 let doseChart = null; // Live dose rate chart instance
 let rcDoseChart = null; // Radiacode dose rate chart instance
+let deviceScreen = null; // AlphaHound display replica
+let ahDetailsInterval = null; // AlphaHound details refresh timer
+let ahAutoRefreshTimer = null; // AlphaHound spectrum auto-refresh timer
+let ahAutoRefreshBusy = false;
 let lastCheckpointTime = 0; // Checkpoint save tracking
 const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
 let radiacodeDoseInterval = null;  // Radiacode dose rate polling interval
@@ -591,6 +596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkRadiacodeStatus();
     // Duplicate check removed
     setupEventListeners();
+    setupAlphaHoundPanelListeners();
     // Decay Tool Logic Inlined
     const decayModal = document.getElementById('decay-modal');
     if (decayModal && document.getElementById('btn-decay-tool')) {
@@ -1856,6 +1862,7 @@ if (btnDisplayNext) {
     btnDisplayNext.addEventListener('click', async () => {
         try {
             await fetch('/device/display/next', { method: 'POST' });
+            if (deviceScreen) deviceScreen.step(1);
         } catch (e) {
             console.error('Display next error:', e);
         }
@@ -1866,6 +1873,7 @@ if (btnDisplayPrev) {
     btnDisplayPrev.addEventListener('click', async () => {
         try {
             await fetch('/device/display/prev', { method: 'POST' });
+            if (deviceScreen) deviceScreen.step(-1);
         } catch (e) {
             console.error('Display prev error:', e);
         }
@@ -2505,13 +2513,7 @@ async function connectDevice() {
     try {
         await api.connectDevice(port);
         ui.setDeviceConnected(true);
-        api.setupDoseWebSocket(
-            (rate) => {
-                ui.updateDoseDisplay(rate);
-                if (doseChart) doseChart.update(rate);
-            },
-            (status) => ui.updateConnectionStatus(status)
-        );
+        startAlphaHoundMonitoring();
 
         // Update UI for AlphaHound device capabilities
         updateDeviceUI('alphahound');
@@ -2527,16 +2529,210 @@ async function connectDeviceTop() {
     try {
         await api.connectDevice(port);
         ui.setDeviceConnected(true);
-        api.setupDoseWebSocket(
-            (rate) => {
-                ui.updateDoseDisplay(rate);
-                if (doseChart) doseChart.update(rate);
-            },
-            (status) => ui.updateConnectionStatus(status)
-        );
+        startAlphaHoundMonitoring();
     } catch (err) {
         alert(err.message);
     }
+}
+
+// ============================================================
+// AlphaHound: live dose sparkline, per-channel CPS, details panel, display replica
+// ============================================================
+
+const ahSet = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+};
+const fmtCps = (v) => (v === null || v === undefined || Number.isNaN(v))
+    ? '--' : `${v >= 1000 ? Math.round(v) : v.toFixed(2)} cps`;
+const fmtDoseText = (uRem) => (uRem === null || uRem === undefined)
+    ? '--' : `${uRem.toFixed(2)} \u00b5Rem/h (${(uRem * 0.01).toFixed(3)} \u00b5Sv/h)`;
+let ahDetailsFailures = 0;
+
+/** The live-dose sparkline canvas is shared with the Radiacode: (re)create its chart for the AlphaHound. */
+function ensureDoseSparkline() {
+    const canvas = document.getElementById('rcDoseRateChart');
+    if (!canvas) return;
+    if (rcDoseChart) {
+        rcDoseChart.destroy();
+        rcDoseChart = null;
+    }
+    canvas.offsetHeight;  // force layout so the canvas has dimensions
+    rcDoseChart = new DoseRateChart(canvas, { label: 'Dose Rate', colorVar: '--secondary-color', maxPoints: 60 });
+}
+
+/** Create the display replica once (the canvas lives in the AlphaHound details panel). */
+function ensureDeviceScreen() {
+    if (deviceScreen) return deviceScreen;
+    const canvas = document.getElementById('ah-screen');
+    if (!canvas) return null;
+    deviceScreen = new DeviceScreen(canvas, {
+        unit: document.getElementById('ah-screen-dose-unit')?.value,
+        rateUnit: document.getElementById('ah-screen-rate-unit')?.value,
+    });
+    const modeSelect = document.getElementById('ah-screen-mode');
+    if (modeSelect) {
+        modeSelect.innerHTML = SCREEN_MODES.map((m) => `<option value="${m.id}">Mode ${m.id}: ${m.name}</option>`).join('');
+        modeSelect.value = String(deviceScreen.mode.id);
+        modeSelect.addEventListener('change', () => deviceScreen.setMode(modeSelect.value));
+        deviceScreen.onModeChange = (m) => { modeSelect.value = String(m.id); };
+    }
+    document.getElementById('ah-screen-dose-unit')?.addEventListener('change', (e) => deviceScreen.setUnit(e.target.value));
+    document.getElementById('ah-screen-rate-unit')?.addEventListener('change', (e) => deviceScreen.setRateUnit(e.target.value));
+    // The arrows press the same buttons as the existing display controls: E/Q go to the device and the replica steps
+    document.getElementById('btn-screen-prev')?.addEventListener('click', () => document.getElementById('btn-display-prev')?.click());
+    document.getElementById('btn-screen-next')?.addEventListener('click', () => document.getElementById('btn-display-next')?.click());
+    deviceScreen.start();
+    return deviceScreen;
+}
+
+function onAlphaHoundCps(cps) {
+    if (!cps) {
+        ['gamma', 'beta', 'alpha', 'total'].forEach((k) => ahSet(`ah-cps-${k}`, '--'));
+        return;
+    }
+    ahSet('ah-cps-gamma', fmtCps(cps.gamma));
+    ahSet('ah-cps-beta', fmtCps(cps.beta));
+    ahSet('ah-cps-alpha', fmtCps(cps.alpha));
+    ahSet('ah-cps-total', fmtCps(cps.total));
+    if (deviceScreen) deviceScreen.setReadings({ cps });
+}
+
+/** Start everything that follows an AlphaHound connection (also used when a refresh restores it). */
+function startAlphaHoundMonitoring() {
+    ensureDoseSparkline();
+    ensureDeviceScreen();
+    if (deviceScreen) deviceScreen.setConnected(true);
+    api.setupDoseWebSocket(
+        (rate) => {
+            ui.updateDoseDisplay(rate);
+            if (rcDoseChart) rcDoseChart.update(rate);
+            if (doseChart) doseChart.update(rate);
+            if (deviceScreen) deviceScreen.setReadings({ dose: rate });
+            ahSet('ah-dose', fmtDoseText(rate));
+        },
+        (status) => ui.updateConnectionStatus(status),
+        (cps) => onAlphaHoundCps(cps)
+    );
+    startAlphaHoundDetails();
+}
+
+async function refreshAlphaHoundDetails() {
+    try {
+        const d = await api.getDeviceDetails();
+        ahDetailsFailures = 0;
+        ahSet('ah-port', d.port ? `${d.port} @ ${d.baudrate}` : '--');
+        ahSet('ah-temp', d.temperature != null ? `${d.temperature.toFixed(1)} \u00b0C` : '--');
+        ahSet('ah-comp', d.comp_factor != null ? d.comp_factor.toFixed(4) : '--');
+        ahSet('ah-dose', fmtDoseText(d.dose_rate_uRem_h));
+        ahSet('ah-log-count', `${d.dose_log_entries} readings`);
+        if (d.temperature != null) ui.updateTemperature(d.temperature);
+    } catch (err) {
+        // 400 = the server says the device is gone (unplugged, server restarted): stop pretending after 3 in a row
+        if (err.status === 400 && ++ahDetailsFailures >= 3) handleAlphaHoundLost();
+    }
+}
+
+function handleAlphaHoundLost() {
+    ahDetailsFailures = 0;
+    stopAlphaHoundDetails();
+    api.stopDoseMonitoring();
+    ui.setDeviceConnected(false);
+    resetDeviceUI();
+    ui.updateConnectionStatus('disconnected');
+    showToast('AlphaHound connection lost. Reconnect to continue.', 'warning');
+}
+
+function startAlphaHoundDetails() {
+    ahDetailsFailures = 0;
+    refreshAlphaHoundDetails();
+    if (!ahDetailsInterval) ahDetailsInterval = setInterval(refreshAlphaHoundDetails, 5000);
+}
+
+function stopAlphaHoundDetails() {
+    if (ahDetailsInterval) {
+        clearInterval(ahDetailsInterval);
+        ahDetailsInterval = null;
+    }
+    stopAhAutoRefresh();
+    const auto = document.getElementById('ah-auto-refresh');
+    if (auto) auto.checked = false;
+    if (deviceScreen) deviceScreen.setConnected(false);
+    ['ah-port', 'ah-temp', 'ah-comp', 'ah-dose', 'ah-cps-gamma', 'ah-cps-beta', 'ah-cps-alpha', 'ah-cps-total',
+        'ah-log-count'].forEach((id) => ahSet(id, '--'));
+}
+
+// Auto-refresh of the cumulative spectrum (the manufacturer's AlphaView and the original driver GUI both offer it)
+function stopAhAutoRefresh() {
+    if (ahAutoRefreshTimer) {
+        clearInterval(ahAutoRefreshTimer);
+        ahAutoRefreshTimer = null;
+    }
+}
+
+function startAhAutoRefresh() {
+    stopAhAutoRefresh();
+    const seconds = Math.min(600, Math.max(5, parseInt(document.getElementById('ah-auto-interval')?.value, 10) || 10));
+    ahAutoRefreshTimer = setInterval(ahAutoRefreshTick, seconds * 1000);
+    ahAutoRefreshTick();
+}
+
+async function ahAutoRefreshTick() {
+    if (ahAutoRefreshBusy || isAcquiring || document.hidden) return;
+    ahAutoRefreshBusy = true;
+    try {
+        // A server-managed acquisition polls the device itself: never compete with it for the serial port
+        const status = await api.getAcquisitionStatus().catch(() => null);
+        if (status && status.is_active) return;
+        await getCurrentSpectrum({ quiet: true });
+    } finally {
+        ahAutoRefreshBusy = false;
+    }
+}
+
+async function runAhProbe() {
+    const cmd = document.getElementById('ah-probe-cmd').value;
+    const btn = document.getElementById('btn-probe');
+    const out = document.getElementById('ah-probe-output');
+    btn.disabled = true;
+    out.textContent = `> ${cmd} ...`;
+    try {
+        const r = await api.probeDevice(cmd);
+        out.textContent = `> ${cmd}\n` + (r.lines.length ? r.lines.join('\n') : '(no reply)');
+    } catch (err) {
+        out.textContent = `Error: ${err.message}`;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function setupAlphaHoundPanelListeners() {
+    document.getElementById('btn-disconnect-alphahound')?.addEventListener('click', disconnectDevice);
+    document.getElementById('btn-dose-csv')?.addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = '/device/dose/log.csv';
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    });
+    document.getElementById('btn-dose-clear')?.addEventListener('click', async () => {
+        if (!confirm('Clear the recorded dose-rate history?')) return;
+        try {
+            const r = await api.clearDoseLog();
+            showToast(`Dose log cleared (${r.cleared} readings)`, 'success');
+            refreshAlphaHoundDetails();
+        } catch (err) {
+            showToast(err.message || 'Failed to clear dose log', 'error');
+        }
+    });
+    document.getElementById('btn-probe')?.addEventListener('click', runAhProbe);
+    document.getElementById('ah-auto-refresh')?.addEventListener('change', (e) => {
+        if (e.target.checked) startAhAutoRefresh(); else stopAhAutoRefresh();
+    });
+    document.getElementById('ah-auto-interval')?.addEventListener('change', () => {
+        if (document.getElementById('ah-auto-refresh')?.checked) startAhAutoRefresh();
+    });
 }
 
 /**
@@ -2552,6 +2748,7 @@ async function disconnectDevice() {
 
         // Reset device feature UI
         resetDeviceUI();
+        stopAlphaHoundDetails();
     } catch (err) {
         console.error(err);
     }
@@ -2572,13 +2769,7 @@ async function checkDeviceStatus() {
             if (status.temperature) {
                 ui.updateTemperature(status.temperature);
             }
-            api.setupDoseWebSocket(
-                (rate) => {
-                    ui.updateDoseDisplay(rate);
-                    if (doseChart) doseChart.update(rate);
-                },
-                (status) => ui.updateConnectionStatus(status)
-            );
+            startAlphaHoundMonitoring();
         } else {
             ui.setDeviceConnected(false);
         }
@@ -2782,13 +2973,16 @@ function showServerManagedUI() {
  * Useful for checking what's accumulated on the device or resuming after browser disconnect.
  * @returns {Promise<void>}
  */
-async function getCurrentSpectrum() {
+async function getCurrentSpectrum(opts = {}) {
+    // quiet: used by the AlphaHound auto-refresh, which must not toast every few seconds
+    const quiet = !!opts && opts.quiet === true;
     try {
-        showToast('Fetching current spectrum from device...', 'info');
+        if (!quiet) showToast('Fetching current spectrum from device...', 'info');
 
         // Use unified API wrapper
         const data = await api.getCurrentSpectrumUnified();
         currentData = data;
+        if (deviceScreen && data.counts) deviceScreen.setSpectrum(data.counts, data.energies);
 
         // Show dashboard if hidden
         document.getElementById('drop-zone').style.display = 'none';
@@ -2801,12 +2995,14 @@ async function getCurrentSpectrum() {
             chartManager.showScrubber(data.energies, data.counts);
         }
 
-        showToast('Current spectrum loaded (cumulative from device)', 'success');
-        (data.warnings || []).forEach(w => showToast(w, 'warning'));
+        if (!quiet) {
+            showToast('Current spectrum loaded (cumulative from device)', 'success');
+            (data.warnings || []).forEach(w => showToast(w, 'warning'));
+        }
 
     } catch (err) {
         console.error('Get current spectrum error:', err);
-        showToast(`Error: ${err.message}`, 'warning');
+        if (!quiet) showToast(`Error: ${err.message}`, 'warning');
     }
 }
 

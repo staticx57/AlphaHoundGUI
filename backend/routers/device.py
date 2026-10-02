@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, WebSocket
+from fastapi import APIRouter, HTTPException, WebSocket, Response
 from .analysis import sanitize_for_json
 from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
@@ -53,7 +53,9 @@ async def connect_device(request: ConnectRequest):
     if success:
         return {"status": "connected", "port": port}
     else:
-        raise HTTPException(status_code=500, detail="Failed to connect to device")
+        detail = alphahound_device.get_last_error() or "Failed to connect to device"
+        # 409: the port exists but something else holds it; anything else stays a plain failure
+        raise HTTPException(status_code=409 if alphahound_device.port_busy else 500, detail=detail)
 
 @router.post("/disconnect")
 async def disconnect_device():
@@ -67,8 +69,93 @@ async def device_status():
         "connected": is_connected,
         "dose_rate": alphahound_device.get_dose_rate() if is_connected else None,
         "temperature": alphahound_device.get_temperature() if is_connected else None,
-        "comp_factor": alphahound_device.get_comp_factor() if is_connected else None
+        "comp_factor": alphahound_device.get_comp_factor() if is_connected else None,
+        "cps": alphahound_device.get_cps() if is_connected else None
     }
+
+
+@router.get("/cps")
+async def get_cps():
+    """Latest gamma / beta / alpha count rates (counts per second) from the device's 'P' reply."""
+    if not alphahound_device.is_connected():
+        raise HTTPException(status_code=400, detail="Device not connected")
+    return {"cps": alphahound_device.get_cps()}
+
+
+@router.get("/details")
+async def device_details():
+    """Everything the device reports about itself over serial, for the details panel."""
+    if not alphahound_device.is_connected():
+        raise HTTPException(status_code=400, detail="Device not connected")
+    dose = alphahound_device.get_dose_rate()
+    return {
+        "model": "AlphaHound",
+        "port": alphahound_device.port,
+        "baudrate": alphahound_device.baudrate,
+        "dose_rate_uRem_h": dose,
+        "dose_rate_uSv_h": dose * UREM_TO_USV if dose is not None else None,
+        "temperature": alphahound_device.get_temperature(),
+        "comp_factor": alphahound_device.get_comp_factor(),
+        "cps": alphahound_device.get_cps(),
+        "cps_polling": alphahound_device.poll_cps,
+        "dose_log_entries": len(alphahound_device.get_dose_log()),
+    }
+
+
+DOSE_LOG_CSV_HEADER = "Timestamp (UTC),Dose Rate (uRem/hr),Dose Rate (uSv/hr),Gamma CPS,Beta CPS,Alpha CPS\n"
+
+
+def _csv_num(v, digits=4):
+    return "" if v is None else f"{v:.{digits}f}".rstrip("0").rstrip(".") if isinstance(v, float) else str(v)
+
+
+@router.get("/dose/log")
+async def get_dose_log(limit: int = 0):
+    """Dose-rate history (uRem/h) with the gamma/beta/alpha CPS seen at the time. limit > 0 keeps the newest N."""
+    log = alphahound_device.get_dose_log()
+    if limit and limit > 0:
+        log = log[-limit:]
+    return {"entries": log, "count": len(log)}
+
+
+@router.get("/dose/log.csv")
+async def download_dose_log():
+    """The dose-rate history as a CSV download."""
+    rows = [DOSE_LOG_CSV_HEADER]
+    for e in alphahound_device.get_dose_log():
+        stamp = datetime.fromtimestamp(e["time"], tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        usv = e["dose_rate"] * UREM_TO_USV
+        rows.append(",".join([stamp, _csv_num(e["dose_rate"], 2), _csv_num(usv, 4),
+                              _csv_num(e["gamma"], 2), _csv_num(e["beta"], 2), _csv_num(e["alpha"], 2)]) + "\n")
+    filename = f"alphahound_dose_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv"
+    return Response(content="".join(rows), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.post("/dose/log/clear")
+async def clear_dose_log():
+    return {"status": "ok", "cleared": alphahound_device.clear_dose_log()}
+
+
+class ProbeRequest(BaseModel):
+    """Read-only device command to send and capture the raw reply of."""
+    command: Literal["D", "DA", "DB", "P"]
+
+
+@router.post("/probe")
+async def probe_command(request: ProbeRequest):
+    """
+    Send D, DA, DB or P and return the raw lines the device answers with (about 1.5 s).
+    Lets you compare the dose variants with the device screen. Other commands are refused: their
+    effect on the device is unknown.
+    """
+    if not alphahound_device.is_connected():
+        raise HTTPException(status_code=400, detail="Device not connected")
+    try:
+        lines = await asyncio.to_thread(alphahound_device.probe, request.command)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"command": request.command, "lines": lines}
 
 @router.get("/dose")
 async def get_dose_rate():

@@ -383,6 +383,7 @@ To access the application from other devices on your network:
 | [Modularity Guide](MODULARITY_GUIDE.md) | How to extend: add devices, isotopes, analysis methods, detector profiles |
 | [Calibration Guide](CALIBRATION_GUIDE.md) | Energy calibration, accuracy improvement, reference energy tables |
 | [ML Guide](ML_GUIDE.md) | AI identification: how the model is trained, classes, benchmark, extension |
+| [AlphaHound serial](docs/ALPHAHOUND_SERIAL.md) | Observed device protocol, display replica, `devctl` remote control |
 | [Radiacode Integration](RADIACODE_INTEGRATION_PLAN.md) | Radiacode device support details and implementation notes |
 | [AlphaHound Commands](docs/ALPHAHOUND_SERIAL_COMMANDS.md) | Serial command reference for AlphaHound device communication |
 | [TODO.md](TODO.md) | Roadmap for future features and open tasks |

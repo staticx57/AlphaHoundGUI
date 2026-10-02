@@ -33,3 +33,4 @@ output/
 # Cloned reference tools (not part of this project)
 external_tools/
 backend/tests/ui_smoke_out/
+backend/data/devctl_state.json

@@ -20,7 +20,8 @@ export class AlphaHoundUI {
             btns: {
                 refresh: document.getElementById('btn-refresh-ports'),
                 connect: document.getElementById('btn-connect-device'),
-                advanced: document.getElementById('btn-advanced')
+                advanced: document.getElementById('btn-advanced'),
+                disconnect: document.getElementById('btn-disconnect-alphahound')
             }
         };
     }
@@ -818,11 +819,13 @@ export class AlphaHoundUI {
             if (this.elements.btns.refresh) this.elements.btns.refresh.style.display = 'none';
             if (this.elements.btns.connect) this.elements.btns.connect.style.display = 'none';
             if (this.elements.btns.advanced) this.elements.btns.advanced.style.display = 'none';
+            if (this.elements.btns.disconnect) this.elements.btns.disconnect.style.display = 'inline-block';
         } else {
             if (this.elements.portSelectParent) this.elements.portSelectParent.style.display = 'flex';
             if (this.elements.btns.refresh) this.elements.btns.refresh.style.display = 'block';
             if (this.elements.btns.connect) this.elements.btns.connect.style.display = 'block';
             if (this.elements.btns.advanced) this.elements.btns.advanced.style.display = 'block';
+            if (this.elements.btns.disconnect) this.elements.btns.disconnect.style.display = 'none';
         }
         // Note: Panel always visible, device_features.js handles greyed/enabled state
     }

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=15">
+    <link rel="stylesheet" href="/static/style.css?v=16">
     <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Chart.js loaded async for performance -->
@@ -107,6 +107,11 @@
                                 </div>
                                 <button id="btn-connect-device" class="btn-primary"
                                     style="padding: 0.5rem 1.5rem; flex-shrink: 0;">Connect</button>
+                                <!-- Disconnect (shown by ui.setDeviceConnected once connected) -->
+                                <button id="btn-disconnect-alphahound"
+                                    style="padding: 0.5rem 1.5rem; background: var(--error-color); color: white; display: none; flex-shrink: 0;">
+                                    Disconnect
+                                </button>
                             </div>
 
                             <!-- Radiacode Connection Row -->
@@ -344,6 +349,90 @@
                     </div>
 
 
+                    <!-- AlphaHound details + display replica (AlphaHound only) -->
+                    <div id="alphahound-details-panel" data-device-feature="alphaDetails"
+                        style="display: none; margin-top: 1rem;">
+                        <details open
+                            style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
+                            <summary
+                                style="cursor: pointer; font-weight: 700; color: var(--text-primary); user-select: none; font-size: 0.85rem;">
+                                AlphaHound Details &amp; Screen
+                            </summary>
+                            <div class="ah-details-grid" style="margin-top: 0.75rem;">
+                                <!-- Display replica -->
+                                <div class="ah-screen-box">
+                                    <canvas id="ah-screen" class="ah-screen-canvas"
+                                        aria-label="Replica of the AlphaHound display"></canvas>
+                                    <div class="ah-screen-controls">
+                                        <button id="btn-screen-prev" class="btn-secondary" title="Previous display mode (also sent to the device)"
+                                            style="padding: 0.25rem 0.6rem;">&lsaquo;</button>
+                                        <select id="ah-screen-mode" title="Display mode shown by the replica"></select>
+                                        <button id="btn-screen-next" class="btn-secondary" title="Next display mode (also sent to the device)"
+                                            style="padding: 0.25rem 0.6rem;">&rsaquo;</button>
+                                    </div>
+                                    <div class="ah-screen-options">
+                                        <label>Dose
+                                            <select id="ah-screen-dose-unit">
+                                                <option value="uRem">&micro;Rem/h</option>
+                                                <option value="uSv">&micro;Sv/h</option>
+                                            </select>
+                                        </label>
+                                        <label>Rate
+                                            <select id="ah-screen-rate-unit">
+                                                <option value="CPS">CPS</option>
+                                                <option value="CPM">CPM</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <p class="ah-screen-note">The device does not report which mode it is showing or its
+                                        button presses: use the arrows (they also press E/Q on the device) or pick the
+                                        mode it is on. Modes 5-7 need data the serial link does not carry.</p>
+                                </div>
+
+                                <!-- Details -->
+                                <div class="ah-details-box">
+                                    <dl class="ah-kv">
+                                        <dt>Port</dt><dd id="ah-port">--</dd>
+                                        <dt>Temperature</dt><dd id="ah-temp">--</dd>
+                                        <dt>Compensation</dt><dd id="ah-comp">--</dd>
+                                        <dt>Dose rate</dt><dd id="ah-dose">--</dd>
+                                        <dt>Gamma</dt><dd id="ah-cps-gamma">--</dd>
+                                        <dt>Beta</dt><dd id="ah-cps-beta">--</dd>
+                                        <dt>Alpha</dt><dd id="ah-cps-alpha">--</dd>
+                                        <dt>Total</dt><dd id="ah-cps-total">--</dd>
+                                        <dt>Dose log</dt><dd id="ah-log-count">--</dd>
+                                    </dl>
+                                    <div class="ah-actions">
+                                        <button id="btn-dose-csv" class="btn-secondary" style="padding: 0.3rem 0.7rem;"
+                                            title="Download the dose-rate history (with gamma/beta/alpha CPS) as CSV">Dose CSV</button>
+                                        <button id="btn-dose-clear" class="btn-secondary" style="padding: 0.3rem 0.7rem;"
+                                            title="Clear the recorded dose-rate history">Clear Dose Log</button>
+                                    </div>
+                                    <div class="ah-actions">
+                                        <label title="Re-download the cumulative gamma spectrum on a timer while idle">
+                                            <input type="checkbox" id="ah-auto-refresh"> Auto-refresh spectrum every
+                                        </label>
+                                        <input type="number" id="ah-auto-interval" value="10" min="5" max="600" step="1"
+                                            style="width: 60px;"> s
+                                    </div>
+                                    <details class="ah-probe">
+                                        <summary>Command probe</summary>
+                                        <div class="ah-actions">
+                                            <select id="ah-probe-cmd" title="Read-only commands only">
+                                                <option value="D">D (dose)</option>
+                                                <option value="DA">DA (dose A)</option>
+                                                <option value="DB">DB (dose B, polled)</option>
+                                                <option value="P">P (gamma/beta/alpha CPS)</option>
+                                            </select>
+                                            <button id="btn-probe" class="btn-secondary" style="padding: 0.3rem 0.7rem;">Send</button>
+                                        </div>
+                                        <pre id="ah-probe-output" class="ah-probe-output">Pick a command and press Send.</pre>
+                                    </details>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
                     <!-- Unified Device Controls (abstracted from device type) -->
                     <div id="unified-device-controls" class="device-panel-grid device-disconnected"
                         style="border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
@@ -454,7 +543,7 @@
                                     <div style="display: flex; flex-direction: column; align-items: flex-end;">
                                         <span id="rc-dose-display"
                                             style="font-size: 1.25rem; font-weight: 800; color: var(--accent-color);">--</span>
-                                        <span id="rc-dose-total" title="Accumulated dose"
+                                        <span id="rc-dose-total" data-device-feature="accumulatedDose" title="Accumulated dose"
                                             style="font-size: 0.7rem; color: var(--text-secondary);">Total --</span>
                                     </div>
                                     <span id="temp-display" data-device-feature="temperature"

@@ -18,10 +18,57 @@ import threading
 import time
 import asyncio
 import traceback
+import math
+from collections import deque
 from typing import Optional, List, Dict, Callable
 
 import logging
 logger = logging.getLogger(__name__)
+
+# Dose/CPS history kept for CSV download (about 27 h at one reading per second)
+DOSE_LOG_MAX = 100_000
+# Non-spectrum lines kept so a command's raw reply can be inspected (probe)
+RAW_LINES_MAX = 300
+# Read-only commands the probe may send. Others (A, B, RA, RB, ...) have unknown effects on the device.
+PROBE_COMMANDS = ("D", "DA", "DB", "P")
+# 'P' reply: CPS:<gamma>,<beta>,<alpha>[,<dose>]  (as used by the manufacturer's AlphaView page)
+CPS_MAX_AGE_S = 5.0
+# Current firmware streams a dose value (about 5 per second, uRem/h scale) on its own, with no polling.
+# Replies to D / DA / DB (and the dose field of 'P') come back about 10x larger (nSv/h), so they must not
+# be mixed into the streamed value. Polling DB is therefore only a fallback for firmware without the
+# stream: it starts after this many seconds without any numeric line.
+STREAM_DETECT_S = 3.0
+STREAM_FRESH_S = 2.0
+# One dose-log row per second (the mean of the readings in that second)
+DOSE_LOG_INTERVAL_S = 1.0
+# A spectrum normally arrives within about a second. If the device never answers, stop waiting after this
+# long: otherwise the "collecting" flag stays set and all dose / CPS polling stops for good.
+SPECTRUM_TIMEOUT_S = 10.0
+
+
+def parse_cps_line(line: str) -> Optional[Dict[str, float]]:
+    """Parse a 'CPS:gamma,beta,alpha[,dose]' line; None if it is not one or is malformed."""
+    if not line.startswith('CPS:'):
+        return None
+    parts = [p.strip() for p in line[4:].split(',')]
+    if len(parts) < 3:
+        return None
+    try:
+        gamma, beta, alpha = (float(p) for p in parts[:3])
+    except ValueError:
+        return None
+    if not all(math.isfinite(v) for v in (gamma, beta, alpha)):
+        return None
+    out = {'gamma': gamma, 'beta': beta, 'alpha': alpha}
+    if len(parts) >= 4:
+        try:
+            dose = float(parts[3])
+            if math.isfinite(dose):
+                out['dose'] = dose
+        except ValueError:
+            pass
+    return out
+
 
 class AlphaHoundDevice:
     """Manager for AlphaHound serial communication"""
@@ -38,6 +85,27 @@ class AlphaHoundDevice:
         self.collecting_spectrum = False
         self.temperature: Optional[float] = None  # Device temperature in °C
         self.comp_factor: Optional[float] = None  # Temperature compensation factor
+
+        # Per-channel count rates from the 'P' command (gamma / beta / alpha, counts per second)
+        self.cps: Optional[Dict[str, float]] = None
+        self.cps_time: float = 0.0
+        self.cps_callback: Optional[Callable] = None
+        self.poll_cps: bool = True
+
+        # Connection diagnostics and history
+        self.last_error: Optional[str] = None
+        self.port_busy: bool = False
+        self.port: Optional[str] = None
+        self.baudrate: Optional[int] = None
+        self._log_lock = threading.Lock()
+        self._last_numeric_time: float = 0.0   # wall clock of the last bare-number (dose) line
+        self._spectrum_requested_at: float = 0.0
+        self._log_sum = 0.0
+        self._log_n = 0
+        self._log_last = 0.0
+        self.dose_log = deque(maxlen=DOSE_LOG_MAX)
+        self._raw_lines = deque(maxlen=RAW_LINES_MAX)
+        self._poll_paused = threading.Event()
         
         # Callbacks for real-time updates
         self.dose_callback: Optional[Callable] = None
@@ -53,14 +121,27 @@ class AlphaHoundDevice:
         """Connect to AlphaHound device"""
         try:
             logger.info(f"[AlphaHound] Connecting to {port}...")
+            self.last_error = None
+            self.port_busy = False
             self.serial_conn = serial.Serial(port, baudrate, timeout=1.0) # Increased timeout for safety
             self.stop_event.clear()
             self.read_thread = threading.Thread(target=self._read_worker, daemon=True)
             self.read_thread.start()
+            self.port = port
+            self.baudrate = baudrate
             logger.info("[AlphaHound] Connected and thread started.")
             return True
         except Exception as e:
             logger.error(f"[AlphaHound] Connection error: {e}")
+            self.serial_conn = None
+            text = str(e)
+            if isinstance(e, PermissionError) or 'PermissionError' in text or 'Access is denied' in text \
+                    or 'Permission denied' in text or 'busy' in text.lower():
+                self.port_busy = True
+                self.last_error = (f"Port {port} is in use by another program (or was only just released). "
+                                   "Close any other program using it and try again in a few seconds.")
+            else:
+                self.last_error = f"Could not open {port}: {text}"
             return False
     
     def disconnect(self):
@@ -74,6 +155,8 @@ class AlphaHoundDevice:
                 pass
         self.serial_conn = None
         self.current_dose = 0.0 # Reset dose to indicate disconnect
+        self.cps = None
+        self.port = None
     
     def is_connected(self) -> bool:
         """Check if device is connected"""
@@ -83,6 +166,7 @@ class AlphaHoundDevice:
         """Request gamma spectrum download from device"""
         self.spectrum = []
         self.collecting_spectrum = True
+        self._spectrum_requested_at = time.time()
         self._write(b'G')
     
     def clear_spectrum(self):
@@ -106,6 +190,70 @@ class AlphaHoundDevice:
         """Get temperature compensation factor (updated when spectrum is requested)"""
         return self.comp_factor
     
+    def get_cps(self, max_age_s: float = CPS_MAX_AGE_S) -> Optional[Dict[str, float]]:
+        """Latest per-channel count rates (gamma/beta/alpha/total CPS, optional dose); None if stale or unseen."""
+        cps = self.cps
+        if not cps:
+            return None
+        age = time.monotonic() - self.cps_time
+        if age > max_age_s:
+            return None
+        return {**cps, 'total': cps['gamma'] + cps['beta'] + cps['alpha'], 'age_s': round(age, 2)}
+
+    def get_last_error(self) -> Optional[str]:
+        return self.last_error
+
+    def get_dose_log(self) -> List[Dict[str, Optional[float]]]:
+        """Dose-rate history: [{time (epoch s), dose_rate (uRem/h), gamma/beta/alpha (cps or None)}, ...]."""
+        with self._log_lock:
+            return list(self.dose_log)
+
+    def clear_dose_log(self) -> int:
+        with self._log_lock:
+            n = len(self.dose_log)
+            self.dose_log.clear()
+            self._log_sum, self._log_n = 0.0, 0
+        return n
+
+    def _log_dose(self, dose: float, now: Optional[float] = None):
+        """Accumulate dose readings and append one row per DOSE_LOG_INTERVAL_S holding their mean."""
+        now = time.time() if now is None else now
+        with self._log_lock:
+            self._log_sum += dose
+            self._log_n += 1
+            if now - self._log_last < DOSE_LOG_INTERVAL_S:
+                return
+            mean = self._log_sum / self._log_n
+            self._log_sum, self._log_n, self._log_last = 0.0, 0, now
+        cps = self.get_cps()
+        row = {'time': now, 'dose_rate': mean,
+               'gamma': cps['gamma'] if cps else None,
+               'beta': cps['beta'] if cps else None,
+               'alpha': cps['alpha'] if cps else None}
+        with self._log_lock:
+            self.dose_log.append(row)
+
+    def probe(self, command: str, wait_s: float = 1.2) -> List[str]:
+        """Send one read-only command (D, DA, DB, P) and return the raw lines the device answers with.
+
+        Dose/CPS polling is paused meanwhile so replies cannot be mistaken for each other.
+        Blocking: call from a worker thread.
+        """
+        if command not in PROBE_COMMANDS:
+            raise ValueError(f"Command {command!r} is not allowed (use one of {', '.join(PROBE_COMMANDS)})")
+        if not self.is_connected():
+            raise RuntimeError("Device not connected")
+        self._poll_paused.set()
+        try:
+            time.sleep(0.4)  # let a reply to an in-flight poll arrive first
+            start = time.monotonic()
+            self._write(command.encode('utf-8'))
+            time.sleep(wait_s)
+            with self._log_lock:
+                return [line for t, line in self._raw_lines if t >= start]
+        finally:
+            self._poll_paused.clear()
+
     def send_command(self, cmd: str):
         """Send a raw command string to the device (e.g., 'E' for display next, 'Q' for display prev)"""
         self._write(cmd.encode('utf-8'))
@@ -140,6 +288,9 @@ class AlphaHoundDevice:
         spectrum_tmp = []
         expecting_spectrum = False
         last_dose_time = 0
+        last_cps_time = 0
+        started = time.time()
+        initial_spectrum_requested = False
         
         logger.info("[AlphaHound] Read thread active")
         
@@ -158,6 +309,22 @@ class AlphaHoundDevice:
                         if not line:
                             continue
                         
+                        if not expecting_spectrum:
+                            with self._log_lock:
+                                self._raw_lines.append((time.monotonic(), line))
+
+                        # Per-channel count rates (reply to 'P')
+                        cps = parse_cps_line(line)
+                        if cps is not None:
+                            self.cps = cps
+                            self.cps_time = time.monotonic()
+                            if self.cps_callback:
+                                try:
+                                    self.cps_callback(self.get_cps())
+                                except Exception as e:
+                                    logger.error(f"[AlphaHound] CPS callback error: {e}")
+                            continue
+
                         # Parse temperature from spectrum metadata
                         if line.startswith('Temp:'):
                             try:
@@ -205,10 +372,15 @@ class AlphaHoundDevice:
                                 # Simple check: is it a float?
                                 if line.replace('.','',1).isdigit():
                                     dose = float(line)
-                                    self.current_dose = dose
-                                    # print(f"[Dose] {dose}") # Debug
-                                    if self.dose_callback:
-                                        self.dose_callback(dose)
+                                    self._last_numeric_time = time.time()
+                                    # While a probe is running, a D/DA/DB reply (nSv/h scale) is among the
+                                    # numbers: leave the dose value alone for that moment
+                                    if not self._poll_paused.is_set():
+                                        self.current_dose = dose
+                                        self._log_dose(dose)
+                                        # print(f"[Dose] {dose}") # Debug
+                                        if self.dose_callback:
+                                            self.dose_callback(dose)
                             except ValueError:
                                 pass
 
@@ -216,9 +388,30 @@ class AlphaHoundDevice:
                 curr = time.time()
                 # Poll dose every 1.0s IF NOT collecting spectrum
                 # Using 'DB' command which matches the device display (discovered via probing)
-                if not self.collecting_spectrum and (curr - last_dose_time >= 1.0):
-                    self._write(b'DB')
-                    last_dose_time = curr
+                if self.collecting_spectrum and curr - self._spectrum_requested_at > SPECTRUM_TIMEOUT_S:
+                    logger.warning("[AlphaHound] Spectrum request timed out; resuming polling")
+                    self.collecting_spectrum = False
+                    expecting_spectrum = False
+
+                if (not initial_spectrum_requested and curr - started >= 1.0
+                        and not self.collecting_spectrum and not self._poll_paused.is_set()):
+                    # Temperature and compensation factor are only reported along with a spectrum, so take
+                    # one right after connecting: the details panel then has them without anyone asking
+                    initial_spectrum_requested = True
+                    self.request_spectrum()
+
+                if not self.collecting_spectrum and not self._poll_paused.is_set():
+                    streaming = (curr - self._last_numeric_time) < STREAM_FRESH_S
+                    # DB is only a fallback for firmware that does not stream the dose by itself
+                    if (not streaming and curr - started >= STREAM_DETECT_S and curr - last_dose_time >= 1.0
+                            and curr - last_cps_time >= 0.5):
+                        self._write(b'DB')
+                        last_dose_time = curr
+                    # 'P' (gamma/beta/alpha CPS) and 'DB' are never written within half a second of each
+                    # other, so the two single-letter commands are not written back to back
+                    elif self.poll_cps and curr - last_cps_time >= 1.0 and curr - last_dose_time >= 0.5:
+                        self._write(b'P')
+                        last_cps_time = curr
                 
                 time.sleep(0.05)
                 

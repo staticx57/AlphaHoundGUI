@@ -34,7 +34,7 @@ def new_page(browser, errors, status_connected=False):
 with sync_playwright() as p:
     browser = p.chromium.launch(channel="chrome", headless=True)
     # The page restores a live Radiacode connection on load, so a real device connected to the server
-    # would leak into every test: mock "disconnected" for all contexts (page-level routes still override).
+    # (or an AlphaHound) would leak into every test: mock "disconnected" for all contexts (page-level routes still override).
     _new_context = browser.new_context
 
     def _isolated_context(*args, **kwargs):
@@ -42,6 +42,9 @@ with sync_playwright() as p:
         ctx.route("**/radiacode/status", lambda route, request: route.fulfill(
             status=200, content_type="application/json",
             body=json.dumps({"connected": False, "available": True, "device_info": None, "last_error": None})))
+        ctx.route("**/device/status", lambda route, request: route.fulfill(
+            status=200, content_type="application/json",
+            body=json.dumps({"connected": False, "dose_rate": None, "temperature": None, "comp_factor": None, "cps": None})))
         return ctx
     browser.new_context = _isolated_context
 
@@ -198,6 +201,131 @@ with sync_playwright() as p:
     check("H total dose is visible without opening Device Settings",
           ph.is_visible("#rc-dose-total") and "Total" in ph.inner_text("#rc-dose-total"), ph.inner_text("#rc-dose-total"))
     ctx_h.close()
+    # I. AlphaHound (mocked): connect, details panel, CPS, sparkline, display replica, probe, disconnect
+    import threading as _threading
+    import time as _time
+    ctx_i = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pi = ctx_i.new_page()
+    errs_i = []
+    pi.on("pageerror", lambda e: errs_i.append(f"pageerror: {e}"))
+    pi.on("console", lambda m: errs_i.append(f"console.error: {m.text}") if m.type == "error" else None)
+    ah = {"connected": False, "disconnect_calls": 0, "next_calls": 0, "details_status": 200}
+
+    def _json_route(pattern, handler):
+        pi.route(pattern, lambda route, request: handler(route, request))
+
+    def _ok(route, body, status=200):
+        route.fulfill(status=status, content_type="application/json", body=_json.dumps(body))
+
+    _json_route("**/device/status", lambda r, q: _ok(r, {"connected": ah["connected"], "dose_rate": 70.0 if ah["connected"] else None,
+                                                         "temperature": 29.5, "comp_factor": 0.95, "cps": None}))
+    _json_route("**/device/ports", lambda r, q: _ok(r, {"ports": [{"device": "COM8", "description": "USB Serial Device (COM8)"}]}))
+
+    def _connect(r, q):
+        ah["connected"] = True
+        _ok(r, {"status": "connected", "port": "COM8"})
+    _json_route("**/device/connect", _connect)
+
+    def _disconnect(r, q):
+        ah["connected"] = False
+        ah["disconnect_calls"] += 1
+        _ok(r, {"status": "disconnected"})
+    _json_route("**/device/disconnect", _disconnect)
+
+    def _details(r, q):
+        if ah["details_status"] != 200:
+            _ok(r, {"detail": "Device not connected"}, ah["details_status"])
+        else:
+            _ok(r, {"model": "AlphaHound", "port": "COM8", "baudrate": 115200, "dose_rate_uRem_h": 70.0, "dose_rate_uSv_h": 0.7,
+                    "temperature": 29.5, "comp_factor": 0.95067, "cps": None, "cps_polling": True, "dose_log_entries": 42})
+    _json_route("**/device/details", _details)
+
+    def _next(r, q):
+        ah["next_calls"] += 1
+        _ok(r, {"status": "ok", "action": "display_next"})
+    _json_route("**/device/display/next", _next)
+    _json_route("**/device/probe", lambda r, q: _ok(r, {"command": "P", "lines": ["CPS:270.25,162.53,6.87,770.13"]}))
+    _json_route("**/device/dose/log/clear", lambda r, q: _ok(r, {"status": "ok", "cleared": 42}))
+
+    def _ws(w):
+        def run():
+            n = 0
+            while True:
+                try:
+                    w.send(_json.dumps({"dose_rate": 60.0 + (n % 10),
+                                        "cps": {"gamma": 270.0, "beta": 150.5, "alpha": 6.25, "dose": 770.0, "total": 426.75, "age_s": 0.2}}))
+                    n += 1
+                    _time.sleep(0.3)
+                except Exception:
+                    return
+        _threading.Thread(target=run, daemon=True).start()
+    pi.route_web_socket("**/ws/dose", _ws)
+    pi.once("dialog", lambda d: d.accept())
+
+    pi.goto(URL, wait_until="networkidle")
+    check("I before connecting the AlphaHound panels are hidden",
+          not pi.is_visible("#alphahound-details-panel") and not pi.is_visible("#btn-disconnect-alphahound"))
+    pi.select_option("#port-select", "COM8")
+    pi.click("#btn-connect-device")
+    pi.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
+    pi.wait_for_function("document.getElementById('ah-cps-gamma').textContent.includes('cps')", timeout=8000)
+    check("I a Disconnect button is visible once connected", pi.is_visible("#btn-disconnect-alphahound"))
+    check("I the details panel is visible", pi.is_visible("#alphahound-details-panel"))
+    check("I port and log size come from /device/details",
+          "COM8" in pi.inner_text("#ah-port") and "42" in pi.inner_text("#ah-log-count"), pi.inner_text("#ah-port"))
+    check("I gamma/beta/alpha/total CPS are shown",
+          all(x in pi.inner_text(f"#ah-cps-{k}") for k, x in (("gamma", "270"), ("beta", "150.5"), ("alpha", "6.25"), ("total", "426"))),
+          pi.inner_text("#ah-cps-total"))
+    check("I real-time dose is shown", "\u00b5Rem" in pi.inner_text("#rc-dose-display") and pi.inner_text("#rc-dose-display")[:2].strip().isdigit(),
+          pi.inner_text("#rc-dose-display"))
+    spark_js = """() => { const c = document.getElementById('rcDoseRateChart'); const ch = window.Chart && Chart.getChart(c);
+                          return ch ? ch.data.datasets[0].data.filter(v => v !== null).length : -1 }"""
+    pi.wait_for_function(f"({spark_js})() >= 3", timeout=6000)
+    spark_points = pi.evaluate(spark_js)
+    check("I the live dose sparkline is drawing for the AlphaHound", spark_points >= 2, str(spark_points))
+    check("I the display replica offers all 11 modes", pi.evaluate("document.getElementById('ah-screen-mode').options.length") == 11)
+    pi.select_option("#ah-screen-mode", "4")
+    pi.wait_for_timeout(600)
+    lit = pi.evaluate("""() => { const c = document.getElementById('ah-screen'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+                                  let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n }""")
+    check("I the replica draws the ABY split screen", lit > 300, str(lit))
+    pi.click("#btn-screen-next")
+    pi.wait_for_function("document.getElementById('ah-screen-mode').value === '5'", timeout=4000)
+    check("I the replica's arrow presses the device's display button and steps the mode", ah["next_calls"] == 1)
+    pi.click(".ah-probe summary")
+    pi.select_option("#ah-probe-cmd", "P")
+    pi.click("#btn-probe")
+    pi.wait_for_function("document.getElementById('ah-probe-output').textContent.includes('CPS:')", timeout=4000)
+    check("I probe shows the raw reply", "270.25" in pi.inner_text("#ah-probe-output"))
+    pi.click("#btn-dose-clear")
+    pi.wait_for_function("document.querySelector('.toast, #toast-container')?.textContent?.includes('cleared') || true", timeout=2000)
+    pi.click("#btn-disconnect-alphahound")
+    pi.wait_for_function("document.getElementById('device-conn-label').textContent === 'Not connected'", timeout=8000)
+    check("I Disconnect calls the server and restores the connect controls",
+          ah["disconnect_calls"] == 1 and pi.is_visible("#btn-connect-device") and not pi.is_visible("#btn-disconnect-alphahound"))
+    check("I the details panel is hidden again", not pi.is_visible("#alphahound-details-panel"))
+    check("I the replica shows NO DEVICE when disconnected", pi.evaluate("""() => { const c = document.getElementById('ah-screen');
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n < 1500 }"""))
+    check("I no JS errors during the AlphaHound flow", not errs_i, "; ".join(errs_i[:3]))
+    ctx_i.close()
+
+    # J. A connection that disappears behind the page's back is noticed (details keep answering 400)
+    ctx_j = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pj = ctx_j.new_page()
+    pj.clock.install()
+    state_j = {"connected": True}
+    pj.route("**/device/status", lambda route, request: route.fulfill(status=200, content_type="application/json", body=_json.dumps(
+        {"connected": state_j["connected"], "dose_rate": 70.0, "temperature": 29.5, "comp_factor": 0.95, "cps": None})))
+    pj.route("**/device/details", lambda route, request: route.fulfill(status=400, content_type="application/json",
+                                                                      body=_json.dumps({"detail": "Device not connected"})))
+    pj.route_web_socket("**/ws/dose", lambda w: None)
+    pj.goto(URL, wait_until="domcontentloaded")
+    pj.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
+    pj.clock.run_for(17000)
+    pj.wait_for_function("document.getElementById('device-conn-label').textContent === 'Not connected'", timeout=8000)
+    check("J three 'not connected' answers reset the AlphaHound UI", pj.is_visible("#btn-connect-device"))
+    ctx_j.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

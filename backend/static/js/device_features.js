@@ -15,6 +15,7 @@ const DEVICE_CAPABILITIES = {
         clearSpectrum: true,
         doseReset: false,
         deviceSettings: false,
+        alphaDetails: true,
         bleConnection: false
     },
     radiacode: {

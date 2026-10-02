@@ -92,6 +92,50 @@ export class AlphaHoundAPI {
     }
 
     /**
+     * Gets what the AlphaHound reports about itself (port, temperature, compensation, dose, CPS, log size).
+     * @returns {Promise<Object>}
+     * @throws {Error} with .status set (400 = not connected)
+     */
+    async getDeviceDetails() {
+        const response = await fetch('/device/details');
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            const err = new Error(error.detail || 'Failed to get device details');
+            err.status = response.status;
+            throw err;
+        }
+        return await response.json();
+    }
+
+    /**
+     * Clears the AlphaHound dose-rate history.
+     * @returns {Promise<{cleared: number}>}
+     */
+    async clearDoseLog() {
+        const response = await fetch('/device/dose/log/clear', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to clear dose log');
+        return await response.json();
+    }
+
+    /**
+     * Sends one read-only command (D, DA, DB or P) and returns the raw reply lines.
+     * @param {string} command
+     * @returns {Promise<{command: string, lines: string[]}>}
+     */
+    async probeDevice(command) {
+        const response = await fetch('/device/probe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command })
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(typeof error.detail === 'string' ? error.detail : 'Probe failed');
+        }
+        return await response.json();
+    }
+
+    /**
      * Clears device spectrum buffer.
      * @returns {Promise<void>}
      */
@@ -703,9 +747,10 @@ export class AlphaHoundAPI {
     }
 
     // WebSocket Logic
-    setupDoseWebSocket(onDoseRate, onConnectionStatus) {
+    setupDoseWebSocket(onDoseRate, onConnectionStatus, onCps) {
         this.listeners.onDoseRate = onDoseRate;
         this.listeners.onConnectionStatus = onConnectionStatus;
+        if (onCps !== undefined) this.listeners.onCps = onCps;
 
         if (this.doseWebSocket) return;
 
@@ -725,6 +770,7 @@ export class AlphaHoundAPI {
         this.doseWebSocket.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (this.listeners.onDoseRate) this.listeners.onDoseRate(data.dose_rate);
+            if (this.listeners.onCps && data.cps !== undefined) this.listeners.onCps(data.cps);
         };
 
         this.doseWebSocket.onerror = (error) => {
@@ -745,7 +791,7 @@ export class AlphaHoundAPI {
 
         this.reconnectTimer = setTimeout(() => {
             this.reconnectAttempts++;
-            this.setupDoseWebSocket(this.listeners.onDoseRate, this.listeners.onConnectionStatus);
+            this.setupDoseWebSocket(this.listeners.onDoseRate, this.listeners.onConnectionStatus, this.listeners.onCps);
         }, delay);
     }
 

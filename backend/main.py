@@ -16,6 +16,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import asyncio
+import threading
+import time
 from alphahound_serial import device as alphahound_device
 from routers import device, analysis, isotopes, device_radiacode, nuclear, export
 
@@ -24,6 +26,11 @@ logger = logging.getLogger(__name__)
 # Track active WebSocket connections for session management
 active_websockets = set()
 WS_DISCONNECT_GRACE_S = 10  # seconds to wait for a reconnect before releasing the device
+
+# Unattended operation (both opt-in; the defaults keep the interactive behaviour):
+#   ALPHAHOUND_KEEP_CONNECTED=1       do not release the AlphaHound when the last browser tab closes
+#   ALPHAHOUND_AUTOCONNECT_PORT=COM8  connect to this serial port at startup (retried while it is busy)
+KEEP_CONNECTED = os.environ.get("ALPHAHOUND_KEEP_CONNECTED", "").strip().lower() in ("1", "true", "yes")
 
 # Rate limiter: 60 requests per minute per IP
 limiter = Limiter(key_func=get_remote_address)
@@ -63,6 +70,27 @@ async def revalidate_ui_files(request: Request, call_next):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
+def autoconnect_alphahound(port: str, attempts: int = 15, delay_s: float = 2.0) -> bool:
+    """Connect the AlphaHound at startup. A just-restarted server often finds the port still held, so retry."""
+    for attempt in range(1, attempts + 1):
+        if alphahound_device.is_connected():
+            return True
+        if alphahound_device.connect(port):
+            logger.info(f"[AutoConnect] AlphaHound connected on {port} (attempt {attempt})")
+            return True
+        logger.warning(f"[AutoConnect] {port}: {alphahound_device.get_last_error()} (attempt {attempt}/{attempts})")
+        time.sleep(delay_s)
+    logger.error(f"[AutoConnect] Giving up on {port} after {attempts} attempts")
+    return False
+
+
+@app.on_event("startup")
+async def _startup_autoconnect():
+    port = os.environ.get("ALPHAHOUND_AUTOCONNECT_PORT", "").strip()
+    if port:
+        threading.Thread(target=autoconnect_alphahound, args=(port,), daemon=True, name="autoconnect").start()
+
+
 # Mount static files
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
@@ -83,7 +111,7 @@ async def websocket_dose_stream(websocket: WebSocket):
         while True:
             if alphahound_device.is_connected():
                 dose = alphahound_device.get_dose_rate()
-                await websocket.send_json({"dose_rate": dose})
+                await websocket.send_json({"dose_rate": dose, "cps": alphahound_device.get_cps()})
             else:
                 await websocket.send_json({"dose_rate": None, "status": "disconnected"})
             await asyncio.sleep(1)
@@ -96,7 +124,7 @@ async def websocket_dose_stream(websocket: WebSocket):
         
         # Auto-disconnect device if no active sessions (prevents zombie connections)
         # Grace period so a page refresh (disconnect then immediate reconnect) keeps the device.
-        if len(active_websockets) == 0 and alphahound_device.is_connected():
+        if len(active_websockets) == 0 and alphahound_device.is_connected() and not KEEP_CONNECTED:
             await asyncio.sleep(WS_DISCONNECT_GRACE_S)
             if len(active_websockets) == 0 and alphahound_device.is_connected():
                 logger.info("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
