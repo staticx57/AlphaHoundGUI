@@ -97,6 +97,18 @@ with sync_playwright() as p:
     check("D Clear BG button shown", clr == "inline-block", str(clr))
     check("D bg status text", "Loaded" in (status or ""), status or "")
     check("D no JS errors during background load", not errs, "; ".join(errs[:3]))
+    # E. Confidence colors follow theme switches made after results are rendered
+    def conf_bg():
+        return page.evaluate("""() => [...document.querySelectorAll('#isotopes-container [style*="var(--confidence-"], #decay-chains-list [style*="var(--confidence-"]')]
+            .map(e => getComputedStyle(e).backgroundColor)""")
+    page.select_option("#theme-select", "dark")
+    page.wait_for_timeout(300)
+    before = conf_bg()
+    page.select_option("#theme-select", "light")
+    page.wait_for_timeout(300)
+    after = conf_bg()
+    check("E confidence colors rendered via CSS vars", len(before) > 0, str(len(before)))
+    check("E confidence colors change with theme", before != after, f"{before[:1]} -> {after[:1]}")
     browser.close()
 
 fails = [r for r in results if not r[1]]

@@ -45,7 +45,7 @@
 
 ### Technical Debt
 - [x] Light theme XRF section contrast fixed (CSS vars `--xrf-text/--xrf-accent`; confidence badge now follows theme switches)
-- [ ] Isotope confidence bars and decay-chain cards in `ui.js` still bake resolved theme colours into inline styles at render time, so they go stale if the theme is switched afterwards (same fix as the XRF badge: reference CSS vars)
+- [x] Isotope confidence bars and decay-chain cards now follow theme switches (`getThemeColors()` returns CSS var references; covered by `ui_smoke.py` section E). Note: only valid for CSS contexts, not canvas/Chart.js
 - [ ] Sweep (`backend/tests/ui_theme_sweep.py`) checks only overflow/contrast/JS errors on 17 themes × 2 viewports; extend to the Radiacode tab, modals and the 35 proposed themes
 - [ ] Analysis quality: synthetic Cs-137 spectrum yields a "U-238 Decay Chain (MEDIUM 37%)" from two weak peaks (Bi-214 1107 keV, Pb-210 32.6 keV); review chain-detection thresholds
 - [ ] Remove dead frontend code for elements that no longer exist (see `LEGACY_NULL_GUARDED` in `backend/tests/test_frontend_ids.py`: `*-top` controls, `btn-rc-*`, etc.), then empty that allowlist

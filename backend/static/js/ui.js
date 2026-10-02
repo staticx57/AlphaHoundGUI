@@ -26,24 +26,26 @@ export class AlphaHoundUI {
     }
 
     /**
-     * Get theme-aware colors from CSS variables
-     * @returns {Object} Object containing all status/confidence colors
+     * Theme colors as CSS variable references (with dark-theme fallbacks).
+     * Returns `var(--x, fallback)` strings rather than resolved values so inline
+     * styles built from them keep following the theme if it is switched later.
+     * Only suitable for CSS contexts (not canvas / Chart.js).
      */
     getThemeColors() {
-        const styles = getComputedStyle(document.documentElement);
+        const v = (name, fallback) => `var(${name}, ${fallback})`;
         return {
-            detected: styles.getPropertyValue('--status-detected').trim() || '#10b981',
-            detectedBg: styles.getPropertyValue('--status-detected-bg').trim() || 'rgba(16, 185, 129, 0.2)',
-            stable: styles.getPropertyValue('--status-stable').trim() || '#8b5cf6',
-            stableBg: styles.getPropertyValue('--status-stable-bg').trim() || 'rgba(139, 92, 246, 0.2)',
-            undetected: styles.getPropertyValue('--status-undetected').trim() || 'rgba(255, 255, 255, 0.3)',
-            confidenceHigh: styles.getPropertyValue('--confidence-high').trim() || '#10b981',
-            confidenceMedium: styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b',
-            confidenceLow: styles.getPropertyValue('--confidence-low').trim() || '#ef4444',
-            xrfPrimary: styles.getPropertyValue('--xrf-primary').trim() || '#3b82f6',
-            xrfHigh: styles.getPropertyValue('--xrf-high').trim() || '#22c55e',
-            xrfMedium: styles.getPropertyValue('--xrf-medium').trim() || '#f59e0b',
-            xrfLow: styles.getPropertyValue('--xrf-low').trim() || '#94a3b8'
+            detected: v('--status-detected', '#10b981'),
+            detectedBg: v('--status-detected-bg', 'rgba(16, 185, 129, 0.2)'),
+            stable: v('--status-stable', '#8b5cf6'),
+            stableBg: v('--status-stable-bg', 'rgba(139, 92, 246, 0.2)'),
+            undetected: v('--status-undetected', 'rgba(255, 255, 255, 0.3)'),
+            confidenceHigh: v('--confidence-high', '#10b981'),
+            confidenceMedium: v('--confidence-medium', '#f59e0b'),
+            confidenceLow: v('--confidence-low', '#ef4444'),
+            xrfPrimary: v('--xrf-primary', '#3b82f6'),
+            xrfHigh: v('--xrf-high', '#22c55e'),
+            xrfMedium: v('--xrf-medium', '#f59e0b'),
+            xrfLow: v('--xrf-low', '#94a3b8')
         };
     }
 
