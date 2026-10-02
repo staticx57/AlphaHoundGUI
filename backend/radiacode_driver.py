@@ -139,6 +139,7 @@ class RadiacodeDevice:
         self._record_type_counts: Dict[str, int] = {}  # data_buf record types seen since connect
         self._events: List[Dict[str, Any]] = []  # device Event records seen since connect (bounded)
         self._event_seq = 0
+        self._dsur_warned = False
         self._session_reset()
         self._last_error: Optional[str] = None
         self._connection_type: str = ""  # "USB", "BLE", or "Bluetooth"
@@ -302,6 +303,7 @@ class RadiacodeDevice:
             
             self._device_info = {}
             self._connection_type = ""
+            self._dsur_warned = False
             logger.info("[Radiacode] Disconnected")
     
     def is_connected(self) -> bool:
@@ -753,7 +755,10 @@ class RadiacodeDevice:
             try:
                 return int(self._device._batch_read_vsfrs([VSFR.DS_uR])[0])
             except Exception as e:
-                logger.warning(f'[Radiacode] Could not read DS_uR dose register: {e}')
+                # Firmware 4.14 never serves this register over BLE: warn once per connection, not per poll
+                level = logging.DEBUG if self._dsur_warned else logging.WARNING
+                self._dsur_warned = True
+                logger.log(level, f'[Radiacode] Could not read DS_uR dose register: {e}')
                 return None
 
     def get_dose_counter_info(self) -> Dict[str, Any]:

@@ -323,3 +323,24 @@ def test_radiacode_alarm_limits_read_register_by_register(monkeypatch):
     assert lim["l1_dose_rate"] == 2000 and lim["l2_dose_rate"] == 4000
     assert lim["l1_count_rate"] == 10.0 and lim["count_unit"] == "cps"
     assert lim["l1_dose"] == 1.0 and lim["l2_dose"] is None and lim["dose_unit"] == "R"
+
+
+def test_dsur_read_failure_warns_once_per_connection(monkeypatch, caplog):
+    import logging
+    import radiacode_driver as rd
+
+    class V:
+        DS_uR = 1
+
+    class Dev:
+        def _batch_read_vsfrs(self, regs):
+            raise IOError("bad vsfr_id")
+
+    monkeypatch.setattr(rd, "VSFR", V)
+    drv = rd.RadiacodeDevice()
+    drv._device = Dev()
+    with caplog.at_level(logging.DEBUG):
+        assert drv.read_dose_register_uR() is None
+        assert drv.read_dose_register_uR() is None
+    levels = [r.levelno for r in caplog.records if "DS_uR" in r.getMessage()]
+    assert levels == [logging.WARNING, logging.DEBUG]

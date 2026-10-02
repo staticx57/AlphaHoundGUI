@@ -157,7 +157,11 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
         )
     
     weighted_chains = apply_abundance_weighting(all_chains)
-    isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
+    # The simple-mode isotope cap is applied after the spectrum fit below: capping first lets isotopes
+    # of a series the fit later rules out (e.g. U-238 daughters on a thorium source) use up the slots
+    # and push out the real ones.
+    isotopes, decay_chains = apply_confidence_filtering(
+        all_isotopes, weighted_chains, {**current_settings, "max_isotopes": 10**6})
 
     # Full-spectrum template fit decides whether the U-238 / Th-232 series are really present
     # (line matching alone cannot separate them at scintillator resolution).
@@ -179,6 +183,9 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     except Exception as e:
         logger.warning(f"[Analysis] Source template fit failed: {e}")
     
+    if current_settings.get("mode") == "simple":
+        isotopes = sorted(isotopes, key=lambda i: i.get("confidence", 0), reverse=True)[:current_settings.get("max_isotopes", 999)]
+
     # Try multiplet fitting for better peak deconvolution
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
         try:
