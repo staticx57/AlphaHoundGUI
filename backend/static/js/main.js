@@ -82,9 +82,18 @@ async function pollRadiacodeDose() {
                 const extendedInfo = await api.getRadiacodeExtendedInfo();
                 const accumEl = document.getElementById('rc-accumulated-dose');
                 const accum = extendedInfo.accumulated_dose_uSv;
-                if (accumEl && (accum === null || accum === undefined)) {
+                const sess = extendedInfo.session_dose;
+                const fmtDose = (v) => v >= 1000 ? (v / 1000).toFixed(3) + ' mSv' : (v >= 1 ? v.toFixed(2) + ' µSv' : (v * 1000).toFixed(1) + ' nSv');
+                if (accumEl && (accum === null || accum === undefined) && sess) {
+                    // This firmware does not serve the device's own dose counter over this connection:
+                    // show the app's running total (integrated dose rate since connect / Reset Dose).
+                    const mins = (sess.covered_seconds / 60).toFixed(1);
+                    accumEl.textContent = fmtDose(sess.dose_uSv) + ' (session)';
+                    accumEl.title = 'Integrated from the device dose-rate readings since you connected or pressed Reset Dose ('
+                        + mins + ' min of readings). The device’s own dose counter is not available over this connection.';
+                } else if (accumEl && (accum === null || accum === undefined)) {
                     accumEl.textContent = 'n/a';
-                    accumEl.title = 'The RadiaCode interface does not report the device dose counter; acquisitions show exposure integrated from the dose rate.';
+                    accumEl.title = 'The RadiaCode interface does not report the device dose counter.';
                 } else if (accumEl && typeof accum === 'number') {
                     accumEl.textContent = accum >= 1000
                         ? (accum / 1000).toFixed(3) + ' mSv'
@@ -472,6 +481,7 @@ if (btnRefreshDiagnostics) {
             document.getElementById('rc-status-flags').textContent = statusResult.status_flags || '--';
             document.getElementById('rc-fw-signature').textContent = fwSigResult.fw_signature || '--';
             document.getElementById('rc-base-time').textContent = baseTimeResult.base_time || '--';
+            await checkDeviceMessages();
 
             showToast('Diagnostics refreshed', 'success');
         } catch (err) {
@@ -484,15 +494,12 @@ if (btnRefreshDiagnostics) {
 // Check for text messages periodically (add to poll function)
 async function checkDeviceMessages() {
     try {
+        // The device's TEXT_MESSAGE is a status log (e.g. "BLE: client connected"), not a radiation
+        // alarm, so it is shown quietly under Advanced Diagnostics rather than as an alert banner.
         const result = await api.getTextMessage();
-        const banner = document.getElementById('rc-message-banner');
-        const textEl = document.getElementById('rc-message-text');
-
-        if (result.has_message && result.message) {
-            textEl.textContent = result.message;
-            banner.style.display = 'block';
-        } else {
-            banner.style.display = 'none';
+        const textEl = document.getElementById('rc-device-status-text');
+        if (textEl) {
+            textEl.textContent = (result.has_message && result.message) ? result.message : '--';
         }
     } catch (err) {
         // Silently fail - messages are optional

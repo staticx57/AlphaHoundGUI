@@ -106,3 +106,144 @@ def test_radiacode_cumulative_dose_from_raredata(monkeypatch):
     assert drv.get_accumulated_dose() == pytest.approx(2.5)   # same x10,000 scale as dose rate
     drv.get_dose_rate()                                 # batch without RareData keeps last value
     assert drv.get_accumulated_dose() == pytest.approx(2.5)
+
+
+def test_dose_counter_self_check(monkeypatch):
+    """dose / duration should reproduce the mean dose rate when the x10,000 scale is right."""
+    import radiacode_driver as rd
+
+    class Rt:
+        def __init__(self, v):
+            self.dose_rate = v
+
+    class Rare:
+        def __init__(self, d, dur):
+            self.dose, self.duration = d, dur
+
+    monkeypatch.setattr(rd, "RealTimeData", Rt)
+    monkeypatch.setattr(rd, "RareData", Rare)
+    # 1.36 uSv/h for 600 s -> 0.2267 uSv -> raw 2.267e-5 in device units (roentgen)
+    batches = [[Rt(1.36e-4), Rare(0.2267e-4, 600)]]
+
+    class Dev:
+        def data_buf(self):
+            return batches.pop(0)
+
+    drv = rd.RadiacodeDevice()
+    drv._device = Dev()
+    drv.get_dose_rate()
+    info = drv.get_dose_counter_info()
+    assert info["accumulation_seconds"] == 600
+    assert info["implied_mean_rate_uSv_h"] == pytest.approx(1.36, rel=0.01)
+    assert info["current_dose_rate_uSv_h"] == pytest.approx(1.36, rel=0.01)
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("auto", "AUTO"), ("right", "RIGHT"), ("left", "LEFT"), ("normal", "RIGHT"), ("reversed", "LEFT"),
+])
+def test_display_direction_maps_to_device_enum(value, expected):
+    """Orientation never worked: it imported DisplayDirection from the wrong module/members."""
+    import radiacode_driver as rd
+    sent = {}
+
+    class Dev:
+        def set_display_direction(self, d):
+            sent["d"] = d
+
+    drv = rd.RadiacodeDevice()
+    drv._device = Dev()
+    assert drv.set_display_direction(value) is True
+    assert sent["d"].name == expected
+
+
+def test_display_direction_rejects_unknown():
+    import radiacode_driver as rd
+
+    class Dev:
+        def set_display_direction(self, d):
+            raise AssertionError("must not be called")
+
+    drv = rd.RadiacodeDevice()
+    drv._device = Dev()
+    assert drv.set_display_direction("sideways") is False
+
+
+def test_dose_register_preferred_and_converted_from_microroentgen(monkeypatch):
+    import radiacode_driver as rd
+
+    class Dev:
+        def _batch_read_vsfrs(self, regs):
+            assert [r.name for r in regs] == ["DS_uR"]
+            return [137]                     # 137 uR
+
+        def data_buf(self):
+            return []
+
+    drv = rd.RadiacodeDevice()
+    drv._device = Dev()
+    assert drv.read_dose_register_uR() == 137
+    info = drv.get_dose_counter_info()
+    assert info["source"] == "DS_uR register"
+    assert info["dose_uSv"] == pytest.approx(1.37)
+
+
+def test_dose_register_failure_falls_back_to_raredata():
+    import radiacode_driver as rd
+
+    class Dev:
+        def _batch_read_vsfrs(self, regs):
+            raise ValueError("Unexpected validity flags")
+
+    drv = rd.RadiacodeDevice()
+    drv._device = Dev()
+    drv._last_rare_dose_raw = 2.0e-4
+    info = drv.get_dose_counter_info()
+    assert info["register_uR"] is None and info["source"] == "RareData"
+    assert info["dose_uSv"] == pytest.approx(2.0)
+
+
+def test_session_dose_integrates_new_readings_and_resets(monkeypatch):
+    import radiacode_driver as rd
+
+    class Rt:
+        def __init__(self, v):
+            self.dose_rate = v
+
+    monkeypatch.setattr(rd, "RealTimeData", Rt)
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(rd.time, "monotonic", lambda: clock["t"])
+
+    class Dev:
+        def __init__(self):
+            self.queue = []
+            self.resets = 0
+
+        def data_buf(self):
+            q, self.queue = self.queue, []
+            return q
+
+        def dose_reset(self):
+            self.resets += 1
+
+    dev = Dev()
+    drv = rd.RadiacodeDevice()
+    drv._device = dev
+    for i in range(0, 3601, 2):                       # 1 h at 3.6 uSv/h, a reading every 2 s
+        clock["t"] = 1000.0 + i
+        dev.queue = [Rt(3.6e-4)]
+        drv.get_dose_rate()
+    s = drv.get_session_dose()
+    assert s["dose_uSv"] == pytest.approx(3.6, rel=1e-3) and s["covered_seconds"] == pytest.approx(3600)
+
+    # cached repeats (no new record) must not add dose
+    clock["t"] += 5
+    drv.get_dose_rate()
+    assert drv.get_session_dose()["dose_uSv"] == pytest.approx(3.6, rel=1e-3)
+
+    # a long gap is not integrated; Reset Dose clears the session and resets the device
+    clock["t"] += 600
+    dev.queue = [Rt(3.6e-4)]
+    drv.get_dose_rate()
+    assert drv.get_session_dose()["dose_uSv"] == pytest.approx(3.6, rel=1e-3)
+    assert drv.reset_dose() is True and dev.resets == 1
+    assert drv.get_session_dose()["dose_uSv"] == 0.0

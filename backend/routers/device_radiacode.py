@@ -469,9 +469,21 @@ ACCUMULATED_ANALYZED_NOTE = (
 )
 
 
+@router.get("/diagnostics/dose-sources")
+def dose_source_diagnostics():
+    """Which dose sources this unit actually provides: register reads and data_buf record types."""
+    if not radiacode_device.is_connected():
+        raise HTTPException(status_code=400, detail="Radiacode not connected")
+    return {
+        "vsfr_reads": radiacode_device.probe_vsfrs(),
+        "data_buf_record_types": radiacode_device.get_record_type_counts(),
+        "dose_counter": radiacode_device.get_dose_counter_info(),
+    }
+
+
 @router.post("/settings/display-direction")
 def set_display_direction(direction: str):
-    """Set device display orientation (normal/reversed/auto)."""
+    """Set device display orientation (auto/right/left; legacy normal/reversed accepted)."""
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
     
@@ -595,12 +607,16 @@ def get_radiacode_extended_info():
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
     
-    accumulated_dose = radiacode_device.get_accumulated_dose()
+    register_uR = radiacode_device.read_dose_register_uR()
+    accumulated_dose = (register_uR / radiacode_device.UR_PER_USV) if register_uR is not None \
+        else radiacode_device.get_accumulated_dose()
     configuration = radiacode_device.get_configuration()
     
     return {
         "accumulated_dose_uSv": accumulated_dose,
         "accumulated_dose_raw": radiacode_device.get_accumulated_dose_raw(),
+        "session_dose": radiacode_device.get_session_dose(),
+        "dose_counter": radiacode_device.get_dose_counter_info(),
         "configuration": configuration,
         "device_info": radiacode_device.get_device_info()
     }

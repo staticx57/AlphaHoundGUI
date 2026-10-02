@@ -47,6 +47,10 @@ try:
         from radiacode.types import RareData
     except ImportError:
         RareData = None
+    try:
+        from radiacode.types import VSFR
+    except ImportError:
+        VSFR = None
     HAS_RADIACODE = True
 except ImportError:
     HAS_RADIACODE = False
@@ -54,6 +58,7 @@ except ImportError:
     RadiacodeNotFound = Exception
     RealTimeData = None
     RareData = None
+    VSFR = None
     Spectrum = None
     DisplayDirection = None
     CTRL = None
@@ -124,6 +129,10 @@ class RadiacodeDevice:
         self._last_dose_rate: Optional[float] = None
         self._last_dose_rate_time: float = 0.0
         self._last_rare_dose_raw: Optional[float] = None  # RareData.dose (device dose counter)
+        self._last_rare_duration_s: Optional[float] = None  # RareData.duration (s since dose reset)
+        self._last_rare_time: Optional[float] = None
+        self._record_type_counts: Dict[str, int] = {}  # data_buf record types seen since connect
+        self._session_reset()
         self._last_error: Optional[str] = None
         self._connection_type: str = ""  # "USB", "BLE", or "Bluetooth"
     
@@ -192,6 +201,9 @@ class RadiacodeDevice:
                         self._device = RadiaCode.__new__(RadiaCode)
                         self._device._connection = self._bleak_transport
                         self._device._seq = 0
+                        # radiacode>=0.4.0 close() calls self._finalizer() (normally set in __init__)
+                        import weakref
+                        self._device._finalizer = weakref.finalize(self._device, self._bleak_transport.close)
                         
                         # Perform initialization sequence from official library
                         import datetime
@@ -335,15 +347,20 @@ class RadiacodeDevice:
                 # and serve it from a short-lived cache when a call finds no new records.
                 newest = None
                 for record in self._device.data_buf():
+                    name = type(record).__name__
+                    self._record_type_counts[name] = self._record_type_counts.get(name, 0) + 1
                     if RealTimeData and isinstance(record, RealTimeData):
                         newest = record
                     elif RareData and isinstance(record, RareData):
                         # Periodic record carrying the device's cumulative dose counter
                         self._last_rare_dose_raw = float(record.dose)
+                        self._last_rare_duration_s = float(getattr(record, "duration", 0) or 0)
+                        self._last_rare_time = time.monotonic()
                 if newest is not None:
                     # RadiaCode library returns dose_rate in a unit requiring 10,000x multiplier for uSv/h
                     self._last_dose_rate = float(newest.dose_rate) * self.DOSE_SCALE
                     self._last_dose_rate_time = time.monotonic()
+                    self._integrate_session_dose(self._last_dose_rate, self._last_dose_rate_time)
                     return self._last_dose_rate
                 if (self._last_dose_rate is not None and
                         time.monotonic() - self._last_dose_rate_time <= self.DOSE_RATE_CACHE_S):
@@ -445,6 +462,7 @@ class RadiacodeDevice:
         with self._lock:
             try:
                 self._device.dose_reset()
+                self._session_reset()
                 return True
             except Exception as e:
                 self._last_error = f"Failed to reset dose: {e}"
@@ -585,6 +603,99 @@ class RadiacodeDevice:
             return None
         return self._last_rare_dose_raw * self.DOSE_SCALE
 
+    UR_PER_USV = 100.0  # 1 uSv = 100 uR (same convention as the library's dose-rate examples)
+
+    SESSION_MAX_GAP_S = 10.0  # do not integrate across longer gaps in readings
+
+    def _session_reset(self):
+        self._session_dose_uSv = 0.0
+        self._session_covered_s = 0.0
+        self._session_start = time.time()
+        self._session_prev: Optional[tuple] = None  # (rate uSv/h, monotonic time)
+
+    def _integrate_session_dose(self, rate_uSv_h: float, now_s: float):
+        """Trapezoid-integrate dose rate into the session dose (uSv)."""
+        prev = self._session_prev
+        if prev is not None:
+            dt = now_s - prev[1]
+            if 0 < dt <= self.SESSION_MAX_GAP_S:
+                self._session_dose_uSv += 0.5 * (prev[0] + rate_uSv_h) * dt / 3600.0
+                self._session_covered_s += dt
+        self._session_prev = (rate_uSv_h, now_s)
+
+    def get_session_dose(self) -> Dict[str, Any]:
+        """Dose accumulated by this app since connect or the last Reset Dose, from dose-rate readings."""
+        return {
+            "dose_uSv": round(self._session_dose_uSv, 6),
+            "covered_seconds": round(self._session_covered_s, 1),
+            "since": self._session_start,
+            "method": "integrated instrument dose rate (app-side; device counter unavailable)",
+        }
+
+    def probe_vsfrs(self) -> Dict[str, Any]:
+        """Read selected registers one at a time to see which this firmware/transport serves."""
+        if not self._device or VSFR is None:
+            return {}
+        out = {}
+        for name in ('DS_uR', 'DS_UNITS', 'DS_LEV1_uR', 'DS_LEV2_uR', 'DR_LEV1_uR_h', 'CR_LEV1_cp10s', 'CPS',
+                     'DEVICE_LANG', 'DISP_BRT'):
+            reg = getattr(VSFR, name, None)
+            if reg is None:
+                out[name] = 'not in library'
+                continue
+            with self._lock:
+                try:
+                    out[name] = self._device._batch_read_vsfrs([reg])[0]
+                except Exception as e:
+                    out[name] = f'error: {e}'
+        return out
+
+    def get_record_type_counts(self) -> Dict[str, int]:
+        return dict(self._record_type_counts)
+
+    def read_dose_register_uR(self) -> Optional[int]:
+        """Read the device's accumulated-dose register DS_uR (uint32, micro-roentgen).
+
+        This is the counter that Reset Dose clears. Unlike RareData it can be read on demand,
+        and its unit is explicit in the register name.
+        """
+        if not self._device or VSFR is None or not hasattr(VSFR, 'DS_uR'):
+            return None
+        with self._lock:
+            try:
+                return int(self._device._batch_read_vsfrs([VSFR.DS_uR])[0])
+            except Exception as e:
+                logger.warning(f'[Radiacode] Could not read DS_uR dose register: {e}')
+                return None
+
+    def get_dose_counter_info(self) -> Dict[str, Any]:
+        """Dose counter with a self-check: dose / duration should equal the mean dose rate.
+
+        The library documents both dose and dose_rate only as "device protocol units"; its own
+        examples convert dose_rate x10,000 -> uSv/h (x1e6 -> uR/h), i.e. roentgen. If dose uses
+        the same unit, implied_mean_rate_uSv_h is close to the readings seen over that period.
+        """
+        register_uR = self.read_dose_register_uR()
+        rare_dose = self.get_accumulated_dose()
+        dose = (register_uR / self.UR_PER_USV) if register_uR is not None else rare_dose
+        dur = self._last_rare_duration_s
+        info = {
+            "session": self.get_session_dose(),
+            "dose_uSv": dose,
+            "source": "DS_uR register" if register_uR is not None else ("RareData" if rare_dose is not None else None),
+            "register_uR": register_uR,
+            "raredata_dose_uSv": rare_dose,
+            "dose_raw": self._last_rare_dose_raw,
+            "accumulation_seconds": dur,
+            "record_age_seconds": (round(time.monotonic() - self._last_rare_time, 1)
+                                   if self._last_rare_time is not None else None),
+            "implied_mean_rate_uSv_h": None,
+            "current_dose_rate_uSv_h": self._last_dose_rate,
+        }
+        if dose is not None and dur and dur > 0:
+            info["implied_mean_rate_uSv_h"] = dose / (dur / 3600.0)
+        return info
+
     def get_accumulated_dose_raw(self) -> Optional[float]:
         """Unscaled RareData.dose, for verifying the scale against the device display."""
         return self._last_rare_dose_raw
@@ -651,12 +762,16 @@ class RadiacodeDevice:
         
         with self._lock:
             try:
-                from radiacode.transports.usb import DisplayDirection
+                # DisplayDirection comes from radiacode.types (module import); the old import from
+                # transports.usb and the NORMAL/REVERSED members never existed, so this always failed.
                 
                 direction_map = {
-                    'normal': DisplayDirection.NORMAL,
-                    'reversed': DisplayDirection.REVERSED,
-                    'auto': DisplayDirection.AUTO
+                    'auto': DisplayDirection.AUTO,
+                    'right': DisplayDirection.RIGHT,
+                    'left': DisplayDirection.LEFT,
+                    # legacy UI values
+                    'normal': DisplayDirection.RIGHT,
+                    'reversed': DisplayDirection.LEFT,
                 }
                 
                 if direction.lower() not in direction_map:
