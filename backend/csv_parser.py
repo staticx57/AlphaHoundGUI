@@ -11,6 +11,27 @@ except ImportError:
 import logging
 logger = logging.getLogger(__name__)
 
+
+def _split_comment_metadata(content: bytes):
+    """Remove leading/inline '#' lines; return (content_without_comments, {key: float})."""
+    text = content.decode("utf-8", errors="replace")
+    meta, kept = {}, []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            parts = [p.strip() for p in stripped.lstrip("#").split(",", 1)]
+            if len(parts) == 2:
+                try:
+                    meta[parts[0].lower()] = float(parts[1])
+                except ValueError:
+                    pass
+            continue
+        kept.append(line)
+    if not meta and len(kept) == len(text.splitlines()):
+        return content, meta  # nothing stripped: leave bytes untouched
+    return ("\n".join(kept) + "\n").encode("utf-8"), meta
+
+
 def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     """
     Parse a CSV spectrum file using Becquerel.
@@ -18,6 +39,10 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     """
     if not HAS_BECQUEREL:
         raise ImportError("Becquerel library not installed on server.")
+
+    # Some exporters (e.g. RadiaCode tools) prefix '# key,value' metadata lines; strip them
+    # so the tabular parser sees only the header + data, but keep what they tell us.
+    content, comment_meta = _split_comment_metadata(content)
 
     # Becquerel usually needs a file path, so we save to temp
     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
@@ -134,6 +159,13 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
             energies = header_cal_energies
             # If we successfully parsed calibration from header, clearly it IS calibrated
             # The 'is_calibrated' logic below will see this list and set True.
+
+    # Calibration coefficients from '# calib_a0..a2' metadata, if no energy column was found
+    if (not energies) and counts and comment_meta.get("calib_a1"):
+        a0, a1, a2 = (comment_meta.get(k, 0.0) for k in ("calib_a0", "calib_a1", "calib_a2"))
+        energies = [a0 + a1 * ch + a2 * ch * ch for ch in range(len(counts))]
+    if live_time is None and comment_meta.get("duration_s"):
+        live_time = comment_meta["duration_s"]
 
     # If energies are missing, use channel numbers
     is_calibrated = True

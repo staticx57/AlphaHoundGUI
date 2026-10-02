@@ -1,0 +1,10 @@
+source_file,source_material,nuclide_or_line,assigned_energy_keV,fitted_channel,role,notes
+source_spectra/Am-241.xml,Am-241,Am-241 gamma,59.5409,22.2129571584,primary,clean low-energy anchor
+source_spectra/Ra-226.xml,radium series,Ra-226 gamma,186.211,73.7804661106,primary,low/mid-energy anchor
+source_spectra/Ra-226.xml,radium series,Pb-214 gamma,241.995,95.7118656969,primary,low/mid-energy anchor
+source_spectra/Ra-226.xml,radium series,Pb-214 gamma,295.224,117.0840033848,primary,mid-energy anchor
+source_spectra/Ra-226.xml,radium series,Pb-214 gamma,351.932,139.8925862751,primary,mid-energy anchor
+source_spectra/Ra-226.xml,radium series,Bi-214 gamma,609.312,238.6832280570,primary,mid/high-energy anchor
+source_spectra/Th-232.xml,thorium series,Pb-212 gamma,238.632,94.8143075474,primary,low/mid-energy anchor
+source_spectra/Th-232.xml,thorium series,Tl-208 gamma,583.187,230.5847836964,primary,mid/high-energy anchor
+source_spectra/Th-232.xml,thorium series,Tl-208 gamma,2614.511,937.8096002119,primary,high-energy curvature anchor

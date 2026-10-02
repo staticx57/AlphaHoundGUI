@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional, Dict
 import math
 from n42_parser import parse_n42
+from radiacode_xml_parser import is_radiacode_xml, parse_radiacode_xml
 from csv_parser import parse_csv_spectrum
 from peak_detection import detect_peaks
 from isotope_database import identify_isotopes, identify_decay_chains
@@ -177,7 +178,8 @@ async def upload_file(file: UploadFile = File(...)):
     if filename.endswith('.n42') or filename.endswith('.xml'):
         try:
             content_str = content.decode('utf-8')
-            result = parse_n42(content_str)
+            # RadiaCode/BecqMoni exports are .xml but not N42
+            result = parse_radiacode_xml(content_str) if is_radiacode_xml(content_str) else parse_n42(content_str)
             if "error" in result: 
                 raise HTTPException(status_code=400, detail=result["error"])
             

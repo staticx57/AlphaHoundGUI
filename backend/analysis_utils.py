@@ -145,6 +145,26 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     weighted_chains = apply_abundance_weighting(all_chains)
     isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
 
+    # Full-spectrum template fit decides whether the U-238 / Th-232 series are really present
+    # (line matching alone cannot separate them at scintillator resolution).
+    try:
+        from source_templates import fit_source_templates, reconcile_with_fit
+        fit = fit_source_templates(energies, counts, result.get("metadata"))
+        if fit:
+            result["source_fit"] = fit
+            # If identified sources anchor the fit, report a clearly-off energy calibration
+            if any(src["present"] for src in fit["sources"].values()):
+                shift = fit["gain"] + fit["offset_keV"] / 662.0 - 1.0
+                if abs(shift) > 0.025:
+                    result["warnings"] = result.get("warnings", []) + [
+                        f"Energy calibration looks about {abs(shift) * 100:.1f}% {'low' if shift < 0 else 'high'} "
+                        "(identified lines sit at shifted energies). Recalibrate for accurate peak energies."
+                    ]
+            decay_chains, isotopes = reconcile_with_fit(
+                fit, decay_chains, isotopes, current_settings.get("isotope_min_confidence", 30.0), peaks)
+    except Exception as e:
+        logger.warning(f"[Analysis] Source template fit failed: {e}")
+    
     # Try multiplet fitting for better peak deconvolution
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
         try:
