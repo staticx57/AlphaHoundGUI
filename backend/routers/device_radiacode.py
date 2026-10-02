@@ -165,7 +165,8 @@ def get_radiacode_spectrum(analyze: bool = True):
         "counts": counts,
         "energies": energies,
         "metadata": metadata,
-        "is_calibrated": True  # Radiacode provides calibration
+        # False only when the driver had to guess a 3.0 keV/ch fallback (identification is then skipped)
+        "is_calibrated": metadata.get("calibration_source", "device") == "device"
     }
     
     logger.info(f"[Radiacode] Fetched {len(counts)} channels, duration: {metadata.get('duration_s')}s")
@@ -175,7 +176,7 @@ def get_radiacode_spectrum(analyze: bool = True):
             # Use common enhanced analysis pipeline
             duration = metadata.get("duration_s")
             live_time = float(duration) if duration is not None else 0.0
-            result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time)
+            result = analyze_spectrum_peaks(result, is_calibrated=result["is_calibrated"], live_time=live_time)
             logger.info(f"[Radiacode] Analysis complete: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
         except Exception as e:
             import traceback

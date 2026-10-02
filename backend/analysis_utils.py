@@ -89,7 +89,19 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
         result["analysis_mode"] = "parser_preserved"
     
     result["peaks"] = peaks
-    
+
+    # Without an energy calibration the "energies" are channel numbers, so matching them
+    # against gamma-line keV values only produces spurious isotopes/chains. Keep the peaks
+    # (useful for calibrating) but skip identification and tell the user why.
+    if not is_calibrated:
+        result["isotopes"] = []
+        result["decay_chains"] = []
+        result["warnings"] = result.get("warnings", []) + [
+            "No energy calibration: isotope and decay-chain identification skipped. "
+            "Energies are channel numbers or an assumed 3 keV/channel; use Calibrate to assign real energies."
+        ]
+        return result
+
     if not peaks:
         result["isotopes"] = []
         result["decay_chains"] = []
@@ -132,7 +144,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     
     weighted_chains = apply_abundance_weighting(all_chains)
     isotopes, decay_chains = apply_confidence_filtering(all_isotopes, weighted_chains, current_settings)
-    
+
     # Try multiplet fitting for better peak deconvolution
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
         try:

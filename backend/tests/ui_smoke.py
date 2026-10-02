@@ -109,6 +109,21 @@ with sync_playwright() as p:
     after = conf_bg()
     check("E confidence colors rendered via CSS vars", len(before) > 0, str(len(before)))
     check("E confidence colors change with theme", before != after, f"{before[:1]} -> {after[:1]}")
+    # F. Uncalibrated upload: identification skipped and the user is told why
+    import math
+    ctx_f = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pf = ctx_f.new_page()
+    rows = [int(20 + 900 * math.exp(-((i - 200) ** 2) / 50) + 400 * math.exp(-((i - 500) ** 2) / 120)) for i in range(1024)]
+    csv = ("Data,Energy\n" + "\n".join(f"{v},{i}" for i, v in enumerate(rows)) + "\n").encode()
+    pf.goto(URL, wait_until="networkidle")
+    pf.set_input_files("#file-input", files=[{"name": "channels.csv", "mimeType": "text/csv", "buffer": csv}])
+    pf.wait_for_selector("#dashboard", state="visible", timeout=20000)
+    pf.wait_for_timeout(1000)
+    toasts = pf.eval_on_selector_all(".toast", "els => els.map(e => e.textContent)")
+    check("F uncalibrated upload shows calibration warning toast", any("calibration" in t.lower() for t in toasts), str(toasts)[:90])
+    check("F no isotope/chain results for uncalibrated data",
+          not pf.evaluate("() => { const c=document.getElementById('decay-chains-list'); return !!c && c.children.length>0 }"))
+    ctx_f.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

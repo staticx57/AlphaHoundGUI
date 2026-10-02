@@ -2336,6 +2336,7 @@ async function handleFile(file) {
         currentData = data;
         ui.resetDropZone();
         ui.renderDashboard(data);
+        (data.warnings || []).forEach(w => showToast(w, 'warning'));
 
         // Auto-populate ROI acquisition time from metadata (if available)
         autoPopulateROITime(data);

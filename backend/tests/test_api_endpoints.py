@@ -134,3 +134,32 @@ def test_subtract_background_returns_flat_count_array(client):
     body = response.json()
     assert body["net_counts"] == [9.0, 18.0, 27.0, 0.0]  # negatives clamped to 0
     assert body["background"] == [1.0, 2.0, 3.0, 50.0]
+
+
+def _channel_only_csv():
+    import math
+    rows = [int(20 + 900 * math.exp(-((i - 200) ** 2) / 50) + 400 * math.exp(-((i - 500) ** 2) / 120)) for i in range(1024)]
+    # Real community-export layout: counts in "Data", channel indices in "Energy" (no keV calibration)
+    return ("Data,Energy\n" + "\n".join(f"{v},{i}" for i, v in enumerate(rows)) + "\n").encode()
+
+
+def test_uncalibrated_csv_skips_identification_with_warning(client):
+    """Channel numbers must not be matched against keV gamma lines (spurious isotopes/chains)."""
+    response = client.post("/upload", files={"file": ("channels.csv", _channel_only_csv(), "text/csv")})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["is_calibrated"] is False
+    assert body["peaks"], "peaks should still be reported so the user can calibrate"
+    assert body["isotopes"] == [] and body["decay_chains"] == []
+    assert any("calibration" in w.lower() for w in body["warnings"])
+
+
+def test_calibrated_csv_has_no_calibration_warning(client):
+    import math
+    energies = [i * 3.0 for i in range(1024)]
+    counts = [int(20 + 900 * math.exp(-((i - 221) ** 2) / 50)) for i in range(1024)]  # ~662 keV
+    body = "Energy,Counts\n" + "\n".join(f"{e},{c}" for e, c in zip(energies, counts)) + "\n"
+    response = client.post("/upload", files={"file": ("cal.csv", body.encode(), "text/csv")})
+    assert response.status_code == 200, response.text
+    assert response.json()["is_calibrated"] is True
+    assert not response.json().get("warnings")

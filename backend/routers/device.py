@@ -6,6 +6,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 import re
 from alphahound_serial import device as alphahound_device
+from device_calibration import energies_from_device_spectrum, SOURCE_DEVICE
 from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
 
 router = APIRouter(prefix="/device", tags=["device"])
@@ -129,9 +130,8 @@ async def acquire_spectrum(request: SpectrumRequest):
             
     spectrum = alphahound_device.get_spectrum()
     counts = [count for count, energy in spectrum]
-    # Override device calibration with requested 3.0 keV/channel
-    # energies = [energy for count, energy in spectrum]  # OLD
-    energies = [i * 3.0 for i in range(len(counts))]     # NEW (Forced 3.0 keV)
+    # Use the device's own (nonlinear) energy axis; linear fallback only if it is unusable
+    energies, energy_source = energies_from_device_spectrum(spectrum)
     
     # Use actual duration if provided, otherwise use count_minutes
     actual_duration_seconds = request.actual_duration_s if request.actual_duration_s else (count_minutes * 60)
@@ -142,10 +142,12 @@ async def acquire_spectrum(request: SpectrumRequest):
         "energies": energies,
         "metadata": {
             "source": "AlphaHound Device",
-            "channels": len(counts)
+            "channels": len(counts),
+            "energy_calibration": energy_source
         }
     }
-    result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=float(actual_duration_seconds))
+    # A guessed linear fallback axis is not a calibration: identification is skipped with a warning
+    result = analyze_spectrum_peaks(result, is_calibrated=(energy_source == SOURCE_DEVICE), live_time=float(actual_duration_seconds))
     
     # Extract results for backward compatibility in the response
     peaks = result.get("peaks", [])
@@ -165,6 +167,7 @@ async def acquire_spectrum(request: SpectrumRequest):
         "metadata": {
             "source": "AlphaHound Device",
             "channels": len(counts),
+            "energy_calibration": energy_source,
             "count_time_minutes": (actual_duration_seconds / 60),
             # N42 export fields
             "acquisition_time": actual_duration_seconds,
@@ -217,7 +220,7 @@ async def get_current_spectrum():
         raise HTTPException(status_code=500, detail="Failed to get spectrum from device")
     
     counts = [count for count, energy in spectrum]
-    energies = [i * 3.0 for i in range(len(counts))]
+    energies, energy_source = energies_from_device_spectrum(spectrum)
     
     # Use common enhanced analysis pipeline
     result = {
@@ -226,10 +229,12 @@ async def get_current_spectrum():
         "metadata": {
             "source": "AlphaHound Device (Current Cumulative)",
             "channels": len(counts),
-            "note": "This is the device's internal accumulation - not time-stamped"
+            "note": "This is the device's internal accumulation - not time-stamped",
+            "energy_calibration": energy_source
         }
     }
-    result = analyze_spectrum_peaks(result, is_calibrated=True)
+    result["is_calibrated"] = (energy_source == SOURCE_DEVICE)
+    result = analyze_spectrum_peaks(result, is_calibrated=(energy_source == SOURCE_DEVICE))
     return result
 
 

@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, List
 from enum import Enum
 
 from analysis_utils import analyze_spectrum_peaks
+from device_calibration import energies_from_device_spectrum, SOURCE_DEVICE, fallback_warning
 
 import logging
 logger = logging.getLogger(__name__)
@@ -218,8 +219,10 @@ class AcquisitionManager:
             spectrum = self._device.get_spectrum()
             if spectrum:
                 self.state.last_spectrum_counts = [int(count) for count, energy in spectrum]
-                # Use forced 3.0 keV/channel calibration (matches device.py)
-                self.state.last_spectrum_energies = [i * 3.0 for i in range(len(self.state.last_spectrum_counts))]
+                # Use the device's own (nonlinear) energy axis; linear fallback only if unusable
+                self.state.last_spectrum_energies, energy_source = energies_from_device_spectrum(spectrum)
+                if energy_source != SOURCE_DEVICE:
+                    logger.warning("[AcquisitionManager] " + fallback_warning())
                 
         except Exception as e:
             logger.error(f"[AcquisitionManager] Poll error: {e}")

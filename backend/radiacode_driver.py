@@ -63,7 +63,42 @@ except ImportError:
     BleakDeviceNotFound = Exception
 
 import logging
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+
+CALIBRATION_DEVICE = "device"
+CALIBRATION_FALLBACK = "fallback_linear_3.0_keV_per_channel"
+
+
+def _valid_coeffs(coeffs):
+    try:
+        vals = [float(c) for c in coeffs]
+    except (TypeError, ValueError):
+        return None
+    if len(vals) < 2 or not all(v == v and abs(v) != float("inf") for v in vals):
+        return None
+    if vals[1] <= 0:  # a1 is the slope in keV/channel; must be positive
+        return None
+    return (vals[0], vals[1], vals[2] if len(vals) > 2 else 0.0)
+
+
+def resolve_energy_calibration(device, spectrum):
+    """
+    Return ((a0, a1, a2), source) for E = a0 + a1*ch + a2*ch^2.
+
+    Tries the device's energy_calib(), then the coefficients attached to the spectrum
+    object, and only then a 3.0 keV/channel assumption (source == CALIBRATION_FALLBACK).
+    """
+    try:
+        coeffs = _valid_coeffs(device.energy_calib())
+        if coeffs:
+            return coeffs, CALIBRATION_DEVICE
+    except Exception:
+        pass
+    coeffs = _valid_coeffs([getattr(spectrum, n, None) for n in ("a0", "a1", "a2")])
+    if coeffs:
+        return coeffs, CALIBRATION_DEVICE
+    return (0.0, 3.0, 0.0), CALIBRATION_FALLBACK
+
 
 
 class RadiacodeDevice:
@@ -316,18 +351,11 @@ class RadiacodeDevice:
                 # Counts per channel
                 counts = list(spectrum.counts) if spectrum.counts is not None else []
                 
-                # Get energy calibration coefficients
                 # RadiaCode uses polynomial calibration: E = a0 + a1*ch + a2*ch^2
-                try:
-                    coeffs = self._device.energy_calib()
-                    if len(coeffs) >= 2:
-                        a0, a1 = coeffs[0], coeffs[1]
-                        a2 = coeffs[2] if len(coeffs) > 2 else 0.0
-                    else:
-                        # Default calibration (~3 keV/channel)
-                        a0, a1, a2 = 0.0, 3.0, 0.0
-                except Exception:
-                    a0, a1, a2 = 0.0, 3.0, 0.0
+                (a0, a1, a2), calibration_source = resolve_energy_calibration(self._device, spectrum)
+                if calibration_source != CALIBRATION_DEVICE:
+                    logger.warning("[Radiacode] Could not read energy calibration from device; "
+                                   "assuming 3.0 keV/channel. Peak energies may be wrong.")
                 
                 # Calculate energies from calibration
                 energies = [a0 + a1 * ch + a2 * ch**2 for ch in range(len(counts))]
@@ -348,6 +376,7 @@ class RadiacodeDevice:
                     "total_counts": sum(counts),
                     "channels": len(counts),
                     "calibration": {"a0": a0, "a1": a1, "a2": a2},
+                    "calibration_source": calibration_source,
                     "source": "Radiacode Device"
                 }
                 
