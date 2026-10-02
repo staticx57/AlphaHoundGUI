@@ -11,6 +11,20 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 
+# Acquisition details carried in <SpectrumExtension><AcquisitionInfo> (not part of N42.42-2006, so
+# readers that do not know the extension simply ignore it): metadata key -> (XML tag, numeric?)
+ACQUISITION_FIELDS = {
+    'device_duration_s': ('DeviceDurationS', True),
+    'exposure_uSv': ('ExposureUSv', True),
+    'mean_dose_rate_uSv_h': ('MeanDoseRateUSvH', True),
+    'max_dose_rate_uSv_h': ('MaxDoseRateUSvH', True),
+    'exposure_covered_s': ('ExposureCoveredS', True),
+    'exposure_method': ('ExposureMethod', False),
+    'exposure_during_acquisition': ('ExposureSummary', False),
+    'time_notes': ('TimeNotes', False),
+}
+
+
 def instrument_from_metadata(metadata: dict) -> dict:
     """Best-effort {manufacturer, model, serial_number} from spectrum metadata."""
     import re
@@ -140,9 +154,15 @@ def generate_n42_xml(spectrum_data: Dict) -> str:
     serial = ET.SubElement(instrument, "SerialNumber")
     serial.text = str(serial_number)
     
-    # Optional: Add isotope identification results as custom data
-    if 'isotopes' in spectrum_data and spectrum_data['isotopes']:
-        _add_isotope_identification(spectrum, spectrum_data['isotopes'])
+    # Optional extension data: acquisition details and isotope identification results
+    isotopes = spectrum_data.get('isotopes') or []
+    acquisition = {k: metadata[k] for k in ACQUISITION_FIELDS if metadata.get(k) not in (None, '')}
+    if isotopes or acquisition:
+        extension = ET.SubElement(spectrum, "SpectrumExtension")
+        if acquisition:
+            _add_acquisition_info(extension, acquisition)
+        if isotopes:
+            _add_isotope_identification(extension, isotopes)
     
     # Format XML with pretty printing
     xml_string = ET.tostring(root, encoding='unicode')
@@ -154,17 +174,22 @@ def generate_n42_xml(spectrum_data: Dict) -> str:
     return '\n'.join(lines)
 
 
-def _add_isotope_identification(spectrum_elem: ET.Element, isotopes: List[Dict]):
+def _add_acquisition_info(extension: ET.Element, values: Dict):
+    """Write the ACQUISITION_FIELDS present in values under <AcquisitionInfo>."""
+    info = ET.SubElement(extension, "AcquisitionInfo")
+    for key, (tag, numeric) in ACQUISITION_FIELDS.items():
+        if key in values:
+            ET.SubElement(info, tag).text = repr(float(values[key])) if numeric else str(values[key])
+
+
+def _add_isotope_identification(extension: ET.Element, isotopes: List[Dict]):
     """
-    Add isotope identification results as extension data (non-standard but useful).
+    Add isotope identification results to the SpectrumExtension (non-standard but useful).
     
     Args:
-        spectrum_elem: Spectrum XML element
+        extension: SpectrumExtension XML element
         isotopes: List of identified isotopes with confidence scores
     """
-    # Create extension element for custom data
-    extension = ET.SubElement(spectrum_elem, "SpectrumExtension")
-    
     for isotope in isotopes[:10]:  # Limit to top 10
         isotope_id = ET.SubElement(extension, "IsotopeIdentification")
         

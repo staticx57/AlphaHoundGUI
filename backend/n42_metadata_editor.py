@@ -329,7 +329,7 @@ def create_n42_from_template(
     Returns:
         N42 XML string
     """
-    from n42_exporter import generate_n42_xml
+    from n42_exporter import generate_n42_xml, ACQUISITION_FIELDS
     
     metadata = metadata or {}
     
@@ -340,6 +340,7 @@ def create_n42_from_template(
             'live_time': metadata.get('live_time', 1.0),
             'real_time': metadata.get('real_time', metadata.get('live_time', 1.0)),
             'start_time': metadata.get('start_time'),
+            **{k: v for k, v in metadata.items() if k in ACQUISITION_FIELDS},
         },
         'instrument_info': {
             'manufacturer': metadata.get('manufacturer', 'RadView Detection'),

@@ -33,6 +33,17 @@ def new_page(browser, errors, status_connected=False):
 
 with sync_playwright() as p:
     browser = p.chromium.launch(channel="chrome", headless=True)
+    # The page restores a live Radiacode connection on load, so a real device connected to the server
+    # would leak into every test: mock "disconnected" for all contexts (page-level routes still override).
+    _new_context = browser.new_context
+
+    def _isolated_context(*args, **kwargs):
+        ctx = _new_context(*args, **kwargs)
+        ctx.route("**/radiacode/status", lambda route, request: route.fulfill(
+            status=200, content_type="application/json",
+            body=json.dumps({"connected": False, "available": True, "device_info": None, "last_error": None})))
+        return ctx
+    browser.new_context = _isolated_context
 
     # A. Plain load
     errs = []
@@ -183,6 +194,9 @@ with sync_playwright() as p:
           ph.is_visible("#btn-disconnect-device") is True and not ph.is_visible("#btn-connect-radiacode"))
     ph.wait_for_function("document.getElementById('rc-dose-display').textContent !== '--'", timeout=8000)
     check("H refresh resumes dose polling", ph.inner_text("#rc-dose-display") != "--")
+    ph.wait_for_function("document.getElementById('rc-dose-total').textContent !== 'Total --'", timeout=8000)
+    check("H total dose is visible without opening Device Settings",
+          ph.is_visible("#rc-dose-total") and "Total" in ph.inner_text("#rc-dose-total"), ph.inner_text("#rc-dose-total"))
     ctx_h.close()
     browser.close()
 

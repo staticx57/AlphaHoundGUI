@@ -99,6 +99,12 @@ async function pollRadiacodeDose() {
                         ? (accum / 1000).toFixed(3) + ' mSv'
                         : accum.toFixed(2) + ' μSv';
                 }
+                // The same total next to the live dose rate, where it is visible without opening Device Settings
+                const totalEl = document.getElementById('rc-dose-total');
+                if (totalEl && accumEl) {
+                    totalEl.textContent = 'Total ' + accumEl.textContent;
+                    totalEl.title = accumEl.title || 'Accumulated dose';
+                }
                 // Update device info in settings panel
                 if (extendedInfo.device_info) {
                     const snEl = document.getElementById('rc-serial-number');
@@ -184,6 +190,8 @@ function showRadiacodeDisconnectedUI() {
     if (disconnectBtn) disconnectBtn.style.display = 'none';
     const doseEl = document.getElementById('rc-dose-display');
     if (doseEl) doseEl.textContent = '--';
+    const totalEl = document.getElementById('rc-dose-total');
+    if (totalEl) totalEl.textContent = 'Total --';
     const dropZone = document.getElementById('drop-zone');
     if (dropZone) dropZone.style.display = '';
 }
@@ -929,6 +937,7 @@ function setupEventListeners() {
                 if (connectedPanel) connectedPanel.style.display = 'none';
                 document.getElementById('btn-connect-radiacode').textContent = 'Connect';
                 document.getElementById('rc-dose-display').textContent = '--';
+                document.getElementById('rc-dose-total').textContent = 'Total --';
                 showToast('Radiacode disconnected', 'info');
 
                 // Reset device feature UI

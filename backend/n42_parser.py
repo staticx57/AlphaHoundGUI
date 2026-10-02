@@ -149,6 +149,20 @@ def parse_n42(file_content: str):
             elif manufacturer:
                 source = manufacturer
 
+        # Acquisition details written by n42_exporter (device duration, exposure, time notes)
+        acquisition = {}
+        info = find_element(spectrum, ['.//n42:AcquisitionInfo', './/AcquisitionInfo'], ns)
+        if info is not None:
+            from n42_exporter import ACQUISITION_FIELDS
+            for key, (tag, numeric) in ACQUISITION_FIELDS.items():
+                text = find_text(info, [f'n42:{tag}', tag], ns)
+                if text is None or not text.strip():
+                    continue
+                try:
+                    acquisition[key] = float(text) if numeric else text.strip()
+                except ValueError:
+                    pass
+
         # Determine calibration status
         is_calibrated = len(energies) > 0 and len(energies) == len(counts)
         
@@ -167,7 +181,8 @@ def parse_n42(file_content: str):
                 "start_time": start_time,
                 "channels": len(counts),
                 "manufacturer": manufacturer,
-                "model": model
+                "model": model,
+                **acquisition
             }
         }
 

@@ -239,3 +239,44 @@ class TestParserFixes:
 if __name__ == '__main__':
     # Run tests
     pytest.main([__file__, '-v', '--tb=short'])
+
+
+class TestAcquisitionInfoExtension:
+    """Exposure, device duration and time notes survive an export -> parse round trip."""
+
+    META = {
+        'live_time': 300.0, 'real_time': 300.5, 'start_time': '2026-10-02T15:40:00+00:00',
+        'device_duration_s': 299.0, 'exposure_uSv': 0.06, 'mean_dose_rate_uSv_h': 1.33,
+        'max_dose_rate_uSv_h': 1.6, 'exposure_covered_s': 162.8,
+        'exposure_method': 'integrated instrument dose rate',
+        'exposure_during_acquisition': '60.1 nSv (mean 1.329, max 1.599 \u00b5Sv/h)',
+        'time_notes': 'Live time equals real time <no dead time reported> & more.',
+    }
+
+    def _export(self, metadata, isotopes=None):
+        return generate_n42_xml({'counts': [1, 2, 3, 4], 'energies': [0.0, 3.0, 6.0, 9.0],
+                                 'metadata': metadata, 'isotopes': isotopes or []})
+
+    def test_round_trip_preserves_every_field(self):
+        parsed = parse_n42(self._export(self.META))
+        for key, value in self.META.items():
+            if key in ('live_time', 'real_time', 'start_time'):
+                continue
+            assert parsed['metadata'][key] == pytest.approx(value) if isinstance(value, float) \
+                else parsed['metadata'][key] == value, key
+
+    def test_no_extension_without_data(self):
+        xml = self._export({'live_time': 1.0})
+        assert 'SpectrumExtension' not in xml and 'AcquisitionInfo' not in xml
+        assert 'exposure_uSv' not in parse_n42(xml)['metadata']
+
+    def test_isotopes_and_acquisition_share_one_extension(self):
+        xml = self._export(self.META, [{'isotope': 'Th-232', 'confidence': 74.0}])
+        assert xml.count('<SpectrumExtension>') == 1
+        assert 'AcquisitionInfo' in xml and 'IsotopeName' in xml
+        validate_n42_structure(xml)
+
+    def test_partial_fields_only_write_what_exists(self):
+        parsed = parse_n42(self._export({'live_time': 1.0, 'device_duration_s': 12.0}))
+        assert parsed['metadata']['device_duration_s'] == 12.0
+        assert 'exposure_uSv' not in parsed['metadata']

@@ -465,7 +465,14 @@ class AcquisitionManager:
         e = self.exposure_summary()
         if not e:
             return {}
-        return {"exposure_during_acquisition": format_exposure(e)}
+        return {
+            "exposure_during_acquisition": format_exposure(e),
+            "exposure_uSv": e["exposure_uSv"],
+            "mean_dose_rate_uSv_h": e["mean_dose_rate_uSv_h"],
+            "max_dose_rate_uSv_h": e["max_dose_rate_uSv_h"],
+            "exposure_covered_s": e["covered_seconds"],
+            "exposure_method": e["method"],
+        }
 
 
 def format_exposure(e: Dict[str, Any]) -> str:
