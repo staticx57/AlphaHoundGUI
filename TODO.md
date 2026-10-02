@@ -44,6 +44,9 @@
 - [ ] Add background-dominated mixture training
 
 ### Technical Debt
+- [ ] Light theme: XRF/Fluorescence section hint text and element chips (e.g. "La Kα") are very faint; the theme sweep's contrast sampler doesn't cover them yet
+- [ ] Sweep (`backend/tests/ui_theme_sweep.py`) checks only overflow/contrast/JS errors on 17 themes × 2 viewports; extend to the Radiacode tab, modals and the 35 proposed themes
+- [ ] Analysis quality: synthetic Cs-137 spectrum yields a "U-238 Decay Chain (MEDIUM 37%)" from two weak peaks (Bi-214 1107 keV, Pb-210 32.6 keV); review chain-detection thresholds
 - [ ] Remove dead frontend code for elements that no longer exist (see `LEGACY_NULL_GUARDED` in `backend/tests/test_frontend_ids.py`: `*-top` controls, `btn-rc-*`, etc.), then empty that allowlist
 - [ ] **ROI advanced peak fitting never runs**: `roi_analysis.py` (~line 119) does `from .fitting_engine import ...` (relative import fails outside a package) and references undefined `target_energy`; the surrounding `except` swallows it so ROI always falls back to simple counting. Fixing changes ROI results, so validate against reference spectra first.
 - [ ] Replace remaining `print` calls in multi-line/other statements and the `[Tag]` message prefixes now duplicated by logger names

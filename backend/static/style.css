@@ -1938,3 +1938,52 @@ select.feature-disabled {
     z-index: 1000;
     border: 1px solid var(--border-color);
 }
+
+#device-title {
+    color: var(--accent-color);
+}
+
+/* ---- Heading contrast fixes (WCAG large-text 3:1) on themes where the accent is too close to the card colour ---- */
+[data-theme="light"] h3,
+[data-theme="light"] #device-title {
+    color: #0369a1;
+}
+
+[data-theme="keithley"] h3,
+[data-theme="keithley"] #device-title {
+    color: #7eb8f0;
+}
+
+[data-theme="ludlum"] h3,
+[data-theme="ludlum"] #device-title {
+    color: #ff5c47;
+}
+
+/* ---- Narrow screens: let the Export/Tools bar wrap instead of overflowing the page ---- */
+@media (max-width: 768px) {
+    .controls {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 0.5rem 1rem;
+    }
+
+    .control-group {
+        flex-wrap: wrap;
+        white-space: normal;
+    }
+
+    .control-group:not(:last-child) {
+        border-right: none;
+        padding-right: 0;
+        margin-right: 0;
+    }
+
+    .chart-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .chart-actions {
+        flex-wrap: wrap;
+    }
+}
