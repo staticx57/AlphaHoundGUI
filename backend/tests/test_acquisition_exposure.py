@@ -299,18 +299,27 @@ def test_radiacode_logs_device_events_and_flags_alarms(monkeypatch):
     assert [e["name"] for e in drv.get_events(since_id=2)] == ["CHARGE_START"]
 
 
-def test_radiacode_alarm_limits_passthrough():
+def test_radiacode_alarm_limits_read_register_by_register(monkeypatch):
     import radiacode_driver as rd
 
-    class Lim:
-        l1_count_rate, l2_count_rate, count_unit = 1, 2, "cps"
-        l1_dose_rate, l2_dose_rate, l1_dose, l2_dose, dose_unit = 20.0, 40.0, 1.0, 2.0, "R"
+    class V:
+        CR_LEV1_cp10s, CR_LEV2_cp10s, DR_LEV1_uR_h, DR_LEV2_uR_h = 1, 2, 3, 4
+        DS_LEV1_uR, DS_LEV2_uR, DS_UNITS, CR_UNITS = 5, 6, 7, 8
+
+    values = {1: 100, 2: 200, 3: 2000, 4: 4000, 5: 1_000_000, 6: 2_000_000, 7: 0, 8: 0}
 
     class Dev:
-        def get_alarm_limits(self):
-            return Lim()
+        def _batch_read_vsfrs(self, regs):
+            assert len(regs) == 1            # BLE rejects the 8-register batch
+            if regs[0] == 6:
+                raise IOError("unsupported")
+            return [values[regs[0]]]
 
+    monkeypatch.setattr(rd, "VSFR", V)
     drv = rd.RadiacodeDevice()
     assert drv.get_alarm_limits() is None
     drv._device = Dev()
-    assert drv.get_alarm_limits()["l2_dose_rate"] == 40.0
+    lim = drv.get_alarm_limits()
+    assert lim["l1_dose_rate"] == 2000 and lim["l2_dose_rate"] == 4000
+    assert lim["l1_count_rate"] == 10.0 and lim["count_unit"] == "cps"
+    assert lim["l1_dose"] == 1.0 and lim["l2_dose"] is None and lim["dose_unit"] == "R"

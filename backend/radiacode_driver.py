@@ -183,7 +183,13 @@ class RadiacodeDevice:
             self._last_error = "Radiacode library not installed. Run: pip install radiacode"
             return False
         
+        t0 = time.monotonic()
+
+        def lap(step: str) -> None:
+            logger.info(f"[Radiacode] connect: {step} done at +{time.monotonic() - t0:.1f}s")
+
         with self._lock:
+            lap("lock acquired")
             try:
                 if use_bluetooth:
                     if not address:
@@ -202,6 +208,7 @@ class RadiacodeDevice:
                         
                         logger.info(f"[Radiacode] Connecting via BLE (bleak) to {address}...")
                         self._bleak_transport = BleakBluetooth(address)
+                        lap("BLE transport (link + GATT discovery)")
                         
                         # Create RadiaCode instance and manually set the connection
                         # We use __new__ to bypass __init__ which would try to create its own transport
@@ -218,11 +225,13 @@ class RadiacodeDevice:
                         logger.info("[Radiacode] Initializing device (SET_EXCHANGE)...")
                         self._device.execute(COMMAND.SET_EXCHANGE, b'\x01\xff\x12\xff')
                         
+                        lap("SET_EXCHANGE")
                         logger.info("[Radiacode] Syncing time...")
                         self._device.set_local_time(datetime.datetime.now())
                         self._device.device_time(0)
                         self._device._base_time = datetime.datetime.now() + datetime.timedelta(seconds=128)
                         
+                        lap("time sync")
                         # Firmware and spectrum format check
                         logger.info("[Radiacode] Fetching device configuration...")
                         self._device._spectrum_format_version = 0
@@ -235,6 +244,7 @@ class RadiacodeDevice:
                         except Exception as e:
                             logger.warning(f"[Radiacode] Warning: failed to parse SpecFormatVersion: {e}")
                         
+                        lap("configuration")
                         self._connection_type = "BLE"
                         logger.info(f"[Radiacode] BLE connected and initialized successfully")
                     else:
@@ -249,6 +259,7 @@ class RadiacodeDevice:
                 
                 # Get device info
                 self._device_info = self._fetch_device_info()
+                lap("device info")
                 self._last_error = None
                 logger.info(f"[Radiacode] Connected via {self._connection_type}")
                 return True
@@ -363,18 +374,47 @@ class RadiacodeDevice:
             return [e for e in self._events if e["id"] > since_id]
 
     def get_alarm_limits(self) -> Optional[Dict[str, Any]]:
-        """The device's alarm thresholds (units as configured on the device), or None."""
-        if not self._device:
+        """
+        The device's alarm thresholds, in the units configured on the device, or None.
+
+        Registers are read one at a time: the library's single 8-register batch read is rejected
+        over BLE ("Invalid Attribute Value Length"). A register this firmware will not serve is None.
+        """
+        if not self._device or VSFR is None:
             return None
-        with self._lock:
-            try:
-                lim = self._device.get_alarm_limits()
-                return {k: getattr(lim, k) for k in (
-                    "l1_count_rate", "l2_count_rate", "count_unit",
-                    "l1_dose_rate", "l2_dose_rate", "l1_dose", "l2_dose", "dose_unit")}
-            except Exception as e:
-                self._last_error = f"Failed to read alarm limits: {e}"
+
+        def read(name):
+            reg = getattr(VSFR, name, None)
+            if reg is None:
                 return None
+            try:
+                return self._device._batch_read_vsfrs([reg])[0]
+            except Exception as e:
+                logger.warning(f"[Radiacode] Could not read {name}: {e}")
+                return None
+
+        with self._lock:
+            raw = {n: read(n) for n in ("CR_LEV1_cp10s", "CR_LEV2_cp10s", "DR_LEV1_uR_h", "DR_LEV2_uR_h",
+                                         "DS_LEV1_uR", "DS_LEV2_uR", "DS_UNITS", "CR_UNITS")}
+        if all(v is None for v in raw.values()):
+            self._last_error = "Failed to read alarm limits: no alarm register could be read"
+            return None
+        dose_mult = 100 if raw["DS_UNITS"] else 1
+        count_mult = 60 if raw["CR_UNITS"] else 1
+
+        def scaled(name, div):
+            return None if raw[name] is None else raw[name] / div
+
+        return {
+            "l1_count_rate": scaled("CR_LEV1_cp10s", 10 / count_mult),
+            "l2_count_rate": scaled("CR_LEV2_cp10s", 10 / count_mult),
+            "count_unit": "cpm" if raw["CR_UNITS"] else "cps",
+            "l1_dose_rate": scaled("DR_LEV1_uR_h", dose_mult),
+            "l2_dose_rate": scaled("DR_LEV2_uR_h", dose_mult),
+            "l1_dose": scaled("DS_LEV1_uR", 1e6 * dose_mult),
+            "l2_dose": scaled("DS_LEV2_uR", 1e6 * dose_mult),
+            "dose_unit": "Sv" if raw["DS_UNITS"] else "R",
+        }
 
     def get_dose_rate(self) -> Optional[float]:
         """
