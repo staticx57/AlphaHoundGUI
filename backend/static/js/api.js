@@ -213,7 +213,7 @@ export class AlphaHoundAPI {
         const response = await fetch('/device/acquisition/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ duration_minutes: durationMinutes })
+            body: JSON.stringify({ duration_minutes: durationMinutes, device: getActiveDevice() || 'alphahound' })
         });
         if (!response.ok) {
             const error = await response.json();
@@ -505,8 +505,8 @@ export class AlphaHoundAPI {
      * Gets accumulated spectrum data (long-term monitoring).
      * @returns {Promise<Object>} Accumulated spectrum with metadata
      */
-    async getAccumulatedSpectrum() {
-        const response = await fetch('/radiacode/spectrum/accumulated');
+    async getAccumulatedSpectrum(analyze = false) {
+        const response = await fetch(`/radiacode/spectrum/accumulated?analyze=${analyze ? 'true' : 'false'}`);
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to get accumulated spectrum');

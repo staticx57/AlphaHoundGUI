@@ -52,6 +52,17 @@ app.include_router(export.router)
 app.include_router(isotopes.router)
 
 
+# Browsers must revalidate the UI's own files on every load. Without this they may reuse a
+# stale module (e.g. an old api.js imported by a new main.js), which silently ignored new options.
+# Revalidation is a cheap 304 when nothing changed.
+@app.middleware("http")
+async def revalidate_ui_files(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # Mount static files
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 

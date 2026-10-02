@@ -43,12 +43,17 @@ try:
     from radiacode import RadiaCode
     from radiacode.transports.usb import DeviceNotFound as RadiacodeNotFound
     from radiacode.types import RealTimeData, Spectrum, DisplayDirection, CTRL
+    try:
+        from radiacode.types import RareData
+    except ImportError:
+        RareData = None
     HAS_RADIACODE = True
 except ImportError:
     HAS_RADIACODE = False
     RadiaCode = None
     RadiacodeNotFound = Exception
     RealTimeData = None
+    RareData = None
     Spectrum = None
     DisplayDirection = None
     CTRL = None
@@ -63,7 +68,9 @@ except ImportError:
     BleakDeviceNotFound = Exception
 
 import logging
-logger = logging.getLogger(__name__)
+import time
+logger = logging.getLogger(__name__)
+
 
 CALIBRATION_DEVICE = "device"
 CALIBRATION_FALLBACK = "fallback_linear_3.0_keV_per_channel"
@@ -114,6 +121,9 @@ class RadiacodeDevice:
         self._bleak_transport: Optional[Any] = None  # For bleak-based BLE connections
         self._lock = threading.Lock()
         self._device_info: Dict[str, Any] = {}
+        self._last_dose_rate: Optional[float] = None
+        self._last_dose_rate_time: float = 0.0
+        self._last_rare_dose_raw: Optional[float] = None  # RareData.dose (device dose counter)
         self._last_error: Optional[str] = None
         self._connection_type: str = ""  # "USB", "BLE", or "Bluetooth"
     
@@ -305,6 +315,9 @@ class RadiacodeDevice:
         """Get cached device information."""
         return self._device_info.copy()
     
+    DOSE_RATE_CACHE_S = 10.0
+    DOSE_SCALE = 10000.0  # library raw units -> uSv (dose) and uSv/h (dose rate)
+
     def get_dose_rate(self) -> Optional[float]:
         """
         Get current dose rate in μSv/h.
@@ -317,12 +330,24 @@ class RadiacodeDevice:
         
         with self._lock:
             try:
-                data_records = self._device.data_buf()
-                for record in data_records:
+                # data_buf() drains the device buffer, so several callers (UI dose poll, acquisition
+                # exposure) would otherwise steal readings from each other: keep the NEWEST reading
+                # and serve it from a short-lived cache when a call finds no new records.
+                newest = None
+                for record in self._device.data_buf():
                     if RealTimeData and isinstance(record, RealTimeData):
-                        # RadiaCode library returns dose_rate in a unit requiring 10,000x multiplier for µSv/h
-                        raw_val = float(record.dose_rate)
-                        return raw_val * 10000
+                        newest = record
+                    elif RareData and isinstance(record, RareData):
+                        # Periodic record carrying the device's cumulative dose counter
+                        self._last_rare_dose_raw = float(record.dose)
+                if newest is not None:
+                    # RadiaCode library returns dose_rate in a unit requiring 10,000x multiplier for uSv/h
+                    self._last_dose_rate = float(newest.dose_rate) * self.DOSE_SCALE
+                    self._last_dose_rate_time = time.monotonic()
+                    return self._last_dose_rate
+                if (self._last_dose_rate is not None and
+                        time.monotonic() - self._last_dose_rate_time <= self.DOSE_RATE_CACHE_S):
+                    return self._last_dose_rate
                 return None
             except Exception as e:
                 import traceback
@@ -546,18 +571,23 @@ class RadiacodeDevice:
     
     def get_accumulated_dose(self) -> Optional[float]:
         """
-        Get total accumulated dose in μSv.
-        
-        NOTE: The radiacode library does not expose accumulated dose via data_buf().
-        RealTimeData only provides dose_rate, not accumulated dose.
-        This feature is not available.
-        
+        Get the device's cumulative dose counter in uSv.
+
+        The device sends it in periodic RareData records within data_buf(), which are
+        consumed by get_dose_rate(); the latest value is cached there. The raw value is
+        scaled like dose_rate (x10,000), the same factor that yields correct uSv/h.
+        UNVERIFIED on hardware: compare with the dose shown on the device's own screen.
+
         Returns:
-            None - Feature not available in radiacode library
+            Dose in uSv, or None until a RareData record has been received.
         """
-        # Accumulated dose is not available from RealTimeData
-        # The library only exposes dose_rate, not total accumulated dose
-        return None
+        if self._last_rare_dose_raw is None:
+            return None
+        return self._last_rare_dose_raw * self.DOSE_SCALE
+
+    def get_accumulated_dose_raw(self) -> Optional[float]:
+        """Unscaled RareData.dose, for verifying the scale against the device display."""
+        return self._last_rare_dose_raw
     
     def get_configuration(self) -> Optional[str]:
         """

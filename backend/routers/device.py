@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException, WebSocket
 from .analysis import sanitize_for_json
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Literal, Optional
 import asyncio
 from datetime import datetime, timezone, timedelta
 import re
 from alphahound_serial import device as alphahound_device
+from radiacode_driver import radiacode_device
 from device_calibration import energies_from_device_spectrum, SOURCE_DEVICE
 from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
 
@@ -188,6 +189,39 @@ from acquisition_manager import acquisition_manager
 class ManagedAcquisitionRequest(BaseModel):
     """Request model for managed acquisition."""
     duration_minutes: float = Field(..., gt=0, le=MAX_ACQUISITION_MINUTES)
+    device: Literal["alphahound", "radiacode"] = "alphahound"
+
+
+UREM_TO_USV = 0.01  # AlphaHound reports dose rate in uRem/h (1 uRem = 0.01 uSv)
+
+
+def alphahound_dose_rate_uSv_h():
+    if not alphahound_device.is_connected():
+        return None
+    return alphahound_device.get_dose_rate() * UREM_TO_USV
+
+
+class RadiacodeAcquisitionDevice:
+    """Adapts the Radiacode driver to the acquisition manager's device interface."""
+
+    calibration_source = "device"
+
+    def is_connected(self):
+        return radiacode_device.is_connected()
+
+    def clear_spectrum(self):
+        radiacode_device.clear_spectrum()
+
+    def request_spectrum(self):
+        pass  # Radiacode spectra are read on demand
+
+    def dose_rate_uSv_h(self):
+        return radiacode_device.get_dose_rate()  # already uSv/h
+
+    def get_spectrum(self):
+        counts, energies, meta = radiacode_device.get_spectrum()
+        self.calibration_source = (meta or {}).get("calibration_source", "device")
+        return list(zip(counts, energies)) if counts else []
 
 
 @router.get("/spectrum/current")
@@ -253,7 +287,17 @@ async def start_managed_acquisition(request: ManagedAcquisitionRequest):
     Returns:
         Status dict with success flag
     """
-    result = await acquisition_manager.start(request.duration_minutes, alphahound_device)
+    if request.device == "radiacode":
+        from routers.device_radiacode import radiacode_identity
+        ident = radiacode_identity()
+        rc_dev = RadiacodeAcquisitionDevice()
+        result = await acquisition_manager.start(request.duration_minutes, rc_dev,
+                                                 source_name=f"Radiacode Device ({ident['instrument_model']})",
+                                                 dose_rate_fn=rc_dev.dose_rate_uSv_h, instrument=ident)
+    else:
+        result = await acquisition_manager.start(request.duration_minutes, alphahound_device,
+                                                 dose_rate_fn=alphahound_dose_rate_uSv_h,
+                                                 instrument={"instrument_model": "AlphaHound"})
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error"))
     return result

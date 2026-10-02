@@ -163,3 +163,10 @@ def test_calibrated_csv_has_no_calibration_warning(client):
     assert response.status_code == 200, response.text
     assert response.json()["is_calibrated"] is True
     assert not response.json().get("warnings")
+
+
+def test_ui_files_are_revalidated_not_cached(client):
+    """Stale cached JS modules made new UI options silently do nothing (accumulated 'analyze')."""
+    for path in ("/", "/static/js/api.js", "/static/js/main.js", "/static/style.css"):
+        assert client.get(path).headers.get("cache-control") == "no-cache", path
+    assert "cache-control" not in client.get("/settings").headers  # API responses untouched

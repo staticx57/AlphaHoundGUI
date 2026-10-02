@@ -142,6 +142,21 @@ def get_radiacode_dose():
     }
 
 
+def radiacode_identity() -> dict:
+    """Metadata naming the connected unit, e.g. {'instrument_model': 'RadiaCode-110', ...}.
+
+    The analysis picks the detector resolution/efficiency model from this
+    (source_templates.resolve_detector), so it must name the actual model.
+    """
+    info = radiacode_device.get_device_info() or {}
+    serial = str(info.get("serial_number") or "")
+    model = "RadiaCode"
+    if serial.upper().startswith("RC-"):
+        # Serials look like 'RC-110-001593' / 'RC-103G-...'
+        model = "RadiaCode-" + serial.split("-")[1]
+    return {"source": "Radiacode Device", "instrument_model": model, "serial_number": serial or None}
+
+
 @router.get("/spectrum")
 def get_radiacode_spectrum(analyze: bool = True):
     """
@@ -160,6 +175,7 @@ def get_radiacode_spectrum(analyze: bool = True):
     
     if not counts:
         raise HTTPException(status_code=500, detail="Failed to read spectrum")
+    metadata = {**(metadata or {}), **radiacode_identity()}
     
     result = {
         "counts": counts,
@@ -378,8 +394,13 @@ def set_radiacode_language(language: str):
 # ============================================================
 
 @router.get("/spectrum/accumulated")
-def get_accumulated_spectrum(analyze: bool = True):
-    """Get long-term accumulated spectrum from device memory (persists across clears)."""
+def get_accumulated_spectrum(analyze: bool = False):
+    """Get the long-term accumulated spectrum from device memory (persists across clears).
+
+    It spans everything since the device's last accumulation reset. That is only a valid
+    spectroscopy measurement if the user reset the device and then measured a single
+    source, so identification runs only when explicitly requested (``analyze=true``).
+    """
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
     
@@ -402,22 +423,50 @@ def get_accumulated_spectrum(analyze: bool = True):
         "a0": spectrum["a0"],
         "a1": spectrum["a1"],
         "a2": spectrum["a2"],
-        "is_calibrated": True
+        "is_calibrated": True,
+        "metadata": {**radiacode_identity(), "duration_s": spectrum["duration"],
+                     "calibration": {"a0": spectrum["a0"], "a1": spectrum["a1"], "a2": spectrum["a2"]},
+                     "spectrum_type": "accumulated"},
     }
     
-    # Run analysis if requested (same as regular spectrum endpoint)
     if analyze and len(spectrum["counts"]) > 0:
+        # User confirmed the history is a single deliberate measurement
+        live_time = float(spectrum["duration"]) if spectrum["duration"] else 0.0
         try:
-            live_time = float(spectrum["duration"]) if spectrum["duration"] else 0.0
             result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time)
-            logger.info(f"[Radiacode] Accumulated analysis: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
         except Exception as e:
-            import traceback
             logger.error(f"[Radiacode] Accumulated analysis error: {e}")
-            traceback.print_exc()
             result["analysis_error"] = str(e)
-    
+        result["warnings"] = result.get("warnings", []) + [ACCUMULATED_ANALYZED_NOTE]
+        return result
+
+    # Default: view only. The history may mix many locations/sources (e.g. carried around),
+    # which is fine as an exposure record but not as a spectroscopy measurement.
+    result.update({
+        "peaks": [],
+        "isotopes": [],
+        "decay_chains": [],
+        "identification_skipped": True,
+        "display_min_keV": _display_min(result.get("metadata")),
+        "warnings": [ACCUMULATED_NOT_FOR_SPECTROSCOPY],
+    })
     return result
+
+
+def _display_min(metadata):
+    from source_templates import detector_min_energy
+    return detector_min_energy(metadata)
+
+
+ACCUMULATED_NOT_FOR_SPECTROSCOPY = (
+    "Accumulated spectrum shown without identification: it holds everything counted since the "
+    "device's last accumulation reset, which may mix several locations and sources. If you reset "
+    "it and then measured a single source, choose to analyze it."
+)
+ACCUMULATED_ANALYZED_NOTE = (
+    "Accumulated spectrum analyzed on the assumption that the device was reset and then used on a "
+    "single source; if it was carried around, results describe a mixture."
+)
 
 
 @router.post("/settings/display-direction")
@@ -551,6 +600,7 @@ def get_radiacode_extended_info():
     
     return {
         "accumulated_dose_uSv": accumulated_dose,
+        "accumulated_dose_raw": radiacode_device.get_accumulated_dose_raw(),
         "configuration": configuration,
         "device_info": radiacode_device.get_device_info()
     }

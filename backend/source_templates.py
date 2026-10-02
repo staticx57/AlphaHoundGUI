@@ -74,6 +74,12 @@ def resolve_detector(metadata: Optional[dict]) -> str:
     return "AlphaHound CsI(Tl)"
 
 
+def detector_min_energy(metadata: Optional[dict]) -> float:
+    """Lowest energy the resolved detector is specified for (keV); below it is noise/threshold."""
+    det = DETECTOR_DATABASE.get(resolve_detector(metadata), {})
+    return float(det.get("min_energy_keV", 20))
+
+
 def _resolution(detector: str) -> float:
     return float(DETECTOR_DATABASE.get(detector, {}).get("energy_resolution_662keV", 0.10))
 

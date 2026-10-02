@@ -11,6 +11,27 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 
+def instrument_from_metadata(metadata: dict) -> dict:
+    """Best-effort {manufacturer, model, serial_number} from spectrum metadata."""
+    import re
+    metadata = metadata or {}
+    model = metadata.get('instrument_model')
+    source = str(metadata.get('source') or '')
+    serial = metadata.get('serial_number') or 'UNKNOWN'
+    if not model:
+        m = re.search(r'\((RadiaCode-[^)]+)\)', source, re.IGNORECASE)
+        if m:
+            model = m.group(1)
+        elif 'radiacode' in source.lower():
+            model = 'RadiaCode'
+    if model and 'radiacode' in str(model).lower():
+        return {'manufacturer': 'RadiaCode', 'model': model, 'serial_number': serial}
+    if model:
+        return {'manufacturer': metadata.get('instrument_manufacturer', 'Unknown'), 'model': model,
+                'serial_number': serial}
+    return {}  # fall back to the AlphaHound defaults (this app's native device)
+
+
 def generate_n42_xml(spectrum_data: Dict) -> str:
     """
     Generate N42-compliant XML from spectrum data.
@@ -56,8 +77,9 @@ def generate_n42_xml(spectrum_data: Dict) -> str:
     real_time = metadata.get('real_time', live_time)
     start_time = metadata.get('start_time') or datetime.now().isoformat()
     
-    # Instrument information
-    instrument_info = spectrum_data.get('instrument_info', {})
+    # Instrument information: explicit instrument_info wins, otherwise derive it from the
+    # spectrum's metadata (a RadiaCode spectrum must not be saved as an AlphaHound)
+    instrument_info = spectrum_data.get('instrument_info') or instrument_from_metadata(metadata)
     manufacturer = instrument_info.get('manufacturer', 'RadView Detection')
     model = instrument_info.get('model', 'AlphaHound')
     serial_number = instrument_info.get('serial_number', 'UNKNOWN')

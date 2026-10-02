@@ -160,6 +160,78 @@ def detect_peaks_cwt(
         return []
 
 
+def detect_peaks_resolution_aware(
+    energies: np.ndarray,
+    net_counts: np.ndarray,
+    gross_counts: np.ndarray,
+    r662: float,
+    min_energy: float = 30.0,
+    max_energy: float = 3000.0,
+    k_sigma: float = 5.0,
+) -> List[float]:
+    """
+    Detector-aware candidate search that complements the fixed-width CWT.
+
+    The CWT widths are fixed in channels, so broad scintillator peaks on a shoulder (e.g.
+    Ac-228 338 keV next to Pb-212 239 keV on a RadiaCode) can be missed. Here the spectrum
+    is smoothed with a Gaussian matched to the detector resolution at each energy, and a
+    local maximum is kept only if
+      - its prominence exceeds k_sigma x the Poisson noise of the smoothed estimate, and
+      - it keeps >= 65 % of its height when smoothed at the full detector sigma (rejects spikes).
+    """
+    from scipy.signal import find_peaks, peak_prominences
+
+    E = np.asarray(energies, dtype=float)
+    net = np.asarray(net_counts, dtype=float)
+    gross = np.maximum(np.asarray(gross_counts, dtype=float), 0.0)
+    n = E.size
+    if n < 16:
+        return []
+    dE = np.maximum(np.gradient(E), 1e-6)
+    fwhm_keV = r662 * 662.0 * np.sqrt(np.clip(E, 1.0, None) / 662.0)
+    fwhm_ch = fwhm_keV / dE
+    sig_ch = np.clip(0.5 * fwhm_ch / 2.355, 0.7, 30.0)   # smooth at half the peak sigma
+
+    smooth = np.empty(n)
+    smooth_full = np.empty(n)
+    noise = np.empty(n)
+    idx = np.arange(n)
+    for i in range(n):
+        s = sig_ch[i]
+        lo, hi = max(0, int(i - 3 * s)), min(n, int(i + 3 * s) + 1)
+        w = np.exp(-0.5 * ((idx[lo:hi] - i) / s) ** 2)
+        w /= w.sum()
+        smooth[i] = np.dot(w, net[lo:hi])
+        noise[i] = np.sqrt(max(np.dot(w * w, gross[lo:hi]), 1.0))   # std of the weighted mean
+        s2 = 2.0 * s                                                  # full detector sigma
+        lo2, hi2 = max(0, int(i - 3 * s2)), min(n, int(i + 3 * s2) + 1)
+        w2 = np.exp(-0.5 * ((idx[lo2:hi2] - i) / s2) ** 2)
+        smooth_full[i] = np.dot(w2 / w2.sum(), net[lo2:hi2])
+
+    in_range = (E >= min_energy) & (E <= max_energy)
+    peaks, _ = find_peaks(smooth)
+    peaks = peaks[in_range[peaks]]
+    if peaks.size == 0:
+        return []
+    prom = peak_prominences(smooth, peaks)[0]
+    # Spike rejection: going from half to full detector sigma keeps ~80 % of a real peak's height
+    # (sigma_p / sqrt(sigma_p^2 + sigma_s^2)) but only ~50 % of a one-channel spike's. Unlike a
+    # half-height width test this also works for peaks sitting on the shoulder of a bigger one.
+    height_kept = smooth_full[peaks] / np.maximum(smooth[peaks], 1e-12)
+    keep = (prom >= k_sigma * noise[peaks]) & (smooth[peaks] > 0) & (height_kept >= 0.65)
+    return sorted(float(E[i]) for i in peaks[keep])
+
+
+def merge_candidates(primary: List[float], extra: List[float], r662: float) -> List[float]:
+    """Add extra candidates that are not within half an FWHM of an existing one."""
+    out = list(primary)
+    for e in extra:
+        half = 0.5 * r662 * 662.0 * np.sqrt(max(e, 1.0) / 662.0)
+        if all(abs(e - p) > half for p in out):
+            out.append(e)
+    return sorted(out)
+
+
 def detect_peaks_prominence(
     energies: np.ndarray,
     counts: np.ndarray,
@@ -209,7 +281,8 @@ def detect_peaks_enhanced(
     validate_fits: bool = True,
     min_r_squared: float = 0.7,
     apply_snip: bool = True,
-    snip_iterations: int = 24
+    snip_iterations: int = 24,
+    resolution_662: Optional[float] = None
 ) -> List[Dict]:
     """
     Enhanced two-stage peak detection.
@@ -227,6 +300,8 @@ def detect_peaks_enhanced(
         min_r_squared: Minimum R² for fit validation
         apply_snip: If True, remove Compton continuum before peak finding
         snip_iterations: SNIP iterations (higher = smoother background)
+        resolution_662: detector FWHM fraction at 662 keV; enables the detector-aware
+                        search that complements the fixed-width CWT
         
     Returns:
         List of validated peak dictionaries
@@ -257,6 +332,19 @@ def detect_peaks_enhanced(
     if len(candidates) == 0:
         # Fallback to prominence-based detection
         candidates = detect_peaks_prominence(energies, counts_for_detection, 0.02, min_energy, max_energy)
+
+    # Detector-aware search for broad / shoulder peaks the fixed-width CWT misses
+    if resolution_662:
+        try:
+            net_for_search = counts_for_detection
+            if net_for_search is counts:
+                from spectral_analysis import snip_background
+                net_for_search = counts - np.asarray(snip_background(counts, iterations=snip_iterations))
+            extra = detect_peaks_resolution_aware(energies, net_for_search, counts, resolution_662,
+                                                  min_energy, max_energy)
+            candidates = merge_candidates(list(candidates), extra, resolution_662)
+        except Exception as e:
+            print(f"[DEBUG Peak] Resolution-aware search failed: {e}")
     
     if not validate_fits:
         # Return simple peak list without validation

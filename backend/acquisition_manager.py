@@ -9,6 +9,7 @@ Author: AlphaHoundGUI
 """
 
 import asyncio
+import time
 import os
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
@@ -44,6 +45,15 @@ class AcquisitionState:
     last_spectrum_energies: Optional[List[float]] = None
     error_message: Optional[str] = None
     final_filename: Optional[str] = None
+    # Exposure during this acquisition, integrated from the instrument's dose-rate readings.
+    # Valid regardless of how many sources contributed (unlike isotope identification).
+    exposure_uSv: float = 0.0
+    exposure_covered_s: float = 0.0
+    dose_rate_samples: int = 0
+    dose_rate_sum: float = 0.0
+    dose_rate_max: Optional[float] = None
+    last_dose_rate: Optional[float] = None
+    last_dose_time: Optional[float] = None
 
 
 class AcquisitionManager:
@@ -78,6 +88,10 @@ class AcquisitionManager:
         self._task: Optional[asyncio.Task] = None
         self._stop_requested = False
         self._device = None  # Will be set when acquisition starts
+        self._source_name = "AlphaHound Device"
+        self._is_calibrated = True
+        self._dose_rate_fn = None  # callable -> dose rate in uSv/h (or None)
+        self._instrument: Dict[str, Any] = {}  # e.g. {'instrument_model': 'RadiaCode-110', 'serial_number': ...}
         
     def get_state(self) -> Dict[str, Any]:
         """Get current acquisition state as dict for API response"""
@@ -91,16 +105,22 @@ class AcquisitionManager:
             "progress_percent": (self.state.elapsed_seconds / self.state.duration_seconds * 100) if self.state.duration_seconds > 0 else 0,
             "last_checkpoint": self.state.last_checkpoint_time.isoformat() if self.state.last_checkpoint_time else None,
             "error": self.state.error_message,
-            "final_filename": self.state.final_filename
+            "final_filename": self.state.final_filename,
+            "exposure": self.exposure_summary(),
         }
     
-    async def start(self, duration_minutes: float, device) -> Dict[str, Any]:
+    async def start(self, duration_minutes: float, device, source_name: str = "AlphaHound Device",
+                    dose_rate_fn=None, instrument: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Start a managed acquisition.
         
         Args:
             duration_minutes: How long to acquire (in minutes)
-            device: AlphaHoundDevice instance
+            device: object with is_connected / clear_spectrum / request_spectrum /
+                    get_spectrum() -> [(count, energy_keV), ...] (AlphaHound driver or an adapter)
+            source_name: label used in results (also selects the detector model for analysis)
+            dose_rate_fn: optional callable returning the current dose rate in uSv/h; sampled
+                          every poll and integrated into the exposure for this acquisition
             
         Returns:
             Status dict
@@ -113,6 +133,10 @@ class AcquisitionManager:
         
         # Initialize state
         self._device = device
+        self._source_name = source_name
+        self._is_calibrated = True
+        self._dose_rate_fn = dose_rate_fn
+        self._instrument = {k: v for k, v in (instrument or {}).items() if k != 'source'}
         self._stop_requested = False
         self.state = AcquisitionState(
             status=AcquisitionStatus.ACQUIRING,
@@ -121,8 +145,8 @@ class AcquisitionManager:
             elapsed_seconds=0.0
         )
         
-        # Clear device spectrum
-        device.clear_spectrum()
+        # Clear device spectrum (device I/O can block, e.g. Bluetooth: keep it off the event loop)
+        await asyncio.to_thread(device.clear_spectrum)
         
         # Start background task
         self._task = asyncio.create_task(self._acquisition_loop())
@@ -171,7 +195,8 @@ class AcquisitionManager:
                     logger.info(f"[AcquisitionManager] Duration complete: {self.state.elapsed_seconds:.1f}s")
                     break
                 
-                # Poll spectrum from device
+                # Sample dose rate (exposure) and poll spectrum from device
+                await self._sample_dose_rate()
                 await self._poll_spectrum()
                 
                 # Checkpoint save
@@ -195,6 +220,47 @@ class AcquisitionManager:
             self.state.status = AcquisitionStatus.ERROR
             self.state.error_message = str(e)
     
+    MAX_DOSE_GAP_S = 10.0  # don't integrate across longer gaps in dose-rate readings
+
+    async def _sample_dose_rate(self):
+        """Read the instrument's dose rate (off the event loop) and integrate it."""
+        if not self._dose_rate_fn:
+            return
+        try:
+            rate = await asyncio.to_thread(self._dose_rate_fn)
+        except Exception as e:
+            logger.warning(f"[AcquisitionManager] Dose-rate read failed: {e}")
+            return
+        self.record_dose_rate(rate, time.monotonic())
+
+    def record_dose_rate(self, rate_uSv_h: Optional[float], now_s: float):
+        """Trapezoid-integrate dose rate (uSv/h) between consecutive readings <= MAX_DOSE_GAP_S apart."""
+        st = self.state
+        if rate_uSv_h is None or not (rate_uSv_h >= 0) or rate_uSv_h == float("inf"):
+            return
+        if st.last_dose_rate is not None and st.last_dose_time is not None:
+            dt = now_s - st.last_dose_time
+            if 0 < dt <= self.MAX_DOSE_GAP_S:
+                st.exposure_uSv += 0.5 * (st.last_dose_rate + rate_uSv_h) * dt / 3600.0
+                st.exposure_covered_s += dt
+        st.last_dose_rate, st.last_dose_time = rate_uSv_h, now_s
+        st.dose_rate_samples += 1
+        st.dose_rate_sum += rate_uSv_h
+        st.dose_rate_max = rate_uSv_h if st.dose_rate_max is None else max(st.dose_rate_max, rate_uSv_h)
+
+    def exposure_summary(self) -> Optional[Dict[str, Any]]:
+        st = self.state
+        if not self._dose_rate_fn or st.dose_rate_samples == 0:
+            return None
+        return {
+            "exposure_uSv": round(st.exposure_uSv, 6),
+            "mean_dose_rate_uSv_h": round(st.dose_rate_sum / st.dose_rate_samples, 6),
+            "max_dose_rate_uSv_h": round(st.dose_rate_max or 0.0, 6),
+            "covered_seconds": round(st.exposure_covered_s, 1),
+            "samples": st.dose_rate_samples,
+            "method": "integrated instrument dose rate",
+        }
+
     async def _poll_spectrum(self):
         """Request and store current spectrum from device"""
         if not self._device or not self._device.is_connected():
@@ -202,27 +268,30 @@ class AcquisitionManager:
         
         try:
             # Request spectrum
-            self._device.request_spectrum()
+            await asyncio.to_thread(self._device.request_spectrum)
             
             # Wait for spectrum to be collected
             await asyncio.sleep(0.5)
             max_wait = 5.0
             waited = 0.0
             while waited < max_wait:
-                spectrum = self._device.get_spectrum()
+                spectrum = await asyncio.to_thread(self._device.get_spectrum)
                 if len(spectrum) >= 1024:
                     break
                 await asyncio.sleep(0.5)
                 waited += 0.5
             
             # Store spectrum data
-            spectrum = self._device.get_spectrum()
+            spectrum = await asyncio.to_thread(self._device.get_spectrum)
             if spectrum:
                 self.state.last_spectrum_counts = [int(count) for count, energy in spectrum]
                 # Use the device's own (nonlinear) energy axis; linear fallback only if unusable
                 self.state.last_spectrum_energies, energy_source = energies_from_device_spectrum(spectrum)
                 if energy_source != SOURCE_DEVICE:
                     logger.warning("[AcquisitionManager] " + fallback_warning())
+                # A guessed axis is not a calibration (identification is then skipped with a warning)
+                self._is_calibrated = (energy_source == SOURCE_DEVICE and
+                                       getattr(self._device, "calibration_source", "device") == "device")
                 
         except Exception as e:
             logger.error(f"[AcquisitionManager] Poll error: {e}")
@@ -238,11 +307,7 @@ class AcquisitionManager:
             from n42_exporter import generate_n42_xml
             
             # Run analysis using common enhanced pipeline
-            result = {
-                'counts': self.state.last_spectrum_counts,
-                'energies': self.state.last_spectrum_energies
-            }
-            result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=self.state.elapsed_seconds)
+            result = self._analyze()
             
             # Build N42 data
             n42_data = {
@@ -251,7 +316,10 @@ class AcquisitionManager:
                 'metadata': {
                     'live_time': self.state.elapsed_seconds,
                     'real_time': self.state.elapsed_seconds,
-                    'start_time': self.state.start_time.isoformat()
+                    'start_time': self.state.start_time.isoformat(),
+                    'source': self._source_name,
+                    **self._instrument,
+                    **self._exposure_metadata(),
                 },
                 'peaks': result.get('peaks', []),
                 'isotopes': result.get('isotopes', [])
@@ -275,7 +343,8 @@ class AcquisitionManager:
         """Finalize acquisition - save final file and cleanup"""
         self.state.status = AcquisitionStatus.FINALIZING
         
-        # Final spectrum poll
+        # Final dose-rate sample and spectrum poll
+        await self._sample_dose_rate()
         await self._poll_spectrum()
         
         if not self.state.last_spectrum_counts:
@@ -287,11 +356,7 @@ class AcquisitionManager:
             from n42_exporter import generate_n42_xml
             
             # Run analysis using common enhanced pipeline
-            result = {
-                'counts': self.state.last_spectrum_counts,
-                'energies': self.state.last_spectrum_energies
-            }
-            result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=self.state.elapsed_seconds)
+            result = self._analyze()
             
             # Build N42 data
             n42_data = {
@@ -300,7 +365,10 @@ class AcquisitionManager:
                 'metadata': {
                     'live_time': self.state.elapsed_seconds,
                     'real_time': self.state.elapsed_seconds,
-                    'start_time': self.state.start_time.isoformat()
+                    'start_time': self.state.start_time.isoformat(),
+                    'source': self._source_name,
+                    **self._instrument,
+                    **self._exposure_metadata(),
                 },
                 'peaks': result.get('peaks', []),
                 'isotopes': result.get('isotopes', [])
@@ -335,17 +403,21 @@ class AcquisitionManager:
             self.state.status = AcquisitionStatus.ERROR
             self.state.error_message = str(e)
     
+    def _analyze(self) -> Dict[str, Any]:
+        """Common analysis of the latest spectrum (source name selects the detector model)."""
+        result = {
+            'counts': self.state.last_spectrum_counts,
+            'energies': self.state.last_spectrum_energies,
+            'metadata': {'source': self._source_name, **self._instrument},
+        }
+        return analyze_spectrum_peaks(result, is_calibrated=self._is_calibrated, live_time=self.state.elapsed_seconds)
+
     def get_latest_data(self) -> Optional[Dict[str, Any]]:
         """Get latest spectrum data for UI updates"""
         if not self.state.last_spectrum_counts:
             return None
         
-        # Run analysis using common enhanced pipeline
-        result = {
-            'counts': self.state.last_spectrum_counts,
-            'energies': self.state.last_spectrum_energies
-        }
-        result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=self.state.elapsed_seconds)
+        result = self._analyze()
         
         return {
             'counts': result['counts'],
@@ -353,16 +425,36 @@ class AcquisitionManager:
             'peaks': result.get('peaks', []),
             'isotopes': result.get('isotopes', []),
             'decay_chains': result.get('decay_chains', []),
+            'is_calibrated': self._is_calibrated,
+            'warnings': result.get('warnings', []),
+            'exposure': self.exposure_summary(),
+            'display_min_keV': result.get('display_min_keV'),
             'metadata': {
-                'source': 'AlphaHound Device',
+                'source': self._source_name,
+                **self._instrument,
                 'channels': len(self.state.last_spectrum_counts),
                 'count_time_minutes': self.state.elapsed_seconds / 60,
                 'acquisition_time': self.state.elapsed_seconds,
                 'live_time': self.state.elapsed_seconds,
                 'real_time': self.state.elapsed_seconds,
-                'start_time': self.state.start_time.isoformat() if self.state.start_time else None
+                'start_time': self.state.start_time.isoformat() if self.state.start_time else None,
+                **self._exposure_metadata(),
             }
         }
+
+    def _exposure_metadata(self) -> Dict[str, Any]:
+        e = self.exposure_summary()
+        if not e:
+            return {}
+        return {"exposure_during_acquisition": format_exposure(e)}
+
+
+def format_exposure(e: Dict[str, Any]) -> str:
+    """'0.421 uSv (mean 0.25, max 0.90 uSv/h)' with nSv for small values."""
+    def dose(v):
+        return f"{v * 1000:.1f} nSv" if v < 1 else f"{v:.3f} \u00b5Sv"
+    return (f"{dose(e['exposure_uSv'])} (mean {e['mean_dose_rate_uSv_h']:.3f}, "
+            f"max {e['max_dose_rate_uSv_h']:.3f} \u00b5Sv/h)")
 
 
 # Global singleton instance

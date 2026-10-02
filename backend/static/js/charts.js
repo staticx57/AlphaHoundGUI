@@ -136,7 +136,13 @@ export class AlphaHoundChart {
         }
 
         // Prepare data
-        const chartData = labels.map((l, i) => ({ x: l, y: dataPoints[i] })); this.labelOffsets = {};
+        // In auto-scale view, channels below the detector threshold (noise pile) are not drawn,
+        // leaving a clean margin between the y-axis and the data. Full Spectrum draws everything.
+        const lowCut = (this.autoScale && typeof this.displayMinKeV === 'number') ? this.displayMinKeV : null;
+        const chartData = labels.map((l, i) => ({
+            x: l,
+            y: (lowCut !== null && parseFloat(l) < lowCut) ? null : dataPoints[i]
+        })); this.labelOffsets = {};
         const peakData = (peaks || []).map(p => ({ x: p.energy, y: p.counts || p.count || 0 }));
 
         // Get theme colors for peaks and chart line
@@ -175,10 +181,14 @@ export class AlphaHoundChart {
             // Ensure minimum zoom of 200 keV
             maxEnergy = Math.max(maxEnergy, 200);
 
-            // Y-AXIS AUTO-SCALE (Visible range headroom)
-            const visibleEndIndex = labels.findIndex(e => parseFloat(e) > maxEnergy);
-            const visibleData = visibleEndIndex > 0 ? dataPoints.slice(0, visibleEndIndex) : dataPoints;
-            const visibleMaxCount = Math.max(...visibleData);
+            // Y-AXIS AUTO-SCALE: headroom over the visible range, ignoring channels below the
+            // detector threshold (their noise pile would otherwise set the scale)
+            const lowLimit = (typeof this.displayMinKeV === 'number') ? this.displayMinKeV : -Infinity;
+            const visibleData = dataPoints.filter((_, i) => {
+                const e = parseFloat(labels[i]);
+                return e >= lowLimit && e <= maxEnergy;
+            });
+            const visibleMaxCount = visibleData.length ? Math.max(...visibleData) : Math.max(...dataPoints);
             maxY = visibleMaxCount * 1.15;
         }
 
@@ -196,6 +206,13 @@ export class AlphaHoundChart {
             }
             const firstDataEnergy = parseFloat(labels[firstNonZeroIndex]);
             minEnergy = Math.max(0, firstDataEnergy - (maxEnergy * 0.05));
+            // Start just below the detector's lower threshold when known (Full Spectrum shows all)
+            // with a small margin so the first data does not sit on the y-axis
+            if (typeof this.displayMinKeV === 'number') {
+                const margin = Math.max(5, 0.03 * (maxEnergy - this.displayMinKeV));
+                // may go slightly below 0 keV: negative tick labels are hidden (see x ticks callback)
+                minEnergy = this.displayMinKeV - margin;
+            }
         }
 
         if (this.chart) {
@@ -256,6 +273,14 @@ export class AlphaHoundChart {
             console.log(`[Chart] autoScale=${this.autoScale}, lastRenderMode=${this._lastRenderMode}, modeSwitched=${modeSwitched}, fullMaxEnergy=${fullMaxEnergy}`);
             this._lastRenderMode = this.autoScale;
 
+            // Apply the scale type BEFORE zooming. zoomScale() triggers chart.update(), which
+            // rebuilds chart.options, so assigning through a reference taken earlier is lost
+            // (that is why Log/Linear appeared to do nothing).
+            if (this.chart.options.scales.y.type !== scaleType) {
+                this.chart.options.scales.y.type = scaleType;
+                this.chart.update('none');
+            }
+
             if (this.autoScale) {
                 console.log(`[Chart] AutoScale: setting x=[${minEnergy}, ${maxEnergy}], y=[0, ${maxY}]`);
                 // Use zoom plugin's zoomScale for programmatic zoom
@@ -269,7 +294,7 @@ export class AlphaHoundChart {
                 this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: fullYMax }, 'none');
             }
 
-            yScale.type = scaleType;
+            this.chart.options.scales.y.type = scaleType;
             this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
             this.chart.update('none');
         } else {
@@ -346,7 +371,11 @@ export class AlphaHoundChart {
                             bounds: 'data',
                             title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#94a3b8', includeBounds: true }
+                            ticks: {
+                                color: '#94a3b8', includeBounds: true,
+                                // The auto-scale margin can start the axis just below 0 keV; don't label it
+                                callback: (value) => (value < 0 ? '' : Number(value).toLocaleString())
+                            }
                         },
                         y: {
                             type: scaleType,

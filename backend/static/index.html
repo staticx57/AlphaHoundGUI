@@ -396,7 +396,7 @@
                                 <button id="btn-get-accumulated" class="btn-secondary"
                                     data-device-feature="accumulatedSpectrum"
                                     style="padding: 0.4rem 0.8rem; display: none;"
-                                    title="Download accumulated spectrum (long-term)">
+                                    title="Long-term accumulated spectrum (since the device's last accumulation reset); you choose whether to identify it">
                                     <img src="/static/icons/history.svg" class="icon"
                                         style="filter: invert(14%) sepia(87%) saturate(1963%) hue-rotate(188deg) brightness(97%) contrast(101%);">
                                     Get Accumulated
@@ -443,6 +443,8 @@
                                     style="display: none; padding: 0.4rem 0.8rem; background: var(--bg-secondary); border: 1px solid var(--accent-color); border-radius: 6px; font-size: 0.85rem;">
                                     <span id="acquisition-timer"
                                         style="color: var(--accent-color); font-weight: 700;">0s</span>
+                                    <span id="acquisition-exposure" title="Dose received during this acquisition (integrated instrument dose rate; valid for mixed sources)"
+                                        style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;"></span>
                                 </div>
                             </div>
                         </div>
@@ -1252,7 +1254,7 @@
     </main>
 
     <!-- Main Application Logic (ES6 Modules) -->
-    <script type="module" src="/static/js/main.js?v=4.9"></script>
+    <script type="module" src="/static/js/main.js?v=5.0"></script>
 </body>
 
 </html>

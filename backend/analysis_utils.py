@@ -61,6 +61,15 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     
     energies = result["energies"]
     counts = result["counts"]
+
+    # Lower display limit: the detector's specified threshold (channels below it hold
+    # electronic noise, e.g. the large pile in a RadiaCode's first channels).
+    if is_calibrated:
+        try:
+            from source_templates import detector_min_energy
+            result["display_min_keV"] = detector_min_energy(result.get("metadata"))
+        except Exception:
+            pass
     
     # Preserve any peaks already detected by the parser
     parser_peaks = result.get("peaks", [])
@@ -68,7 +77,12 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     # Use enhanced peak detection if available
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
         try:
-            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True)
+            try:
+                from source_templates import resolve_detector, _resolution
+                r662 = _resolution(resolve_detector(result.get("metadata")))
+            except Exception:
+                r662 = None
+            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True, resolution_662=r662)
             result["analysis_mode"] = "enhanced"
             
             # If enhanced returns 0 but parser found peaks, fall back to basic

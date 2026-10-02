@@ -80,6 +80,10 @@ export class AlphaHoundUI {
     }
 
     renderDashboard(data) {
+        // Detector lower threshold (keV): auto-scale view starts here and ignores the noise below it
+        if (window.chartManager) {
+            window.chartManager.displayMinKeV = (typeof data?.display_min_keV === 'number') ? data.display_min_keV : null;
+        }
         this.elements.dashboard.style.display = 'block';
         this.renderMetadata(data.metadata);
         this.renderDataQualityWarning(data.data_quality);
@@ -300,7 +304,8 @@ export class AlphaHoundUI {
             'energy_calibration_slope': 'Cal Slope',
             'energy_calibration_offset': 'Cal Offset',
             'calibration': 'Calibration',
-            'duration_s': 'Duration'
+            'duration_s': 'Duration',
+            'exposure_during_acquisition': 'Exposure (this acquisition)'
         };
 
         const metaHtml = Object.entries(metadata || {}).map(([key, value]) => {
@@ -626,12 +631,13 @@ export class AlphaHoundUI {
                                 <strong>Detected Members:</strong> ${chain.num_detected}/${chain.num_key_isotopes} key indicators
                             </div>
                             ${membersHTML}
+                            ${chain.applications && chain.applications.length > 0 ? `
                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                 <strong>Likely Sources:</strong>
                                 <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
                                     ${chain.applications.map(app => `<li style="margin: 0.25rem 0;">${app}</li>`).join('')}
                                 </ul>
-                            </div>
+                            </div>` : ''}
                             ${chain.references && chain.references.length > 0 ? `
                             <div style="margin-top: 0.5rem; font-size: 0.7rem;">
                                 <strong>References:</strong>

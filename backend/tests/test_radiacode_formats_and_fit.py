@@ -109,3 +109,38 @@ def test_fit_reports_nothing_for_featureless_continuum():
 
 def test_fit_returns_none_for_tiny_input():
     assert fit_source_templates([1.0, 2.0], [1, 2]) is None
+
+
+def test_display_min_is_detector_threshold():
+    client = TestClient(app)
+    body = client.post("/upload", files={"file": ("Th-232.xml", (RC / "Th-232.xml").read_bytes(), "text/xml")}).json()
+    assert body["display_min_keV"] == 20.0
+
+
+def test_resolution_aware_search_finds_shoulder_peak_cwt_misses():
+    """Broad 338 keV line on the shoulder of a strong 239 keV line (RadiaCode resolution)."""
+    from peak_detection_enhanced import detect_peaks_cwt, detect_peaks_resolution_aware, merge_candidates
+    ch = np.arange(1024)
+    E = 5.56 + 2.364 * ch + 0.000378 * ch ** 2
+    dE = np.gradient(E)
+    def line(mu, area):
+        s = 0.084 * 662 * math.sqrt(mu / 662) / 2.355
+        return area * np.exp(-0.5 * ((E - mu) / s) ** 2) / (s * math.sqrt(2 * math.pi)) * dE
+    cont = 4.0e5 * np.exp(-E / 250.0) + 2000.0
+    rng = np.random.default_rng(7)
+    gross = rng.poisson(cont + line(238.6, 6.0e6) + line(338.3, 1.2e6) + line(583.2, 1.5e6)).astype(float)
+    from spectral_analysis import snip_background
+    net = gross - np.asarray(snip_background(gross, iterations=24))
+    found = detect_peaks_resolution_aware(E, net, gross, 0.084)
+    merged = merge_candidates(detect_peaks_cwt(E, net), found, 0.084)
+    for target in (238.6, 338.3, 583.2):
+        assert any(abs(e - target) < 15 for e in merged), (target, merged)
+
+
+def test_resolution_aware_search_rejects_single_channel_spikes():
+    from peak_detection_enhanced import detect_peaks_resolution_aware
+    E = 3.0 + 2.4 * np.arange(1024)
+    gross = np.full(1024, 50.0)
+    gross[[200, 400, 600]] = 400.0           # one-channel spikes, physically too narrow
+    found = detect_peaks_resolution_aware(E, gross - 50.0, gross, 0.084)
+    assert found == []

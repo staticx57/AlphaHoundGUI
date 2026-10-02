@@ -1,7 +1,7 @@
 // Updated: 2024-12-14 17:00 - N42 Export Fixed
 import { api } from './api.js';
-import { ui } from './ui.js?v=2.9';
-import { chartManager, DoseRateChart } from './charts.js?v=4.5';
+import { ui } from './ui.js?v=3.0';
+import { chartManager, DoseRateChart } from './charts.js?v=4.6';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
 import { n42MetadataEditor } from './n42_editor.js';
@@ -82,7 +82,10 @@ async function pollRadiacodeDose() {
                 const extendedInfo = await api.getRadiacodeExtendedInfo();
                 const accumEl = document.getElementById('rc-accumulated-dose');
                 const accum = extendedInfo.accumulated_dose_uSv;
-                if (accumEl && typeof accum === 'number') {
+                if (accumEl && (accum === null || accum === undefined)) {
+                    accumEl.textContent = 'n/a';
+                    accumEl.title = 'The RadiaCode interface does not report the device dose counter; acquisitions show exposure integrated from the dose rate.';
+                } else if (accumEl && typeof accum === 'number') {
                     accumEl.textContent = accum >= 1000
                         ? (accum / 1000).toFixed(3) + ' mSv'
                         : accum.toFixed(2) + ' μSv';
@@ -312,8 +315,14 @@ const btnGetAccumulated = document.getElementById('btn-get-accumulated');
 if (btnGetAccumulated) {
     btnGetAccumulated.addEventListener('click', async () => {
         try {
+            // The accumulated spectrum spans everything since the device's last accumulation reset.
+            // Only identify it if the user measured a single source over that period.
+            const analyze = confirm(
+                'Analyze the accumulated spectrum for isotopes?\n\n' +
+                'OK: the device was reset and then used on a single source.\n' +
+                'Cancel: just view it (it may mix several locations/sources).');
             showToast('Getting accumulated spectrum...', 'info');
-            const data = await api.getAccumulatedSpectrum();
+            const data = await api.getAccumulatedSpectrum(analyze);
 
             // Backend now returns fully analyzed data with energies, counts, peaks, isotopes
             currentData = data;
@@ -327,7 +336,8 @@ if (btnGetAccumulated) {
             chartManager.render(data.energies, data.counts, data.peaks || [], 'linear');
 
             const durationMin = (data.duration / 60).toFixed(1);
-            showToast(`Accumulated spectrum: ${durationMin} min, ${(data.peaks || []).length} peaks`, 'success');
+            showToast(`Accumulated spectrum loaded (${durationMin} min of device history${analyze ? ', analyzed' : ', view only'})`, 'success');
+            (data.warnings || []).forEach(w => showToast(w, 'info'));
         } catch (err) {
             console.error('Failed to get accumulated spectrum:', err);
             showToast(err.message || 'Failed to get accumulated spectrum', 'error');
@@ -1263,6 +1273,7 @@ function setupEventListeners() {
 
     // Clear Spectrum button
     document.getElementById('btn-clear-spectrum')?.addEventListener('click', async () => {
+        if (!confirm('Clear all accumulated counts on the device?')) return;
         try {
             await api.clearSpectrumUnified();
             showToast('Spectrum cleared', 'success');
@@ -1786,19 +1797,7 @@ if (btnDisplayPrev) {
     });
 }
 
-// Clear Spectrum button (W command)
-const btnClearSpectrum = document.getElementById('btn-clear-spectrum');
-if (btnClearSpectrum) {
-    btnClearSpectrum.addEventListener('click', async () => {
-        if (!confirm('Clear all accumulated counts on the device?')) return;
-        try {
-            await fetch('/device/clear', { method: 'POST' });
-            showToast('Spectrum cleared');
-        } catch (e) {
-            console.error('Clear spectrum error:', e);
-        }
-    });
-}
+// Clear Spectrum: handled once, device-aware, in setupEventListeners() (api.clearSpectrumUnified)
 
 // Top panel device controls (if they exist)
 const refreshTop = document.getElementById('btn-refresh-ports-top');
@@ -2548,6 +2547,15 @@ async function startAcquisition() {
                 // Update UI timer
                 ui.updateAcquisitionTimer(status.elapsed_seconds, seconds);
 
+                // Exposure received during this acquisition (integrated dose rate)
+                const expEl = document.getElementById('acquisition-exposure');
+                if (expEl) {
+                    const ex = status.exposure;
+                    expEl.textContent = ex
+                        ? '· ' + (ex.exposure_uSv < 1 ? (ex.exposure_uSv * 1000).toFixed(1) + ' nSv' : ex.exposure_uSv.toFixed(3) + ' µSv')
+                        : '';
+                }
+
                 // Update spectrum display if data available
                 if (status.spectrum_data) {
                     currentData = status.spectrum_data;
@@ -2679,6 +2687,7 @@ async function getCurrentSpectrum() {
         }
 
         showToast('Current spectrum loaded (cumulative from device)', 'success');
+        (data.warnings || []).forEach(w => showToast(w, 'warning'));
 
     } catch (err) {
         console.error('Get current spectrum error:', err);
