@@ -1486,7 +1486,8 @@ function setupEventListeners() {
             // Update status - make clear this is visual only
             statusEl.innerHTML = '<img src="/static/icons/check.svg" class="icon" style="width: 14px; height: 14px; vertical-align: middle;"> Background removed <em>(chart only - analysis unchanged)</em>';
             statusEl.style.color = '#10b981';
-            document.getElementById('bg-active-indicator').style.display = 'inline';
+            const bgIndicator = document.getElementById('bg-active-indicator');
+            if (bgIndicator) bgIndicator.style.display = 'inline';
 
             showToast('Background removed from chart (analysis preserved)', 'success');
         } catch (err) {
@@ -2843,7 +2844,8 @@ async function handleBackgroundFile(e) {
 function setBackground(data, name) {
     backgroundData = data;
     document.getElementById('bg-status').textContent = `Loaded: ${name}`;
-    document.getElementById('bg-active-indicator').style.display = 'inline';
+    const bgIndicator = document.getElementById('bg-active-indicator');
+    if (bgIndicator) bgIndicator.style.display = 'inline';
     document.getElementById('btn-clear-bg').style.display = 'inline-block';
 
     // Refresh chart with subtraction

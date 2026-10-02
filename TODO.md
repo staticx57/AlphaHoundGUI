@@ -31,6 +31,8 @@
 - [ ] Exports (N42/CSV/checkpoint) and N42 metadata editor still work after moving to `routers/export.py`
 - [ ] Server console output looks sane after switching ~180 `print` calls to `logging` (set `ALPHAHOUND_LOG_LEVEL=DEBUG` for more); live-device log lines (Radiacode/AlphaHound) appear at the right levels
 - [ ] With a real AlphaHound: `POST /device/spectrum` acquire works (was an UnboundLocalError; verified only with a mocked device)
+- [ ] AlphaHound live dose: readout updates, sparkline moves, and the >2000 µRem/hr safety alert appears (`ui.js` was writing to nonexistent `dose-display`, so the WebSocket callback threw on every message; now points at `rc-dose-display`)
+- [ ] Background subtraction: Load Background File / Use Current as BG shows the "● ACTIVE" badge and the Clear BG button, and refreshes the chart (previously threw on missing `bg-active-indicator`)
 - [ ] Nothing depended on the deleted `js/main_restored_temp.js` (was unreferenced; recoverable from git history)
 
 ### ML & Analysis
@@ -40,6 +42,7 @@
 - [ ] Add background-dominated mixture training
 
 ### Technical Debt
+- [ ] Remove dead frontend code for elements that no longer exist (see `LEGACY_NULL_GUARDED` in `backend/tests/test_frontend_ids.py`: `*-top` controls, `btn-rc-*`, etc.), then empty that allowlist
 - [ ] **ROI advanced peak fitting never runs**: `roi_analysis.py` (~line 119) does `from .fitting_engine import ...` (relative import fails outside a package) and references undefined `target_energy`; the surrounding `except` swallows it so ROI always falls back to simple counting. Fixing changes ROI results, so validate against reference spectra first.
 - [ ] Replace remaining `print` calls in multi-line/other statements and the `[Tag]` message prefixes now duplicated by logger names
 - [x] Split `routers/analysis.py` (1500+ lines) into `analysis.py`, `export.py`, `nuclear.py` (same 37 routes)

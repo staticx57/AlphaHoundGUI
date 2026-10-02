@@ -9,7 +9,7 @@ export class AlphaHoundUI {
             peaksContainer: document.getElementById('peaks-container'),
             peaksTbody: document.getElementById('peaks-tbody'),
             resultsContainer: document.getElementById('analysis-results'),
-            doseDisplay: document.getElementById('dose-display'),
+            doseDisplay: document.getElementById('rc-dose-display'), // shared live-dose readout in the unified device panel
             acquisitionTimer: document.getElementById('acquisition-timer'),
             isotopesContainer: document.getElementById('isotopes-container'),
             isotopesTbody: document.getElementById('isotopes-tbody'),
@@ -699,6 +699,7 @@ export class AlphaHoundUI {
     }
 
     updateDoseDisplay(doseRate) {
+        if (!this.elements.doseDisplay) return;
         if (doseRate !== null && doseRate !== undefined) {
             this.elements.doseDisplay.textContent = `${doseRate.toFixed(2)} µRem/hr`;
 
@@ -749,6 +750,7 @@ export class AlphaHoundUI {
     }
 
     updateConnectionStatus(status) {
+        if (!this.elements.doseDisplay) return;
         if (status === 'connected') {
             this.elements.doseDisplay.textContent = '-- µRem/hr';
         } else if (status === 'connecting') {

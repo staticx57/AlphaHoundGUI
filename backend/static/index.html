@@ -559,7 +559,10 @@
 
                     <div id="background-section" class="analysis-sub-section"
                         style="flex: 2; margin-top: 0; display: flex; flex-direction: column;">
-                        <strong>Background Subtraction</strong>
+                        <strong>Background Subtraction
+                            <span id="bg-active-indicator" title="A background is being subtracted"
+                                style="display: none; margin-left: 0.5rem; font-size: 0.7rem; font-weight: 600; color: var(--secondary-color);">● ACTIVE</span>
+                        </strong>
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
                             <button id="btn-snip-bg" class="btn-primary" style="font-size: 0.85rem; padding: 6px 12px;"
                                 title="Auto-remove Compton continuum using SNIP algorithm">Auto Remove BG</button>
