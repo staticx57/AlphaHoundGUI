@@ -42,7 +42,10 @@ DEFAULT_LOG = pathlib.Path(os.environ.get("TEMP") or os.environ.get("TMPDIR") or
 # ------------------------------------------------------------------ helpers
 
 def say(msg):
-    print(msg, flush=True)
+    try:
+        print(msg, flush=True)
+    except OSError:          # the reader closed the pipe (e.g. `devctl status | head -1`): not an error
+        pass
 
 
 def call(method, path, body=None, timeout=10):
