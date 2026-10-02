@@ -59,12 +59,3 @@ select {
     color: #0f172a;
 }
 
-/* Radiacode panel styling */
-#radiacode-quick-panel {
-    background: var(--card-bg);
-    border: 2px solid var(--secondary-color);
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    flex: 2;
-}

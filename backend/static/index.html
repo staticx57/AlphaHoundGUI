@@ -254,6 +254,11 @@
                                                 style="color: var(--text-primary); font-weight: 600;">--</span>
                                         </div>
                                         <div style="display: flex; gap: 0.5rem;">
+                                            <span style="opacity: 0.7; min-width: 50px;">Dose:</span>
+                                            <span id="rc-accumulated-dose" title="Accumulated dose since last reset"
+                                                style="color: var(--text-primary); font-weight: 600;">--</span>
+                                        </div>
+                                        <div style="display: flex; gap: 0.5rem;">
                                             <span style="opacity: 0.7; min-width: 50px;">FW:</span>
                                             <span id="rc-firmware-version"
                                                 style="color: var(--text-primary); font-weight: 600;">--</span>
@@ -280,6 +285,13 @@
                                                 style="font-size: 0.65rem; padding: 0.2rem 0.4rem;">Apply</button>
                                         </div>
                                     </details>
+
+                                    <!-- View Configuration -->
+                                    <button id="btn-view-config" data-device-feature="deviceConfig"
+                                        class="btn-secondary"
+                                        style="padding: 0.3rem 0.6rem; font-size: 0.7rem; width: 100%;">
+                                        View Configuration
+                                    </button>
 
                                     <!-- Power Off (Phase 2) -->
                                     <button id="btn-power-off" data-device-feature="powerControl" style="margin-top: 0.75rem; width: 100%; padding: 0.4rem; 
@@ -456,185 +468,6 @@
                     </div>
                 </div>
 
-                <!-- Radiacode Device Panel (HIDDEN - Using unified controls from AlphaHound panel above) -->
-                <div id="radiacode-quick-panel" style="display: none;">
-                    <div class="device-header">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <img src="/static/icons/device.svg" class="icon icon-xl" alt="Device">
-                            <h3 style="margin: 0; color: var(--secondary-color);">Radiacode Device</h3>
-                        </div>
-
-                        <div class="device-action-group"
-                            style="flex: 1; display: flex; gap: 0.75rem; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
-
-                            <!-- Connection Mode -->
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer;">
-                                    <input type="radio" name="rc-conn-mode" value="usb" checked>
-                                    <span style="font-size: 0.85rem;">USB</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer;">
-                                    <input type="radio" name="rc-conn-mode" value="bluetooth">
-                                    <span style="font-size: 0.85rem;">Bluetooth</span>
-                                </label>
-                            </div>
-
-                            <!-- BLE Scan and Device Selection (shown when Bluetooth selected) -->
-                            <div id="rc-ble-controls" style="display: none; gap: 0.5rem; align-items: center;">
-                                <button id="btn-scan-ble" class="btn-secondary"
-                                    style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
-                                    title="Scan for nearby Radiacode devices">
-                                    <img src="/static/icons/refresh.svg" class="icon"
-                                        style="width: 14px; height: 14px;">
-                                    Scan
-                                </button>
-                                <select id="rc-ble-devices" style="min-width: 180px; font-size: 0.85rem;">
-                                    <option value="">Select BLE Device...</option>
-                                </select>
-                                <!-- Manual MAC input fallback -->
-                                <input type="text" id="rc-bluetooth-mac" placeholder="or enter MAC"
-                                    style="width: 140px; font-family: monospace; font-size: 0.8rem;"
-                                    title="Manual MAC address entry">
-                            </div>
-
-                            <button id="btn-connect-radiacode" class="btn-primary"
-                                style="padding: 0.5rem 1.5rem; flex-shrink: 0;">Connect</button>
-                        </div>
-                    </div>
-
-                    <!-- Radiacode Connected State -->
-                    <div id="radiacode-connected"
-                        style="display: none; border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
-
-                        <!-- Top row: Status + Buttons + Disconnect -->
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span class="status-dot"
-                                    style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--secondary-color);"></span>
-                                <span
-                                    style="color: var(--text-secondary); font-weight: 500; font-size: 0.85rem;">Connected</span>
-                                <span id="rc-device-model"
-                                    style="font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;"></span>
-                            </div>
-
-                            <!-- Action buttons - compact -->
-                            <div style="display: flex; gap: 0.5rem;">
-                                <button id="btn-rc-get-spectrum" class="btn-primary"
-                                    style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
-                                    <img src="/static/icons/chart.svg" class="icon" style="width: 14px; height: 14px;">
-                                    Spectrum
-                                </button>
-                                <button id="btn-rc-clear" class="btn-secondary"
-                                    style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
-                                    <img src="/static/icons/refresh.svg" class="icon"
-                                        style="width: 14px; height: 14px;">
-                                    Clear
-                                </button>
-                                <button id="btn-rc-reset-dose" class="btn-secondary" data-device-feature="doseReset"
-                                    style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: var(--warning-color); color: var(--warning-color);"
-                                    title="Reset accumulated dose">
-                                    Reset Dose
-                                </button>
-                            </div>
-
-                            <button id="btn-disconnect-radiacode"
-                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--error-color); color: white; margin-left: auto;">
-                                Disconnect
-                            </button>
-                        </div>
-
-                        <!-- Dose rate chart - full width -->
-                        <div
-                            style="display: flex; align-items: center; gap: 1rem; background: var(--bg-secondary); border-radius: 8px; padding: 0.5rem 0.75rem;">
-                            <div style="flex-shrink: 0; min-width: 100px;">
-                                <span
-                                    style="color: var(--text-secondary); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; display: block;">Dose
-                                    Rate</span>
-                                <span id="rc-dose-display"
-                                    style="font-size: 1.1rem; font-weight: 800; color: var(--secondary-color);">--</span>
-                            </div>
-                            <div style="flex: 1; min-height: 45px; max-height: 55px;">
-                                <canvas id="rcDoseRateChart"></canvas>
-                            </div>
-                        </div>
-
-                        <!-- Device Settings -->
-                        <div id="radiacode-settings-panel" data-device-feature="deviceSettings"
-                            style="display: none; margin-top: 1rem;">
-                            <details
-                                style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
-                                <summary
-                                    style="cursor: pointer; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; user-select: none;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path
-                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                    </svg>
-                                    Radiacode Settings
-                                </summary>
-
-                                <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
-                                    <!-- Brightness Slider -->
-                                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                        <div
-                                            style="display: flex; justify-content: space-between; align-items: center;">
-                                            <label for="rc-brightness"
-                                                style="font-size: 0.85rem; color: var(--text-secondary);">Brightness</label>
-                                            <span id="rc-brightness-value"
-                                                style="font-size: 0.85rem; font-weight: 700; color: var(--accent-color);">5</span>
-                                        </div>
-                                        <input type="range" id="rc-brightness" min="0" max="9" value="5"
-                                            style="width: 100%; accent-color: var(--accent-color);">
-                                    </div>
-
-                                    <!-- Sound & Vibration Toggles -->
-                                    <div style="display: flex; gap: 1rem;">
-                                        <label
-                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; flex: 1;">
-                                            <input type="checkbox" id="rc-sound"
-                                                style="accent-color: var(--accent-color);">
-                                            <span style="font-size: 0.85rem; color: var(--text-secondary);">Sound</span>
-                                        </label>
-                                        <label
-                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; flex: 1;">
-                                            <input type="checkbox" id="rc-vibration"
-                                                style="accent-color: var(--accent-color);">
-                                            <span
-                                                style="font-size: 0.85rem; color: var(--text-secondary);">Vibration</span>
-                                        </label>
-                                    </div>
-
-                                    <!-- Display Timeout -->
-                                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                        <label for="rc-display-timeout"
-                                            style="font-size: 0.85rem; color: var(--text-secondary);">Display Timeout
-                                            (seconds)</label>
-                                        <input type="number" id="rc-display-timeout" min="0" value="30"
-                                            style="padding: 0.4rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    </div>
-
-                                    <!-- Language -->
-                                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                        <label for="rc-language"
-                                            style="font-size: 0.85rem; color: var(--text-secondary);">Language</label>
-                                        <select id="rc-language"
-                                            style="padding: 0.4rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                            <option value="en">English</option>
-                                            <option value="ru">Русский</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- View Configuration Button -->
-                                    <button id="btn-view-config" data-device-feature="deviceConfig"
-                                        class="btn-secondary"
-                                        style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: none;">
-                                        View Configuration
-                                    </button>
-                                </div>
-                            </details>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Drop Zone (compact) -->
                 <div class="upload-container" id="drop-zone"

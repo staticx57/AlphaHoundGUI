@@ -13,6 +13,17 @@
 - [x] **Chart Autoscale & Label Stacking**: ✅ Fixed autoscale toggle between peak-focused view and full spectrum, fixed overlapping annotation labels with vertical stacking (2025-12-22)
 - [x] **Documentation Overhaul**: ✅ Major README update with Radiacode, XRF, SNIP, spectrum algebra, server-managed acquisitions (2025-12-22)
 
+### Pending Manual Verification (needs local browser / Radiacode hardware)
+- [ ] Radiacode tab renders with no layout regressions after removing the hidden duplicate `radiacode-quick-panel` (and its duplicate IDs) from `index.html`
+- [ ] After connecting a Radiacode, Dose / SN / FW rows in Device Settings populate on first poll (~2s) instead of ~20s
+- [ ] Accumulated dose row shows `accumulated_dose_uSv` from `/radiacode/info/extended` and formats μSv/mSv correctly
+- [ ] "View Configuration" button appears in Device Settings (Radiacode only) and shows the configuration
+- [ ] Browser console shows no new errors; Reset/Clear/Disconnect buttons still work
+- [ ] Upload a real CSV spectrum and confirm peaks/isotopes look the same as before (parser-level detection removed; only automated tests ran, on tiny synthetic CSVs)
+- [ ] `POST /upload` with a malformed CSV now returns 400 (was 500); confirm the UI shows a sensible error toast
+- [ ] Full UI/UX visual sweep across themes and mobile widths (needs a real browser)
+- [ ] Nothing depended on the deleted `js/main_restored_temp.js` (was unreferenced; recoverable from git history)
+
 ### ML & Analysis
 - [ ] Collect real detector data for ML fine-tuning
 - [ ] Update synthetic demo files to use realistic Poisson noise
@@ -21,12 +32,12 @@
 
 ### Technical Debt
 - [ ] Add unit tests for frontend JavaScript modules
-- [ ] Add unit tests for backend API endpoints
+- [x] Add unit tests for backend API endpoints ✅ (`backend/tests/test_api_endpoints.py`; 59 tests pass)
 - [ ] Implement TypeScript for type safety
-- [ ] **Centralize Peak Detection**: Remove `detect_peaks()` calls from individual parsers (csv_parser.py, etc.) and have all peak detection happen in `_analyze_spectrum_peaks()` in `analysis.py`. This ensures consistent detection across all file formats (N42, CSV, CHN, SPE, SPC, PCF, etc.) and simplifies threshold tuning.
+- [x] **Centralize Peak Detection** ✅ (csv_parser.py no longer detects peaks/isotopes; all formats go through `analyze_spectrum_peaks()` in `analysis_utils.py`) — original note: Remove `detect_peaks()` calls from individual parsers (csv_parser.py, etc.) and have all peak detection happen in `_analyze_spectrum_peaks()` in `analysis.py`. This ensures consistent detection across all file formats (N42, CSV, CHN, SPE, SPC, PCF, etc.) and simplifies threshold tuning.
 
 ### Performance Optimization
-- [ ] Lazy load Chart.js and other heavy libraries
+- [ ] Lazy load Chart.js and other heavy libraries *(Deferred: already loaded with `defer`; modules use the globals at init, so lazy loading needs a browser to verify)*
 - [ ] Implement WebWorkers for ML training
 - [ ] Optimize large spectrum rendering
 - [ ] Add service worker for offline capability

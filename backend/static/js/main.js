@@ -37,6 +37,7 @@ function startRadiacodeDosePolling() {
     if (radiacodeDoseInterval) return;  // Already polling
 
     console.log('[Radiacode] Starting dose rate polling');
+    pollRadiacodeDose._pollCount = 0;
 
     // Poll immediately, then every 2 seconds
     pollRadiacodeDose();
@@ -74,12 +75,18 @@ async function pollRadiacodeDose() {
             }
         }
 
-        // Update device info periodically (every 10 polls ~20 seconds)
-        if (!pollRadiacodeDose._pollCount) pollRadiacodeDose._pollCount = 0;
-        pollRadiacodeDose._pollCount++;
-        if (pollRadiacodeDose._pollCount % 10 === 0) {
+        // Update device info on the first poll, then every 10 polls (~20 seconds)
+        pollRadiacodeDose._pollCount = (pollRadiacodeDose._pollCount || 0) + 1;
+        if (pollRadiacodeDose._pollCount === 1 || pollRadiacodeDose._pollCount % 10 === 0) {
             try {
                 const extendedInfo = await api.getRadiacodeExtendedInfo();
+                const accumEl = document.getElementById('rc-accumulated-dose');
+                const accum = extendedInfo.accumulated_dose_uSv;
+                if (accumEl && typeof accum === 'number') {
+                    accumEl.textContent = accum >= 1000
+                        ? (accum / 1000).toFixed(3) + ' mSv'
+                        : accum.toFixed(2) + ' μSv';
+                }
                 // Update device info in settings panel
                 if (extendedInfo.device_info) {
                     const snEl = document.getElementById('rc-serial-number');
