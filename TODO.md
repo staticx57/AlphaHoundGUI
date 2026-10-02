@@ -30,7 +30,7 @@ Done and verified on the live AB+G (COM8): `P` polling and CPS parsing, dose str
 - [ ] What do `D`, `DA` and `DB` differ in (all three replied with ~the same value on this firmware)?
 - [ ] Modes 5-7 of the replica (alpha/beta spectroscopy, radon approximation) need data the serial link does not give; revisit if RadView documents more commands.
 - [ ] `A`, `B`, `RA`, `RB`, `SpecA`, `SpecB`, `COUNT`, `ALL`, `?` return nothing; their effect is unknown (not sent by the app).
-- [ ] The details panel's dose log lives in server memory (about 27 h at 1 row per second); it is lost on a server restart.
+- [x] The dose log is persisted (`backend/data/dose_log.jsonl`) and survives restarts; the dose-rate average, count-rate charts and per-acquisition channel statistics are in.
 
 ### Pending Manual Verification (needs local browser / Radiacode hardware)
 > Verified in headless Chrome with a mocked device (`python backend/tests/ui_smoke.py`, 15 checks): page load without JS errors, Radiacode tab layout/IDs, View Configuration + accumulated-dose elements present, AlphaHound dose readout + safety alert, connection-restore enabling controls, background load flow. Still needs real hardware / eyes: live Radiacode values, PDF download, exports, other themes and mobile widths, real-CSV peak comparison.

@@ -747,10 +747,11 @@ export class AlphaHoundAPI {
     }
 
     // WebSocket Logic
-    setupDoseWebSocket(onDoseRate, onConnectionStatus, onCps) {
+    setupDoseWebSocket(onDoseRate, onConnectionStatus, onCps, onMessage) {
         this.listeners.onDoseRate = onDoseRate;
         this.listeners.onConnectionStatus = onConnectionStatus;
         if (onCps !== undefined) this.listeners.onCps = onCps;
+        if (onMessage !== undefined) this.listeners.onMessage = onMessage;
 
         if (this.doseWebSocket) return;
 
@@ -771,6 +772,7 @@ export class AlphaHoundAPI {
             const data = JSON.parse(event.data);
             if (this.listeners.onDoseRate) this.listeners.onDoseRate(data.dose_rate);
             if (this.listeners.onCps && data.cps !== undefined) this.listeners.onCps(data.cps);
+            if (this.listeners.onMessage) this.listeners.onMessage(data);
         };
 
         this.doseWebSocket.onerror = (error) => {
@@ -791,7 +793,8 @@ export class AlphaHoundAPI {
 
         this.reconnectTimer = setTimeout(() => {
             this.reconnectAttempts++;
-            this.setupDoseWebSocket(this.listeners.onDoseRate, this.listeners.onConnectionStatus, this.listeners.onCps);
+            this.setupDoseWebSocket(this.listeners.onDoseRate, this.listeners.onConnectionStatus, this.listeners.onCps,
+                this.listeners.onMessage);
         }, delay);
     }
 

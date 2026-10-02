@@ -207,3 +207,22 @@ def test_last_client_leaving_releases_the_device_unless_keep_connected(connected
     asyncio.run(main.websocket_dose_stream(ws))
     assert ws.sent and ws.sent[0]["dose_rate"] == 50.0
     assert bool(released) is expect_release
+
+
+def test_dose_average_in_status_details_and_websocket(client, connected, monkeypatch):
+    monkeypatch.setattr(dev, "get_dose_rate_avg", lambda *a, **k: 66.5)
+    assert client.get("/device/status").json()["dose_rate_avg"] == 66.5
+    assert client.get("/device/details").json()["dose_rate_avg_uRem_h"] == 66.5
+    monkeypatch.setattr(main, "WS_DISCONNECT_GRACE_S", 0)
+    monkeypatch.setattr(main, "KEEP_CONNECTED", True)
+    with client.websocket_connect("/ws/dose") as ws:
+        assert ws.receive_json()["dose_rate_avg"] == 66.5
+
+
+def test_alphahound_cps_helper_for_the_acquisition_manager(monkeypatch):
+    from routers import device as device_router
+    monkeypatch.setattr(dev, "is_connected", lambda: False)
+    assert device_router.alphahound_cps() is None
+    monkeypatch.setattr(dev, "is_connected", lambda: True)
+    monkeypatch.setattr(dev, "get_cps", lambda *a, **k: {"gamma": 1.0, "beta": 2.0, "alpha": 3.0})
+    assert device_router.alphahound_cps()["beta"] == 2.0

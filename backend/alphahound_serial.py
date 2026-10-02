@@ -19,6 +19,8 @@ import time
 import asyncio
 import traceback
 import math
+import json
+import os
 from collections import deque
 from typing import Optional, List, Dict, Callable
 
@@ -41,6 +43,8 @@ STREAM_DETECT_S = 3.0
 STREAM_FRESH_S = 2.0
 # One dose-log row per second (the mean of the readings in that second)
 DOSE_LOG_INTERVAL_S = 1.0
+# Window for the smoothed dose rate (single streamed readings are noisy: +-20 % or more)
+DOSE_AVG_WINDOW_S = 5.0
 # A spectrum normally arrives within about a second. If the device never answers, stop waiting after this
 # long: otherwise the "collecting" flag stays set and all dose / CPS polling stops for good.
 SPECTRUM_TIMEOUT_S = 10.0
@@ -103,6 +107,8 @@ class AlphaHoundDevice:
         self._log_sum = 0.0
         self._log_n = 0
         self._log_last = 0.0
+        self._dose_recent = deque(maxlen=400)   # (wall time, uRem/h) of the latest readings, for the average
+        self._log_path: Optional[str] = None    # persistent dose log (JSON lines), see enable_log_persistence
         self.dose_log = deque(maxlen=DOSE_LOG_MAX)
         self._raw_lines = deque(maxlen=RAW_LINES_MAX)
         self._poll_paused = threading.Event()
@@ -200,8 +206,63 @@ class AlphaHoundDevice:
             return None
         return {**cps, 'total': cps['gamma'] + cps['beta'] + cps['alpha'], 'age_s': round(age, 2)}
 
+    def get_dose_rate_avg(self, window_s: float = DOSE_AVG_WINDOW_S) -> Optional[float]:
+        """Mean of the dose readings of the last window_s seconds (uRem/h), None when there are none."""
+        cutoff = time.time() - window_s
+        vals = [v for t, v in list(self._dose_recent) if t >= cutoff]
+        return sum(vals) / len(vals) if vals else None
+
     def get_last_error(self) -> Optional[str]:
         return self.last_error
+
+    # ------------------------------------------------------------ persistent dose log
+    def enable_log_persistence(self, path: str) -> int:
+        """Keep the dose log in a JSON-lines file so it survives a server restart.
+
+        Loads the newest DOSE_LOG_MAX rows already in the file, trims it when it has grown well past
+        that, and appends every new row from now on. Returns the number of rows loaded.
+        """
+        rows: List[Dict] = []
+        try:
+            with open(path, encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        row = json.loads(line)
+                        if isinstance(row, dict) and 'time' in row and 'dose_rate' in row:
+                            rows.append(row)
+                    except ValueError:
+                        continue          # a half-written last line after a crash
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.warning(f"[AlphaHound] Could not read the dose log {path}: {e}")
+        total = len(rows)
+        rows = rows[-DOSE_LOG_MAX:]
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            if total > DOSE_LOG_MAX * 1.2:   # rewrite once, so the file cannot grow without bound
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.writelines(json.dumps(r) + '\n' for r in rows)
+        except OSError as e:
+            logger.warning(f"[AlphaHound] Dose log persistence disabled: {e}")
+            return 0
+        with self._log_lock:
+            self.dose_log.clear()
+            self.dose_log.extend(rows)
+            self._log_path = path
+        logger.info(f"[AlphaHound] Dose log: {len(rows)} earlier readings loaded from {path}")
+        return len(rows)
+
+    def _persist_row(self, row: Dict):
+        path = self._log_path
+        if not path:
+            return
+        try:
+            with open(path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(row) + '\n')
+        except OSError as e:
+            logger.warning(f"[AlphaHound] Dose log persistence disabled: {e}")
+            self._log_path = None
 
     def get_dose_log(self) -> List[Dict[str, Optional[float]]]:
         """Dose-rate history: [{time (epoch s), dose_rate (uRem/h), gamma/beta/alpha (cps or None)}, ...]."""
@@ -213,6 +274,12 @@ class AlphaHoundDevice:
             n = len(self.dose_log)
             self.dose_log.clear()
             self._log_sum, self._log_n = 0.0, 0
+            path = self._log_path
+        if path:
+            try:
+                open(path, 'w', encoding='utf-8').close()
+            except OSError as e:
+                logger.warning(f"[AlphaHound] Could not clear the dose log file: {e}")
         return n
 
     def _log_dose(self, dose: float, now: Optional[float] = None):
@@ -232,6 +299,7 @@ class AlphaHoundDevice:
                'alpha': cps['alpha'] if cps else None}
         with self._log_lock:
             self.dose_log.append(row)
+        self._persist_row(row)
 
     def probe(self, command: str, wait_s: float = 1.2) -> List[str]:
         """Send one read-only command (D, DA, DB, P) and return the raw lines the device answers with.
@@ -377,6 +445,7 @@ class AlphaHoundDevice:
                                     # numbers: leave the dose value alone for that moment
                                     if not self._poll_paused.is_set():
                                         self.current_dose = dose
+                                        self._dose_recent.append((self._last_numeric_time, dose))
                                         self._log_dose(dose)
                                         # print(f"[Dose] {dose}") # Debug
                                         if self.dose_callback:

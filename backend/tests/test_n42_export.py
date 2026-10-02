@@ -280,3 +280,13 @@ class TestAcquisitionInfoExtension:
         parsed = parse_n42(self._export({'live_time': 1.0, 'device_duration_s': 12.0}))
         assert parsed['metadata']['device_duration_s'] == 12.0
         assert 'exposure_uSv' not in parsed['metadata']
+
+
+def test_channel_statistics_round_trip_through_n42():
+    meta = {'live_time': 60.0, 'real_time': 60.0, 'mean_cps_gamma': 110.25, 'mean_cps_beta': 60.5,
+            'mean_cps_alpha': 3.125, 'max_cps_total': 194.0}
+    xml = generate_n42_xml({'counts': [1, 2, 3, 4], 'energies': [0.0, 3.0, 6.0, 9.0], 'metadata': meta})
+    assert 'MeanGammaCps' in xml and 'MeanAlphaCps' in xml
+    parsed = parse_n42(xml)['metadata']
+    assert parsed['mean_cps_gamma'] == 110.25 and parsed['mean_cps_beta'] == 60.5
+    assert parsed['mean_cps_alpha'] == 3.125 and parsed['max_cps_total'] == 194.0

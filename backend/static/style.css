@@ -2108,3 +2108,27 @@ select.feature-disabled {
     min-height: 2.5rem;
     white-space: pre-wrap;
 }
+
+.ah-cps-charts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.ah-cps-chart {
+    background: var(--bg-primary);
+    border-radius: 6px;
+    padding: 0.3rem 0.4rem;
+    min-width: 0;
+}
+
+.ah-cps-chart span {
+    font-size: 0.65rem;
+    font-weight: 700;
+}
+
+.ah-cps-chart-box {
+    position: relative;
+    height: 56px;
+}

@@ -306,7 +306,11 @@ export class AlphaHoundUI {
             'energy_calibration_offset': 'Cal Offset',
             'calibration': 'Calibration',
             'duration_s': 'Duration',
-            'exposure_during_acquisition': 'Exposure (this acquisition)'
+            'exposure_during_acquisition': 'Exposure (this acquisition)',
+            'mean_cps_gamma': 'Mean Gamma CPS',
+            'mean_cps_beta': 'Mean Beta CPS',
+            'mean_cps_alpha': 'Mean Alpha CPS',
+            'max_cps_total': 'Peak Total CPS'
         };
 
         // Explanations shown as tooltips so every field says what it means
@@ -319,6 +323,10 @@ export class AlphaHoundUI {
             'real_time_s': 'Elapsed wall-clock time of the measurement.',
             'device_duration_s': 'Accumulation time reported by the instrument itself (independent of this app\u2019s clock).',
             'duration_s': 'Accumulation time reported by the instrument.',
+            'mean_cps_gamma': 'Mean gamma count rate during the acquisition, in counts per second (AlphaHound).',
+            'mean_cps_beta': 'Mean beta count rate during the acquisition, in counts per second (AlphaHound).',
+            'mean_cps_alpha': 'Mean alpha count rate during the acquisition, in counts per second (AlphaHound).',
+            'max_cps_total': 'Highest gamma + beta + alpha count rate seen during the acquisition.',
         };
 
         // Several time fields often carry the same number (neither supported device reports dead time,

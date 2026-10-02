@@ -11,6 +11,10 @@
 - **`backend/tools/devctl.py`**: connect / disconnect / restart / ensure / probe from the command line, for unattended work. Server opt-ins `ALPHAHOUND_AUTOCONNECT_PORT` and `ALPHAHOUND_KEEP_CONNECTED`.
 - Port errors are readable (409 "in use by another program") instead of a bare 500.
 
+- **Count-rate history charts** for gamma, beta and alpha in the details panel (as on AlphaView), and a 5 s **smoothed dose** next to the raw reading (`dose_rate_avg` in `/device/status`, `/device/details` and the WebSocket).
+- **Dose log survives restarts**: kept in `backend/data/dose_log.jsonl` (loaded at startup, trimmed when it grows far past 100 000 rows; `ALPHAHOUND_DOSE_LOG=off` keeps it in memory only).
+- **Channel statistics per acquisition**: mean gamma / beta / alpha CPS and peak total CPS are recorded during an AlphaHound acquisition, shown in the metadata panel, returned in `/device/acquisition/status` (`channels`) and written to the N42 `AcquisitionInfo`.
+
 ### Fixed
 - **Real-time dose spikes**: the device streams its own dose value (~5 per second) and answers `D`/`DA`/`DB` and `P` with values ~10x larger (nSv/h scale). The driver treated every bare number as the dose, so each `DB` reply briefly put a 10x spike in the readout. `DB` is now only a fallback for firmware without the stream.
 - **Dead dose sparkline for the AlphaHound** (the chart was created without a canvas).

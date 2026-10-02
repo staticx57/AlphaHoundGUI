@@ -34,8 +34,9 @@ def test_start_route_uses_radiacode_adapter(monkeypatch):
 def test_start_route_defaults_to_alphahound(monkeypatch):
     captured = {}
 
-    async def fake_start(duration_minutes, device, source_name="AlphaHound Device", dose_rate_fn=None, instrument=None):
-        captured.update(device=device, source=source_name, dose=dose_rate_fn, instrument=instrument)
+    async def fake_start(duration_minutes, device, source_name="AlphaHound Device", dose_rate_fn=None, instrument=None,
+                         cps_fn=None):
+        captured.update(device=device, source=source_name, dose=dose_rate_fn, instrument=instrument, cps=cps_fn)
         return {"success": True}
 
     monkeypatch.setattr(device_router.acquisition_manager, "start", fake_start)
@@ -44,6 +45,7 @@ def test_start_route_defaults_to_alphahound(monkeypatch):
     assert captured["source"] == "AlphaHound Device"
     assert captured["dose"] is device_router.alphahound_dose_rate_uSv_h
     assert captured["instrument"] == {"instrument_model": "AlphaHound"}
+    assert captured["cps"] is device_router.alphahound_cps       # per-channel rates are recorded for the AlphaHound
 
 
 def test_radiacode_not_connected_is_reported(monkeypatch):

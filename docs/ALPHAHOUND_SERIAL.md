@@ -35,9 +35,11 @@ real-time dose.
 
 ## What the app exposes
 
-`GET /device/status` (adds `cps`), `GET /device/cps`, `GET /device/details`, `GET /device/dose/log` and `/device/dose/log.csv`
-(one averaged row per second), `POST /device/dose/log/clear`, `POST /device/probe {"command": "D|DA|DB|P"}`, and the dose
-WebSocket `/ws/dose` (`{"dose_rate", "cps"}`). Connecting a busy port now returns 409 with a readable message.
+`GET /device/status` (adds `cps` and `dose_rate_avg`), `GET /device/cps`, `GET /device/details`, `GET /device/dose/log` and
+`/device/dose/log.csv` (one averaged row per second, kept in `backend/data/dose_log.jsonl` across restarts), `POST /device/dose/log/clear`,
+`POST /device/probe {"command": "D|DA|DB|P"}`, and the dose WebSocket `/ws/dose` (`{"dose_rate", "dose_rate_avg", "cps"}`).
+Connecting a busy port returns 409 with a readable message. An AlphaHound acquisition also records the mean gamma / beta / alpha CPS and
+peak total CPS (`channels` in the acquisition status, `AcquisitionInfo` in the N42).
 
 ## Display replica
 

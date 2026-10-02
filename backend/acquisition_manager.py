@@ -55,6 +55,12 @@ class AcquisitionState:
     last_dose_rate: Optional[float] = None
     last_dose_time: Optional[float] = None
     device_duration_s: Optional[float] = None  # accumulation time as reported by the instrument
+    # Per-channel count rates seen during this acquisition (AlphaHound AB+G: gamma / beta / alpha)
+    cps_samples: int = 0
+    cps_sum_gamma: float = 0.0
+    cps_sum_beta: float = 0.0
+    cps_sum_alpha: float = 0.0
+    cps_max_total: Optional[float] = None
 
 
 class AcquisitionManager:
@@ -92,6 +98,7 @@ class AcquisitionManager:
         self._source_name = "AlphaHound Device"
         self._is_calibrated = True
         self._dose_rate_fn = None  # callable -> dose rate in uSv/h (or None)
+        self._cps_fn = None  # callable -> {'gamma', 'beta', 'alpha'} counts per second (or None)
         self._instrument: Dict[str, Any] = {}  # e.g. {'instrument_model': 'RadiaCode-110', 'serial_number': ...}
         
     def get_state(self) -> Dict[str, Any]:
@@ -108,10 +115,12 @@ class AcquisitionManager:
             "error": self.state.error_message,
             "final_filename": self.state.final_filename,
             "exposure": self.exposure_summary(),
+            "channels": self.channel_summary(),
         }
     
     async def start(self, duration_minutes: float, device, source_name: str = "AlphaHound Device",
-                    dose_rate_fn=None, instrument: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                    dose_rate_fn=None, instrument: Optional[Dict[str, Any]] = None,
+                    cps_fn=None) -> Dict[str, Any]:
         """
         Start a managed acquisition.
         
@@ -137,6 +146,7 @@ class AcquisitionManager:
         self._source_name = source_name
         self._is_calibrated = True
         self._dose_rate_fn = dose_rate_fn
+        self._cps_fn = cps_fn
         self._instrument = {k: v for k, v in (instrument or {}).items() if k != 'source'}
         self._stop_requested = False
         self.state = AcquisitionState(
@@ -223,8 +233,48 @@ class AcquisitionManager:
     
     MAX_DOSE_GAP_S = 10.0  # don't integrate across longer gaps in dose-rate readings
 
+    async def _sample_cps(self):
+        """Read the per-channel count rates, when the device has them, and accumulate their statistics."""
+        if not self._cps_fn:
+            return
+        try:
+            cps = await asyncio.to_thread(self._cps_fn)
+        except Exception as e:
+            logger.warning(f"[AcquisitionManager] CPS read failed: {e}")
+            return
+        self.record_cps(cps)
+
+    def record_cps(self, cps: Optional[Dict[str, float]]):
+        st = self.state
+        try:
+            g, b, a = float(cps['gamma']), float(cps['beta']), float(cps['alpha'])
+        except (TypeError, KeyError, ValueError):
+            return
+        if not all(v >= 0 and v != float("inf") for v in (g, b, a)):
+            return
+        st.cps_samples += 1
+        st.cps_sum_gamma += g
+        st.cps_sum_beta += b
+        st.cps_sum_alpha += a
+        total = g + b + a
+        st.cps_max_total = total if st.cps_max_total is None else max(st.cps_max_total, total)
+
+    def channel_summary(self) -> Optional[Dict[str, Any]]:
+        st = self.state
+        if not self._cps_fn or st.cps_samples == 0:
+            return None
+        n = st.cps_samples
+        return {
+            "mean_cps_gamma": round(st.cps_sum_gamma / n, 3),
+            "mean_cps_beta": round(st.cps_sum_beta / n, 3),
+            "mean_cps_alpha": round(st.cps_sum_alpha / n, 3),
+            "max_cps_total": round(st.cps_max_total or 0.0, 3),
+            "samples": n,
+        }
+
     async def _sample_dose_rate(self):
         """Read the instrument's dose rate (off the event loop) and integrate it."""
+        await self._sample_cps()
         if not self._dose_rate_fn:
             return
         try:
@@ -461,11 +511,18 @@ class AcquisitionManager:
             out["device_duration_s"] = round(self.state.device_duration_s, 1)
         return out
 
+    def _channel_metadata(self) -> Dict[str, Any]:
+        c = self.channel_summary()
+        if not c:
+            return {}
+        return {k: c[k] for k in ("mean_cps_gamma", "mean_cps_beta", "mean_cps_alpha", "max_cps_total")}
+
     def _exposure_metadata(self) -> Dict[str, Any]:
         e = self.exposure_summary()
         if not e:
-            return {}
+            return self._channel_metadata()
         return {
+            **self._channel_metadata(),
             "exposure_during_acquisition": format_exposure(e),
             "exposure_uSv": e["exposure_uSv"],
             "mean_dose_rate_uSv_h": e["mean_dose_rate_uSv_h"],

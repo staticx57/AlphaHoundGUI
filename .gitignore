@@ -34,3 +34,4 @@ output/
 external_tools/
 backend/tests/ui_smoke_out/
 backend/data/devctl_state.json
+backend/data/dose_log.jsonl

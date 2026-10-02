@@ -84,6 +84,16 @@ def autoconnect_alphahound(port: str, attempts: int = 15, delay_s: float = 2.0) 
     return False
 
 
+DOSE_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dose_log.jsonl")
+
+
+@app.on_event("startup")
+async def _startup_dose_log():
+    # Keep the AlphaHound dose history across restarts (ALPHAHOUND_DOSE_LOG=off to keep it in memory only)
+    if os.environ.get("ALPHAHOUND_DOSE_LOG", "").strip().lower() != "off":
+        alphahound_device.enable_log_persistence(DOSE_LOG_FILE)
+
+
 @app.on_event("startup")
 async def _startup_autoconnect():
     port = os.environ.get("ALPHAHOUND_AUTOCONNECT_PORT", "").strip()
@@ -111,7 +121,8 @@ async def websocket_dose_stream(websocket: WebSocket):
         while True:
             if alphahound_device.is_connected():
                 dose = alphahound_device.get_dose_rate()
-                await websocket.send_json({"dose_rate": dose, "cps": alphahound_device.get_cps()})
+                await websocket.send_json({"dose_rate": dose, "cps": alphahound_device.get_cps(),
+                                           "dose_rate_avg": alphahound_device.get_dose_rate_avg()})
             else:
                 await websocket.send_json({"dose_rate": None, "status": "disconnected"})
             await asyncio.sleep(1)

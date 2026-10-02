@@ -26,6 +26,7 @@ let deviceScreen = null; // AlphaHound display replica
 let ahDetailsInterval = null; // AlphaHound details refresh timer
 let ahAutoRefreshTimer = null; // AlphaHound spectrum auto-refresh timer
 let ahAutoRefreshBusy = false;
+let ahCpsCharts = null; // AlphaHound gamma / beta / alpha count-rate history charts
 let lastCheckpointTime = 0; // Checkpoint save tracking
 const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
 let radiacodeDoseInterval = null;  // Radiacode dose rate polling interval
@@ -2561,6 +2562,23 @@ function ensureDoseSparkline() {
     rcDoseChart = new DoseRateChart(canvas, { label: 'Dose Rate', colorVar: '--secondary-color', maxPoints: 60 });
 }
 
+/** (Re)create the three count-rate history charts of the details panel. */
+function ensureCpsCharts() {
+    destroyCpsCharts();
+    const spec = { gamma: '#38bdf8', beta: '#f59e0b', alpha: '#ef4444' };
+    ahCpsCharts = {};
+    for (const [key, color] of Object.entries(spec)) {
+        const canvas = document.getElementById(`ah-chart-${key}`);
+        if (canvas) ahCpsCharts[key] = new DoseRateChart(canvas, { label: key, color, maxPoints: 120 });
+    }
+}
+
+function destroyCpsCharts() {
+    if (!ahCpsCharts) return;
+    Object.values(ahCpsCharts).forEach((c) => c.destroy());
+    ahCpsCharts = null;
+}
+
 /** Create the display replica once (the canvas lives in the AlphaHound details panel). */
 function ensureDeviceScreen() {
     if (deviceScreen) return deviceScreen;
@@ -2596,11 +2614,17 @@ function onAlphaHoundCps(cps) {
     ahSet('ah-cps-alpha', fmtCps(cps.alpha));
     ahSet('ah-cps-total', fmtCps(cps.total));
     if (deviceScreen) deviceScreen.setReadings({ cps });
+    if (ahCpsCharts) {
+        for (const key of ['gamma', 'beta', 'alpha']) {
+            if (ahCpsCharts[key]) ahCpsCharts[key].update(cps[key]);
+        }
+    }
 }
 
 /** Start everything that follows an AlphaHound connection (also used when a refresh restores it). */
 function startAlphaHoundMonitoring() {
     ensureDoseSparkline();
+    ensureCpsCharts();
     ensureDeviceScreen();
     if (deviceScreen) deviceScreen.setConnected(true);
     api.setupDoseWebSocket(
@@ -2612,7 +2636,10 @@ function startAlphaHoundMonitoring() {
             ahSet('ah-dose', fmtDoseText(rate));
         },
         (status) => ui.updateConnectionStatus(status),
-        (cps) => onAlphaHoundCps(cps)
+        (cps) => onAlphaHoundCps(cps),
+        (msg) => {
+            if (msg.dose_rate_avg !== undefined) ahSet('ah-dose-avg', fmtDoseText(msg.dose_rate_avg));
+        }
     );
     startAlphaHoundDetails();
 }
@@ -2625,6 +2652,7 @@ async function refreshAlphaHoundDetails() {
         ahSet('ah-temp', d.temperature != null ? `${d.temperature.toFixed(1)} \u00b0C` : '--');
         ahSet('ah-comp', d.comp_factor != null ? d.comp_factor.toFixed(4) : '--');
         ahSet('ah-dose', fmtDoseText(d.dose_rate_uRem_h));
+        ahSet('ah-dose-avg', fmtDoseText(d.dose_rate_avg_uRem_h));
         ahSet('ah-log-count', `${d.dose_log_entries} readings`);
         if (d.temperature != null) ui.updateTemperature(d.temperature);
     } catch (err) {
@@ -2658,7 +2686,8 @@ function stopAlphaHoundDetails() {
     const auto = document.getElementById('ah-auto-refresh');
     if (auto) auto.checked = false;
     if (deviceScreen) deviceScreen.setConnected(false);
-    ['ah-port', 'ah-temp', 'ah-comp', 'ah-dose', 'ah-cps-gamma', 'ah-cps-beta', 'ah-cps-alpha', 'ah-cps-total',
+    destroyCpsCharts();
+    ['ah-port', 'ah-temp', 'ah-comp', 'ah-dose', 'ah-dose-avg', 'ah-cps-gamma', 'ah-cps-beta', 'ah-cps-alpha', 'ah-cps-total',
         'ah-log-count'].forEach((id) => ahSet(id, '--'));
 }
 

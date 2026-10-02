@@ -389,3 +389,74 @@ def test_an_unanswered_spectrum_request_does_not_stall_polling_forever(dev):
     dev.request_spectrum()
     assert dev.collecting_spectrum
     assert wait_for(lambda: dev.get_cps() is not None, timeout=5)   # P polling resumed after the timeout
+
+
+# ---------- smoothed dose ----------
+
+def test_dose_rate_avg_uses_only_the_window(dev):
+    now = time.time()
+    dev._dose_recent.extend([(now - 30, 500.0), (now - 4, 60.0), (now - 2, 70.0), (now - 0.5, 80.0)])
+    assert dev.get_dose_rate_avg(5.0) == pytest.approx(70.0)
+    assert dev.get_dose_rate_avg(1.0) == pytest.approx(80.0)
+    assert dev.get_dose_rate_avg(0.1) is None
+
+
+def test_dose_rate_avg_follows_the_stream_and_ignores_probe_replies(dev):
+    fake = FakeSerial(stream_reply)
+    streamer = Streamer(fake, 65.0)
+    try:
+        start(dev, fake)
+        assert wait_for(lambda: dev.get_dose_rate_avg() is not None)
+        dev.probe("DB", wait_s=0.4)                          # a 710 reply passes through the stream
+        assert dev.get_dose_rate_avg() == pytest.approx(65.0)
+    finally:
+        streamer.stop.set()
+
+
+# ---------- persistent dose log ----------
+
+def _row(t, dose):
+    return {"time": t, "dose_rate": dose, "gamma": None, "beta": None, "alpha": None}
+
+
+def test_dose_log_persists_and_reloads(dev, tmp_path):
+    import json
+    path = str(tmp_path / "dose_log.jsonl")
+    assert dev.enable_log_persistence(path) == 0
+    for i in range(3):
+        dev._log_dose(10.0 + i, now=5000.0 + i * 2)
+    with open(path, encoding="utf-8") as f:
+        assert [json.loads(line)["dose_rate"] for line in f] == [10.0, 11.0, 12.0]
+    other = ah.AlphaHoundDevice()                            # a "restart": a fresh driver reads the file
+    assert other.enable_log_persistence(path) == 3
+    assert [r["dose_rate"] for r in other.get_dose_log()] == [10.0, 11.0, 12.0]
+    other._log_dose(13.0, now=5100.0)
+    assert len(other.get_dose_log()) == 4
+
+
+def test_dose_log_file_survives_a_corrupt_line_and_clear_empties_it(dev, tmp_path):
+    import json
+    path = tmp_path / "dose_log.jsonl"
+    path.write_text(json.dumps(_row(1.0, 5.0)) + chr(10) + "{half a line" + chr(10) + json.dumps(_row(2.0, 6.0)) + chr(10),
+                    encoding="utf-8")
+    assert dev.enable_log_persistence(str(path)) == 2
+    assert dev.clear_dose_log() == 2
+    assert path.read_text(encoding="utf-8") == ""
+    assert dev.get_dose_log() == []
+
+
+def test_dose_log_file_is_trimmed_when_it_grows_far_past_the_limit(dev, tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(ah, "DOSE_LOG_MAX", 10)
+    path = tmp_path / "dose_log.jsonl"
+    path.write_text(chr(10).join(json.dumps(_row(float(i), float(i))) for i in range(30)) + chr(10), encoding="utf-8")
+    assert dev.enable_log_persistence(str(path)) == 10
+    kept = [json.loads(line)["dose_rate"] for line in path.read_text(encoding="utf-8").splitlines()]
+    assert kept == [float(i) for i in range(20, 30)]         # newest rows only
+
+
+def test_persistence_failure_never_breaks_logging(dev, tmp_path):
+    dev.enable_log_persistence(str(tmp_path / "dose_log.jsonl"))
+    dev._log_path = str(tmp_path / "missing_dir" / "x.jsonl")  # cannot be written
+    dev._log_dose(1.0, now=9000.0)
+    assert len(dev.get_dose_log()) == 1 and dev._log_path is None

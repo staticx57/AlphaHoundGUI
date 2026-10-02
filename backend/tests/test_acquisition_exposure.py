@@ -7,11 +7,12 @@ import acquisition_manager as am
 @pytest.fixture
 def mgr():
     m = am.AcquisitionManager()
-    saved = (m.state, m._dose_rate_fn)
+    saved = (m.state, m._dose_rate_fn, m._cps_fn)
     m.state = am.AcquisitionState()
     m._dose_rate_fn = lambda: None
+    m._cps_fn = None
     yield m
-    m.state, m._dose_rate_fn = saved
+    m.state, m._dose_rate_fn, m._cps_fn = saved
 
 
 def test_constant_rate_integrates_to_rate_times_time(mgr):
@@ -344,3 +345,42 @@ def test_dsur_read_failure_warns_once_per_connection(monkeypatch, caplog):
         assert drv.read_dose_register_uR() is None
     levels = [r.levelno for r in caplog.records if "DS_uR" in r.getMessage()]
     assert levels == [logging.WARNING, logging.DEBUG]
+
+
+def test_channel_statistics_are_accumulated_and_exported(mgr):
+    mgr._cps_fn = lambda: None
+    for g, b, a in [(100.0, 50.0, 2.0), (120.0, 70.0, 4.0), (110.0, 60.0, 3.0)]:
+        mgr.record_cps({"gamma": g, "beta": b, "alpha": a, "total": g + b + a})
+    mgr.record_cps(None)                                   # a missing reading is ignored
+    mgr.record_cps({"gamma": "x", "beta": 1, "alpha": 1})  # so is a malformed one
+    mgr.record_cps({"gamma": -1, "beta": 1, "alpha": 1})
+    c = mgr.channel_summary()
+    assert c["samples"] == 3
+    assert c["mean_cps_gamma"] == pytest.approx(110.0) and c["mean_cps_beta"] == pytest.approx(60.0)
+    assert c["mean_cps_alpha"] == pytest.approx(3.0) and c["max_cps_total"] == pytest.approx(194.0)
+    meta = mgr._exposure_metadata()
+    assert meta["mean_cps_gamma"] == pytest.approx(110.0) and "exposure_uSv" not in meta   # no dose readings here
+    assert mgr.get_state()["channels"]["samples"] == 3
+
+
+def test_channel_statistics_are_absent_without_a_cps_source(mgr):
+    mgr.record_cps({"gamma": 1, "beta": 1, "alpha": 1})
+    assert mgr.channel_summary() is None and mgr._exposure_metadata() == {}
+
+
+def test_manager_samples_the_cps_function_each_poll(mgr):
+    import asyncio
+    mgr._cps_fn = lambda: {"gamma": 10.0, "beta": 5.0, "alpha": 1.0}
+    asyncio.run(mgr._sample_dose_rate())
+    asyncio.run(mgr._sample_dose_rate())
+    assert mgr.channel_summary()["samples"] == 2
+
+
+def test_exposure_and_channel_metadata_merge(mgr):
+    mgr._dose_rate_fn = lambda: 1.0
+    mgr._cps_fn = lambda: None
+    mgr.record_dose_rate(1.0, 0.0)
+    mgr.record_dose_rate(1.0, 5.0)
+    mgr.record_cps({"gamma": 4.0, "beta": 2.0, "alpha": 1.0})
+    meta = mgr._exposure_metadata()
+    assert meta["mean_cps_beta"] == 2.0 and meta["exposure_uSv"] > 0

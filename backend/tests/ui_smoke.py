@@ -236,7 +236,7 @@ with sync_playwright() as p:
         if ah["details_status"] != 200:
             _ok(r, {"detail": "Device not connected"}, ah["details_status"])
         else:
-            _ok(r, {"model": "AlphaHound", "port": "COM8", "baudrate": 115200, "dose_rate_uRem_h": 70.0, "dose_rate_uSv_h": 0.7,
+            _ok(r, {"model": "AlphaHound", "port": "COM8", "baudrate": 115200, "dose_rate_uRem_h": 70.0, "dose_rate_uSv_h": 0.7, "dose_rate_avg_uRem_h": 64.5,
                     "temperature": 29.5, "comp_factor": 0.95067, "cps": None, "cps_polling": True, "dose_log_entries": 42})
     _json_route("**/device/details", _details)
 
@@ -252,8 +252,8 @@ with sync_playwright() as p:
             n = 0
             while True:
                 try:
-                    w.send(_json.dumps({"dose_rate": 60.0 + (n % 10),
-                                        "cps": {"gamma": 270.0, "beta": 150.5, "alpha": 6.25, "dose": 770.0, "total": 426.75, "age_s": 0.2}}))
+                    w.send(_json.dumps({"dose_rate": 60.0 + (n % 10), "dose_rate_avg": 64.5,
+                                        "cps": {"gamma": 270.0 + n, "beta": 150.5, "alpha": 6.25, "dose": 770.0, "total": 426.75, "age_s": 0.2}}))
                     n += 1
                     _time.sleep(0.3)
                 except Exception:
@@ -283,6 +283,11 @@ with sync_playwright() as p:
     pi.wait_for_function(f"({spark_js})() >= 3", timeout=6000)
     spark_points = pi.evaluate(spark_js)
     check("I the live dose sparkline is drawing for the AlphaHound", spark_points >= 2, str(spark_points))
+    chart_js = """() => ['gamma', 'beta', 'alpha'].map(k => { const ch = window.Chart && Chart.getChart(document.getElementById('ah-chart-' + k));
+                          return ch ? ch.data.datasets[0].data.filter(v => v !== null).length : -1 })"""
+    pi.wait_for_function(f"({chart_js})().every(n => n >= 3)", timeout=6000)
+    check("I gamma / beta / alpha count-rate charts are drawing", all(n >= 3 for n in pi.evaluate(chart_js)), str(pi.evaluate(chart_js)))
+    check("I the smoothed dose is shown", "64.50" in pi.inner_text("#ah-dose-avg"), pi.inner_text("#ah-dose-avg"))
     check("I the display replica offers all 11 modes", pi.evaluate("document.getElementById('ah-screen-mode').options.length") == 11)
     pi.select_option("#ah-screen-mode", "4")
     pi.wait_for_timeout(600)
@@ -304,6 +309,7 @@ with sync_playwright() as p:
     check("I Disconnect calls the server and restores the connect controls",
           ah["disconnect_calls"] == 1 and pi.is_visible("#btn-connect-device") and not pi.is_visible("#btn-disconnect-alphahound"))
     check("I the details panel is hidden again", not pi.is_visible("#alphahound-details-panel"))
+    check("I the count-rate charts are released on disconnect", pi.evaluate("typeof Chart !== 'undefined' && !Chart.getChart(document.getElementById('ah-chart-gamma'))"))
     check("I the replica shows NO DEVICE when disconnected", pi.evaluate("""() => { const c = document.getElementById('ah-screen');
           const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0;
           for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n < 1500 }"""))

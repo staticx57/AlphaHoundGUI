@@ -70,7 +70,8 @@ async def device_status():
         "dose_rate": alphahound_device.get_dose_rate() if is_connected else None,
         "temperature": alphahound_device.get_temperature() if is_connected else None,
         "comp_factor": alphahound_device.get_comp_factor() if is_connected else None,
-        "cps": alphahound_device.get_cps() if is_connected else None
+        "cps": alphahound_device.get_cps() if is_connected else None,
+        "dose_rate_avg": alphahound_device.get_dose_rate_avg() if is_connected else None
     }
 
 
@@ -94,6 +95,7 @@ async def device_details():
         "baudrate": alphahound_device.baudrate,
         "dose_rate_uRem_h": dose,
         "dose_rate_uSv_h": dose * UREM_TO_USV if dose is not None else None,
+        "dose_rate_avg_uRem_h": alphahound_device.get_dose_rate_avg(),
         "temperature": alphahound_device.get_temperature(),
         "comp_factor": alphahound_device.get_comp_factor(),
         "cps": alphahound_device.get_cps(),
@@ -282,6 +284,11 @@ class ManagedAcquisitionRequest(BaseModel):
 UREM_TO_USV = 0.01  # AlphaHound reports dose rate in uRem/h (1 uRem = 0.01 uSv)
 
 
+def alphahound_cps():
+    """gamma / beta / alpha counts per second for the acquisition manager (None when not reported)."""
+    return alphahound_device.get_cps() if alphahound_device.is_connected() else None
+
+
 def alphahound_dose_rate_uSv_h():
     if not alphahound_device.is_connected():
         return None
@@ -387,7 +394,8 @@ async def start_managed_acquisition(request: ManagedAcquisitionRequest):
     else:
         result = await acquisition_manager.start(request.duration_minutes, alphahound_device,
                                                  dose_rate_fn=alphahound_dose_rate_uSv_h,
-                                                 instrument={"instrument_model": "AlphaHound"})
+                                                 instrument={"instrument_model": "AlphaHound"},
+                                                 cps_fn=alphahound_cps)
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error"))
     return result

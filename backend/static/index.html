@@ -396,12 +396,21 @@
                                         <dt>Temperature</dt><dd id="ah-temp">--</dd>
                                         <dt>Compensation</dt><dd id="ah-comp">--</dd>
                                         <dt>Dose rate</dt><dd id="ah-dose">--</dd>
+                                        <dt>Dose (5 s avg)</dt><dd id="ah-dose-avg" title="Mean of the last 5 s of readings: single readings are noisy">--</dd>
                                         <dt>Gamma</dt><dd id="ah-cps-gamma">--</dd>
                                         <dt>Beta</dt><dd id="ah-cps-beta">--</dd>
                                         <dt>Alpha</dt><dd id="ah-cps-alpha">--</dd>
                                         <dt>Total</dt><dd id="ah-cps-total">--</dd>
                                         <dt>Dose log</dt><dd id="ah-log-count">--</dd>
                                     </dl>
+                                    <div class="ah-cps-charts" aria-label="Count rate history">
+                                        <div class="ah-cps-chart"><span style="color: #38bdf8;">&gamma; gamma cps</span>
+                                            <div class="ah-cps-chart-box"><canvas id="ah-chart-gamma"></canvas></div></div>
+                                        <div class="ah-cps-chart"><span style="color: #f59e0b;">&beta; beta cps</span>
+                                            <div class="ah-cps-chart-box"><canvas id="ah-chart-beta"></canvas></div></div>
+                                        <div class="ah-cps-chart"><span style="color: #ef4444;">&alpha; alpha cps</span>
+                                            <div class="ah-cps-chart-box"><canvas id="ah-chart-alpha"></canvas></div></div>
+                                    </div>
                                     <div class="ah-actions">
                                         <button id="btn-dose-csv" class="btn-secondary" style="padding: 0.3rem 0.7rem;"
                                             title="Download the dose-rate history (with gamma/beta/alpha CPS) as CSV">Dose CSV</button>
