@@ -13,6 +13,17 @@
 - [x] **Chart Autoscale & Label Stacking**: ✅ Fixed autoscale toggle between peak-focused view and full spectrum, fixed overlapping annotation labels with vertical stacking (2025-12-22)
 - [x] **Documentation Overhaul**: ✅ Major README update with Radiacode, XRF, SNIP, spectrum algebra, server-managed acquisitions (2025-12-22)
 
+### Session handoff (2026-10-02, live RC-110 testing on Windows, branch fix/duplicate-route-registrations)
+Last push: `3a8aa0d`. **Uncommitted** (all tests pass: 159 backend, 23 UI smoke, 34/34 theme sweep after the info-icon colour fix):
+- Time fields: Acquisition/Live/Real/count_time were one wall-clock number copied 4x. UI now shows one "Acquisition Time" card (or separate Live/Real cards when they differ) with an ⓘ tooltip; acquisitions add `device_duration_s` (instrument-reported, Radiacode) and `time_notes`.
+- Radiacode UI state: after Disconnect the Connect button still read "Connected"; a connection lost server-side (restart, BLE drop) was never noticed. Now `showRadiacodeDisconnectedUI()` resets both; 3 consecutive 400 "not connected" dose polls trigger it. Covered by ui_smoke section G.
+- Untracked user data (not committed): `backend/data/acquisitions/spectrum_2026-10-02_{09-53-28,11-12-13,11-20-16}.n42` (RC-110 + Takumar lens; 09-53-28 carries the old wrong AlphaHound label).
+Open items:
+- [ ] Verify RC-110 end to end after a fresh connect: Dose row shows "(session)" total; compare with the device screen (device DS_uR register and RareData are not served by firmware 4.14 over BLE: see `/radiacode/diagnostics/dose-sources`).
+- [ ] Restore Radiacode UI state on page refresh while the server is still connected (AlphaHound has `checkDeviceStatus`; Radiacode does not).
+- [ ] Real alarm events (dose-rate/dose thresholds) from `data_buf` `Event` records are not shown; alarm limits readable via `get_alarm_limits()` (device: dose-rate alarm 40 uR/h).
+- [ ] PyRIID / AI Identify: not installed; PyRIID pins numpy 1.26 / scipy 1.13 / TF 2.16 vs numpy 2.2 here: needs a separate Python environment.
+- [ ] Tooling notes: servers are restarted with `powershell -File $TEMP/restart.ps1`-style (kill port 3200, start `python main.py` in backend); a restart drops the Radiacode BLE link. Browser tests: `python backend/tests/ui_smoke.py`, `ui_theme_sweep.py` (set PYTHONIOENCODING=utf-8 on Windows); real-spectrum benchmark: `python backend/tests/real_benchmark.py`.
 ### Pending Manual Verification (needs local browser / Radiacode hardware)
 > Verified in headless Chrome with a mocked device (`python backend/tests/ui_smoke.py`, 15 checks): page load without JS errors, Radiacode tab layout/IDs, View Configuration + accumulated-dose elements present, AlphaHound dose readout + safety alert, connection-restore enabling controls, background load flow. Still needs real hardware / eyes: live Radiacode values, PDF download, exports, other themes and mobile widths, real-CSV peak comparison.
 

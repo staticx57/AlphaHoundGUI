@@ -218,8 +218,11 @@ class RadiacodeAcquisitionDevice:
     def dose_rate_uSv_h(self):
         return radiacode_device.get_dose_rate()  # already uSv/h
 
+    device_duration_s = None  # accumulation time reported by the device itself
+
     def get_spectrum(self):
         counts, energies, meta = radiacode_device.get_spectrum()
+        self.device_duration_s = (meta or {}).get('duration_s')
         self.calibration_source = (meta or {}).get("calibration_source", "device")
         return list(zip(counts, energies)) if counts else []
 

@@ -146,12 +146,55 @@ async function pollRadiacodeDose() {
                 console.log('[Radiacode] Extended info unavailable:', extErr.message);
             }
         }
+        pollRadiacodeDose._notConnectedCount = 0;
     } catch (err) {
         // Don't spam errors - just log once
         if (!pollRadiacodeDose._hasError) {
             console.warn('[Radiacode] Dose poll error:', err.message);
             pollRadiacodeDose._hasError = true;
         }
+        // The server answers 400 "not connected" when the device was disconnected (unplugged,
+        // Bluetooth dropped, server restarted). Three in a row: stop pretending we are connected.
+        if (err.status === 400 && /not connected/i.test(err.message || '')) {
+            pollRadiacodeDose._notConnectedCount = (pollRadiacodeDose._notConnectedCount || 0) + 1;
+            if (pollRadiacodeDose._notConnectedCount >= 3) {
+                pollRadiacodeDose._notConnectedCount = 0;
+                handleRadiacodeLost();
+            }
+        }
+    }
+}
+
+/**
+ * Resets the UI to the disconnected state. Used after a user Disconnect and when the
+ * connection is lost behind our back (Bluetooth drop, unplug, server restart).
+ */
+function showRadiacodeDisconnectedUI() {
+    stopRadiacodeDosePolling();
+    ui.setDeviceConnected(false);
+    resetDeviceUI();
+    const connectBtn = document.getElementById('btn-connect-radiacode');
+    if (connectBtn) {
+        connectBtn.textContent = 'Connect';   // it read "Connected" after a successful connect
+        connectBtn.disabled = false;
+        connectBtn.style.display = 'inline-block';
+    }
+    const disconnectBtn = document.getElementById('btn-disconnect-device');
+    if (disconnectBtn) disconnectBtn.style.display = 'none';
+    const doseEl = document.getElementById('rc-dose-display');
+    if (doseEl) doseEl.textContent = '--';
+    const dropZone = document.getElementById('drop-zone');
+    if (dropZone) dropZone.style.display = '';
+}
+
+function handleRadiacodeLost() {
+    if (!isAcquiring) {
+        showRadiacodeDisconnectedUI();
+        showToast('Radiacode connection lost. Reconnect to continue.', 'warning');
+    } else {
+        // An acquisition is running on the server; it reports its own error state.
+        showRadiacodeDisconnectedUI();
+        showToast('Radiacode disconnected during acquisition.', 'error');
     }
 }
 
@@ -1305,13 +1348,9 @@ function setupEventListeners() {
             // Stop polling FIRST (before API call) - critical for clean disconnect
             stopRadiacodeDosePolling();
             await api.disconnectUnified();
-            ui.setDeviceConnected(false);
             stopAcquisition();
-            resetDeviceUI();
-
-            // Show connect button, hide disconnect button (keep connection row visible!)
-            document.getElementById('btn-connect-radiacode').style.display = 'inline-block';
-            document.getElementById('btn-disconnect-device').style.display = 'none';
+            showRadiacodeDisconnectedUI();
+            showToast('Disconnected', 'info');
         } catch (err) {
             console.error('Disconnect error:', err);
         }

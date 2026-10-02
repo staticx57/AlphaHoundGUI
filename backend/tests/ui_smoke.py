@@ -124,6 +124,47 @@ with sync_playwright() as p:
     check("F no isotope/chain results for uncalibrated data",
           not pf.evaluate("() => { const c=document.getElementById('decay-chains-list'); return !!c && c.children.length>0 }"))
     ctx_f.close()
+    # G. Radiacode connection state: Disconnect resets the button; a lost connection is noticed
+    import json as _json
+    def rc_page(dose_ok_count):
+        ctx = browser.new_context(viewport={"width": 1400, "height": 1000})
+        pg = ctx.new_page()
+        state = {"dose_calls": 0}
+        pg.route("**/radiacode/connect", lambda route, request: route.fulfill(
+            status=200, content_type="application/json", body=_json.dumps({"device_info": {"model": "RadiaCode-110"}})))
+        pg.route("**/radiacode/disconnect", lambda route, request: route.fulfill(
+            status=200, content_type="application/json", body="{}"))
+        pg.route("**/radiacode/info/extended", lambda route, request: route.fulfill(
+            status=200, content_type="application/json", body="{}"))
+
+        def dose(route, request):
+            state["dose_calls"] += 1
+            if state["dose_calls"] <= dose_ok_count:
+                route.fulfill(status=200, content_type="application/json", body=_json.dumps({"dose_rate_uSv_h": 1.2}))
+            else:
+                route.fulfill(status=400, content_type="application/json", body=_json.dumps({"detail": "Radiacode not connected"}))
+        pg.route("**/radiacode/dose", dose)
+        pg.goto(URL, wait_until="networkidle")
+        pg.click("#tab-radiacode")
+        pg.click("#btn-connect-radiacode")
+        pg.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
+        return ctx, pg
+
+    ctx_g, pg = rc_page(dose_ok_count=10_000)
+    check("G connected state shown", pg.inner_text("#device-conn-label") == "Connected")
+    pg.once("dialog", lambda d: d.accept())
+    pg.click("#btn-disconnect-device")
+    pg.wait_for_function("document.getElementById('device-conn-label').textContent === 'Not connected'", timeout=8000)
+    check("G after Disconnect the Connect button reads 'Connect' and is visible",
+          pg.inner_text("#btn-connect-radiacode") == "Connect" and pg.is_visible("#btn-connect-radiacode"))
+    check("G after Disconnect the Disconnect button is hidden", not pg.is_visible("#btn-disconnect-device"))
+    ctx_g.close()
+
+    ctx_g, pg = rc_page(dose_ok_count=2)
+    pg.wait_for_function("document.getElementById('device-conn-label').textContent === 'Not connected'", timeout=20000)
+    check("G lost connection (server says 'not connected') resets the UI by itself",
+          pg.inner_text("#btn-connect-radiacode") == "Connect" and pg.inner_text("#rc-dose-display") == "--")
+    ctx_g.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

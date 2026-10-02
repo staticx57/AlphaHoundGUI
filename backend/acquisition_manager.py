@@ -54,6 +54,7 @@ class AcquisitionState:
     dose_rate_max: Optional[float] = None
     last_dose_rate: Optional[float] = None
     last_dose_time: Optional[float] = None
+    device_duration_s: Optional[float] = None  # accumulation time as reported by the instrument
 
 
 class AcquisitionManager:
@@ -289,6 +290,9 @@ class AcquisitionManager:
                 self.state.last_spectrum_energies, energy_source = energies_from_device_spectrum(spectrum)
                 if energy_source != SOURCE_DEVICE:
                     logger.warning("[AcquisitionManager] " + fallback_warning())
+                dur = getattr(self._device, 'device_duration_s', None)
+                if isinstance(dur, (int, float)) and dur >= 0:
+                    self.state.device_duration_s = float(dur)
                 # A guessed axis is not a calibration (identification is then skipped with a warning)
                 self._is_calibrated = (energy_source == SOURCE_DEVICE and
                                        getattr(self._device, "calibration_source", "device") == "device")
@@ -439,8 +443,23 @@ class AcquisitionManager:
                 'real_time': self.state.elapsed_seconds,
                 'start_time': self.state.start_time.isoformat() if self.state.start_time else None,
                 **self._exposure_metadata(),
+                **self._time_metadata(),
             }
         }
+
+    TIME_NOTES = (
+        "Real time is the wall-clock time since the acquisition started. Live time is the time the "
+        "detector could count (real time minus dead time); neither supported instrument reports dead "
+        "time, so live time is taken to equal real time. Device duration is the accumulation time "
+        "reported by the instrument itself, shown as an independent check."
+    )
+
+    def _time_metadata(self) -> Dict[str, Any]:
+        """Explains the time fields and adds the instrument-reported duration when available."""
+        out = {"time_notes": self.TIME_NOTES}
+        if self.state.device_duration_s is not None:
+            out["device_duration_s"] = round(self.state.device_duration_s, 1)
+        return out
 
     def _exposure_metadata(self) -> Dict[str, Any]:
         e = self.exposure_summary()

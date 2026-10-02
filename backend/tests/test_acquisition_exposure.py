@@ -247,3 +247,27 @@ def test_session_dose_integrates_new_readings_and_resets(monkeypatch):
     assert drv.get_session_dose()["dose_uSv"] == pytest.approx(3.6, rel=1e-3)
     assert drv.reset_dose() is True and dev.resets == 1
     assert drv.get_session_dose()["dose_uSv"] == 0.0
+
+
+def test_time_metadata_explained_and_includes_device_duration():
+    m = am.AcquisitionManager()
+    saved = (m.state, m._device)
+    try:
+        m.state = am.AcquisitionState(elapsed_seconds=90.0, device_duration_s=89.4,
+                                      last_spectrum_counts=[1] * 8, last_spectrum_energies=[float(i) for i in range(8)])
+        md = m._time_metadata()
+        assert md["device_duration_s"] == 89.4
+        assert "dead time" in md["time_notes"] and "wall-clock" in md["time_notes"]
+        m.state.device_duration_s = None
+        assert "device_duration_s" not in m._time_metadata()
+    finally:
+        m.state, m._device = saved
+
+
+def test_radiacode_adapter_exposes_device_duration(monkeypatch):
+    from routers import device as d
+    monkeypatch.setattr(d.radiacode_device, "get_spectrum",
+                        lambda: ([1, 2, 3], [1.0, 2.0, 3.0], {"duration_s": 61.5, "calibration_source": "device"}))
+    dev = d.RadiacodeAcquisitionDevice()
+    assert dev.get_spectrum() == [(1, 1.0), (2, 2.0), (3, 3.0)]
+    assert dev.device_duration_s == 61.5

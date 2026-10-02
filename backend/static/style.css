@@ -1992,3 +1992,25 @@ select.feature-disabled {
         flex-wrap: wrap;
     }
 }
+
+/* Small info marker next to a label; hover/focus shows the explanation (native tooltip) */
+.info-tip {
+    display: inline-block;
+    margin-left: 0.25rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: help;
+    opacity: 0.9;
+    text-transform: none;
+    color: var(--accent-color);
+}
+
+[data-theme="light"] .info-tip {
+    color: #0369a1; /* accent is too pale on the light card colour (contrast) */
+}
+
+.info-tip:hover,
+.info-tip:focus {
+    opacity: 1;
+    outline: none;
+}

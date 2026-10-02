@@ -308,8 +308,53 @@ export class AlphaHoundUI {
             'exposure_during_acquisition': 'Exposure (this acquisition)'
         };
 
-        const metaHtml = Object.entries(metadata || {}).map(([key, value]) => {
+        // Explanations shown as tooltips so every field says what it means
+        const explain = {
+            'count_time_minutes': 'Time since the acquisition started (wall clock), in minutes.',
+            'acquisition_time': 'Time since the acquisition started (wall clock).',
+            'live_time': 'Time the detector was able to count (real time minus dead time).',
+            'real_time': 'Elapsed wall-clock time of the measurement.',
+            'live_time_s': 'Time the detector was able to count (real time minus dead time).',
+            'real_time_s': 'Elapsed wall-clock time of the measurement.',
+            'device_duration_s': 'Accumulation time reported by the instrument itself (independent of this app\u2019s clock).',
+            'duration_s': 'Accumulation time reported by the instrument.',
+        };
+
+        // Several time fields often carry the same number (neither supported device reports dead time,
+        // so live = real = acquisition time). Show one explained card instead of four unexplained ones.
+        const md = { ...(metadata || {}) };
+        const timeNotes = md.time_notes; delete md.time_notes;
+        const secs = (k) => (typeof md[k] === 'number') ? md[k] : null;
+        const same = (a, b) => a !== null && b !== null && Math.abs(a - b) < 0.5;
+        const acq = secs('acquisition_time'), live = secs('live_time'), real = secs('real_time');
+        const cmin = (typeof md.count_time_minutes === 'number') ? md.count_time_minutes * 60 : null;
+        const merged = [];
+        if (acq !== null && same(acq, live) && same(acq, real) && (cmin === null || same(acq, cmin))) {
+            ['acquisition_time', 'live_time', 'real_time', 'count_time_minutes'].forEach(k => delete md[k]);
+            merged.push({
+                label: 'Acquisition Time',
+                value: acq,
+                title: (timeNotes || 'Live time and real time are identical here: neither device reports dead time, '
+                    + 'so live time is taken to equal real time (= elapsed time since the acquisition started).')
+            });
+        } else if (live !== null && real !== null && same(live, real) && acq === null) {
+            ['live_time', 'real_time'].forEach(k => delete md[k]);
+            merged.push({
+                label: 'Live = Real Time', value: live,
+                title: 'Live and real time are identical in this file (no dead time recorded).'
+            });
+        }
+        const fmtSecs = (v) => v >= 3600 ? `${Math.floor(v / 3600)}h ${Math.floor((v % 3600) / 60)}m`
+            : (v >= 60 ? `${(v / 60).toFixed(1)} min (${v.toFixed(0)} s)` : `${v.toFixed(1)}s`);
+        const mergedHtml = merged.map(m => `
+            <div class="stat-card">
+                <div class="stat-label">${m.label} <span class="info-tip" tabindex="0" role="img" aria-label="${m.title}" title="${m.title}">ⓘ</span></div>
+                <div class="stat-value" title="${m.title}">${fmtSecs(m.value)}</div>
+            </div>`).join('');
+
+        const metaHtml = mergedHtml + Object.entries(md).map(([key, value]) => {
             let displayKey = keyMap[key] || key.toUpperCase().replaceAll('_', ' ');
+            if (key === 'device_duration_s') displayKey = 'Device Duration';
             let displayValue = value || '-';
 
             // Handle object values (like calibration coefficients)
@@ -323,7 +368,7 @@ export class AlphaHoundUI {
                 }
             } else if (key === 'count_time_minutes' && value > 0) {
                 displayValue = `${parseFloat(value).toFixed(2)} min`;
-            } else if (key === 'duration_s' && typeof value === 'number') {
+            } else if ((key === 'duration_s' || key === 'device_duration_s') && typeof value === 'number') {
                 // Format duration - convert seconds to readable format
                 if (value >= 3600) {
                     const hrs = Math.floor(value / 3600);
@@ -340,8 +385,8 @@ export class AlphaHoundUI {
 
             return `
                 <div class="stat-card">
-                    <div class="stat-label">${displayKey}</div>
-                    <div class="stat-value" title="${typeof value === 'object' ? JSON.stringify(value) : value}">${displayValue}</div>
+                    <div class="stat-label">${displayKey}${explain[key] ? ` <span class="info-tip" tabindex="0" role="img" aria-label="${explain[key]}" title="${explain[key]}">ⓘ</span>` : ''}</div>
+                    <div class="stat-value" title="${explain[key] || (typeof value === 'object' ? JSON.stringify(value) : value)}">${displayValue}</div>
                 </div>
             `;
         }).join('');

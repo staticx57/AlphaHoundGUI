@@ -354,7 +354,9 @@ export class AlphaHoundAPI {
         const response = await fetch('/radiacode/dose');
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.detail || 'Failed to get dose rate');
+            const err = new Error(error.detail || 'Failed to get dose rate');
+            err.status = response.status;   // 400 = server says the device is not connected
+            throw err;
         }
         return await response.json();
     }
