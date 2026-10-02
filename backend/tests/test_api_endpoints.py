@@ -108,3 +108,17 @@ def test_pdf_export_returns_pdf(client):
     assert response.status_code == 200, response.text
     assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
+
+
+def test_device_spectrum_acquire_with_mock_device(client, monkeypatch):
+    """Regression: /spectrum used actual_duration_seconds/start_time/end_time before defining them."""
+    from routers import device as device_router
+    dev = device_router.alphahound_device
+    monkeypatch.setattr(dev, "is_connected", lambda: True)
+    monkeypatch.setattr(dev, "clear_spectrum", lambda: None)
+    monkeypatch.setattr(dev, "get_spectrum", lambda: [(10 + (i == 100) * 300, i * 3.0) for i in range(1024)])
+    response = client.post("/device/spectrum", json={"count_minutes": 0})
+    assert response.status_code == 200, response.text
+    meta = response.json()["metadata"]
+    assert meta["start_time"] < meta["end_time"] or meta["acquisition_time"] == 0
+    assert len(response.json()["counts"]) == 1024

@@ -7,6 +7,9 @@ import os
 import csv
 from typing import Dict, List, Tuple, Optional
 
+import logging
+logger = logging.getLogger(__name__)
+
 # Directory containing downloaded IAEA data
 IAEA_DATA_DIR = os.path.join(os.path.dirname(__file__), 'data', 'idb', 'isotopes')
 
@@ -78,7 +81,7 @@ def parse_iaea_csv(filepath: str, min_intensity: float = 0.01, min_energy: float
         gammas.sort(key=lambda x: -x[1])
         
     except Exception as e:
-        print(f"[IAEA Parser] Error parsing {filepath}: {e}")
+        logger.error(f"[IAEA Parser] Error parsing {filepath}: {e}")
         return None
     
     return {
@@ -119,7 +122,7 @@ def load_all_isotopes(min_intensity: float = 0.5, top_n: int = 15) -> Dict[str, 
     isotopes = {}
     
     if not os.path.exists(IAEA_DATA_DIR):
-        print(f"[IAEA Parser] Data directory not found: {IAEA_DATA_DIR}")
+        logger.info(f"[IAEA Parser] Data directory not found: {IAEA_DATA_DIR}")
         return isotopes
     
     for filename in os.listdir(IAEA_DATA_DIR):
@@ -146,7 +149,7 @@ def load_all_isotopes(min_intensity: float = 0.5, top_n: int = 15) -> Dict[str, 
             result['gammas'] = result['gammas'][:top_n]
             isotopes[proper_name] = result
     
-    print(f"[IAEA Parser] Loaded {len(isotopes)} isotopes from IAEA data")
+    logger.info(f"[IAEA Parser] Loaded {len(isotopes)} isotopes from IAEA data")
     return isotopes
 
 
@@ -173,21 +176,21 @@ def get_isotope_gammas(isotope_name: str, min_intensity: float = 0.5) -> List[Tu
 
 # Quick test
 if __name__ == "__main__":
-    print("Testing IAEA Parser...")
+    logger.info("Testing IAEA Parser...")
     
     # Test single isotope
     bi214_gammas = get_isotope_gammas("Bi-214")
-    print(f"\nBi-214 top gamma lines ({len(bi214_gammas)} found):")
+    logger.info(f"\nBi-214 top gamma lines ({len(bi214_gammas)} found):")
     for energy, intensity in bi214_gammas[:5]:
-        print(f"  {energy:.1f} keV - {intensity:.2f}%")
+        logger.info(f"  {energy:.1f} keV - {intensity:.2f}%")
     
     # Test loading all isotopes
     all_isotopes = load_all_isotopes()
-    print(f"\nLoaded {len(all_isotopes)} isotopes from IAEA data")
+    logger.info(f"\nLoaded {len(all_isotopes)} isotopes from IAEA data")
     
     # Show sample
     for name, data in list(all_isotopes.items())[:5]:
         n_gammas = len(data['gammas'])
         top_energy = data['gammas'][0][0] if data['gammas'] else 0
         top_intensity = data['gammas'][0][1] if data['gammas'] else 0
-        print(f"  {name}: {n_gammas} gammas, strongest {top_energy:.1f} keV @ {top_intensity:.2f}%")
+        logger.info(f"  {name}: {n_gammas} gammas, strongest {top_energy:.1f} keV @ {top_intensity:.2f}%")

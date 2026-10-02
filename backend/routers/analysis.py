@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, File, UploadFile, HTTPException, Response
 from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional, Dict
@@ -19,12 +21,13 @@ try:
     from confidence_scoring import enhance_isotope_identifications
     from multiplet_fitting import enhance_peaks_with_multiplet_fitting
     HAS_ENHANCED_ANALYSIS = True
-    print("[Analysis] Enhanced analysis modules loaded")
+    logger.info("[Analysis] Enhanced analysis modules loaded")
 except ImportError as e:
     HAS_ENHANCED_ANALYSIS = False
-    print(f"[Analysis] Enhanced modules not available: {e}")
+    logger.warning(f"[Analysis] Enhanced modules not available: {e}")
 
 from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
+
 
 # Constants for input validation
 MAX_FILE_SIZE_MB = 10
@@ -192,23 +195,23 @@ async def upload_file(file: UploadFile = File(...)):
     elif filename.endswith('.csv'):
         try:
             result = parse_csv_spectrum(content, filename)
-            print(f"[CSV Upload] Parsed: {len(result.get('counts', []))} counts, {len(result.get('energies', []))} energies")
-            print(f"[CSV Upload] is_calibrated: {result.get('is_calibrated', False)}")
+            logger.info(f"[CSV Upload] Parsed: {len(result.get('counts', []))} counts, {len(result.get('energies', []))} energies")
+            logger.info(f"[CSV Upload] is_calibrated: {result.get('is_calibrated', False)}")
             
             # Use common analysis pipeline
             is_calibrated = result.get("is_calibrated", False)
             result = analyze_spectrum_peaks(result, is_calibrated)
             
-            print(f"[CSV Upload] After analysis: peaks={len(result.get('peaks', []))}, isotopes={len(result.get('isotopes', []))}")
+            logger.info(f"[CSV Upload] After analysis: peaks={len(result.get('peaks', []))}, isotopes={len(result.get('isotopes', []))}")
             if result.get('peaks'):
                 peak_energies = [p.get('energy', 0) for p in result['peaks'][:5]]
-                print(f"[CSV Upload] First 5 peak energies: {peak_energies}")
+                logger.info(f"[CSV Upload] First 5 peak energies: {peak_energies}")
             return result
         except ValueError as e:
             # Unparseable CSV is a client error, not a server fault
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            print(f"[CSV Upload] Error: {e}")
+            logger.error(f"[CSV Upload] Error: {e}")
             import traceback
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=str(e))
@@ -400,7 +403,7 @@ def ml_identify(request: MLIdentifyRequest):
     except ImportError as e:
         raise HTTPException(status_code=501, detail="PyRIID not installed")
     except Exception as e:
-        print(f"[ML] Error: {e}")
+        logger.error(f"[ML] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -478,7 +481,7 @@ def snip_background_endpoint(request: dict):
         return response
         
     except Exception as e:
-        print(f"SNIP background error: {e}")
+        logger.error(f"SNIP background error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -515,7 +518,7 @@ def analyze_roi_endpoint(request: ROIAnalysisRequest):
         )
         
         from dataclasses import asdict
-        print(f"[DEBUG] Analyze ROI Result Type: {type(result)}")
+        logger.debug(f"[DEBUG] Analyze ROI Result Type: {type(result)}")
         # If it's already a dict, just return it. If dataclass, convert.
         if isinstance(result, dict):
             response = result
@@ -530,14 +533,14 @@ def analyze_roi_endpoint(request: ROIAnalysisRequest):
                 enhanced = get_enhanced_analysis(source_type, activity_bq)
                 if enhanced:
                     response["enhanced_analysis"] = enhanced
-                    print(f"[ROI] Added enhanced analysis for {source_type}")
+                    logger.info(f"[ROI] Added enhanced analysis for {source_type}")
         
         return response
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[ROI] Error: {e}")
+        logger.error(f"[ROI] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analyze/uranium-ratio")
@@ -569,7 +572,7 @@ def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[ROI] Uranium ratio error: {e}")
+        logger.error(f"[ROI] Uranium ratio error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/analyze/roi-isotopes")
@@ -623,7 +626,7 @@ def identify_source_endpoint(request: UraniumRatioRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[Source ID] Error: {e}")
+        logger.error(f"[Source ID] Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -988,7 +991,7 @@ def analyze_multiplet_endpoint(request: dict):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[Multiplet] Error: {e}")
+        logger.error(f"[Multiplet] Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

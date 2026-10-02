@@ -17,6 +17,9 @@ from enum import Enum
 
 from analysis_utils import analyze_spectrum_peaks
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class AcquisitionStatus(str, Enum):
     """Acquisition lifecycle states"""
@@ -123,7 +126,7 @@ class AcquisitionManager:
         # Start background task
         self._task = asyncio.create_task(self._acquisition_loop())
         
-        print(f"[AcquisitionManager] Started {duration_minutes} minute acquisition")
+        logger.info(f"[AcquisitionManager] Started {duration_minutes} minute acquisition")
         return {"success": True, "message": f"Acquisition started for {duration_minutes} minutes"}
     
     async def stop(self) -> Dict[str, Any]:
@@ -143,7 +146,7 @@ class AcquisitionManager:
             try:
                 await asyncio.wait_for(self._task, timeout=10.0)
             except asyncio.TimeoutError:
-                print("[AcquisitionManager] Stop timeout, cancelling task")
+                logger.info("[AcquisitionManager] Stop timeout, cancelling task")
                 self._task.cancel()
         
         return {
@@ -164,7 +167,7 @@ class AcquisitionManager:
                 
                 # Check if duration expired
                 if self.state.elapsed_seconds >= self.state.duration_seconds:
-                    print(f"[AcquisitionManager] Duration complete: {self.state.elapsed_seconds:.1f}s")
+                    logger.info(f"[AcquisitionManager] Duration complete: {self.state.elapsed_seconds:.1f}s")
                     break
                 
                 # Poll spectrum from device
@@ -184,10 +187,10 @@ class AcquisitionManager:
             await self._finalize()
             
         except asyncio.CancelledError:
-            print("[AcquisitionManager] Acquisition cancelled")
+            logger.info("[AcquisitionManager] Acquisition cancelled")
             self.state.status = AcquisitionStatus.STOPPED
         except Exception as e:
-            print(f"[AcquisitionManager] Error: {e}")
+            logger.error(f"[AcquisitionManager] Error: {e}")
             self.state.status = AcquisitionStatus.ERROR
             self.state.error_message = str(e)
     
@@ -219,7 +222,7 @@ class AcquisitionManager:
                 self.state.last_spectrum_energies = [i * 3.0 for i in range(len(self.state.last_spectrum_counts))]
                 
         except Exception as e:
-            print(f"[AcquisitionManager] Poll error: {e}")
+            logger.error(f"[AcquisitionManager] Poll error: {e}")
     
 
     
@@ -260,10 +263,10 @@ class AcquisitionManager:
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(n42_content)
             
-            print(f"[AcquisitionManager] Checkpoint saved at {self.state.elapsed_seconds:.0f}s")
+            logger.info(f"[AcquisitionManager] Checkpoint saved at {self.state.elapsed_seconds:.0f}s")
             
         except Exception as e:
-            print(f"[AcquisitionManager] Checkpoint error: {e}")
+            logger.error(f"[AcquisitionManager] Checkpoint error: {e}")
     
     async def _finalize(self):
         """Finalize acquisition - save final file and cleanup"""
@@ -316,16 +319,16 @@ class AcquisitionManager:
             self.state.final_filename = filename
             self.state.status = AcquisitionStatus.COMPLETE if not self._stop_requested else AcquisitionStatus.STOPPED
             
-            print(f"[AcquisitionManager] Finalized: {filename} ({self.state.elapsed_seconds:.1f}s)")
+            logger.info(f"[AcquisitionManager] Finalized: {filename} ({self.state.elapsed_seconds:.1f}s)")
             
             # Cleanup checkpoint file
             checkpoint_path = os.path.join(save_dir, 'acquisition_in_progress.n42')
             if os.path.exists(checkpoint_path):
                 os.remove(checkpoint_path)
-                print("[AcquisitionManager] Checkpoint file cleaned up")
+                logger.info("[AcquisitionManager] Checkpoint file cleaned up")
                 
         except Exception as e:
-            print(f"[AcquisitionManager] Finalize error: {e}")
+            logger.error(f"[AcquisitionManager] Finalize error: {e}")
             self.state.status = AcquisitionStatus.ERROR
             self.state.error_message = str(e)
     

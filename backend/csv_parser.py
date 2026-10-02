@@ -8,6 +8,9 @@ try:
 except ImportError:
     HAS_BECQUEREL = False
 
+import logging
+logger = logging.getLogger(__name__)
+
 def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     """
     Parse a CSV spectrum file using Becquerel.
@@ -43,7 +46,7 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
         source = "CSV File (Becquerel)"
 
     except Exception as bq_error:
-        print(f"[WARNING] Becquerel parsing failed: {str(bq_error)}. Attempting manual fallback.")
+        logger.error(f"[WARNING] Becquerel parsing failed: {str(bq_error)}. Attempting manual fallback.")
         try:
             # Fallback: Manual generic CSV parsing using pandas
             import pandas as pd
@@ -212,11 +215,11 @@ def _try_parse_calibration_header(filepath: str, num_channels: int):
                    pass
 
         if found_coeffs:
-            print(f"[DEBUG] Found Calibration Coefficients in header: a0={a0}, a1={a1}")
+            logger.debug(f"[DEBUG] Found Calibration Coefficients in header: a0={a0}, a1={a1}")
             # Generate linear energy list
             return [a0 + a1 * x for x in range(num_channels)]
             
     except Exception as e:
-        print(f"[DEBUG] Header calibration parsing failed: {e}")
+        logger.debug(f"[DEBUG] Header calibration parsing failed: {e}")
         
     return None

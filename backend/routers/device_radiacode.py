@@ -17,6 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from radiacode_driver import radiacode_device
 from analysis_utils import analyze_spectrum_peaks
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/radiacode", tags=["radiacode"])
 
 
@@ -165,7 +168,7 @@ def get_radiacode_spectrum(analyze: bool = True):
         "is_calibrated": True  # Radiacode provides calibration
     }
     
-    print(f"[Radiacode] Fetched {len(counts)} channels, duration: {metadata.get('duration_s')}s")
+    logger.info(f"[Radiacode] Fetched {len(counts)} channels, duration: {metadata.get('duration_s')}s")
     # Run analysis if requested
     if analyze and len(counts) > 0:
         try:
@@ -173,10 +176,10 @@ def get_radiacode_spectrum(analyze: bool = True):
             duration = metadata.get("duration_s")
             live_time = float(duration) if duration is not None else 0.0
             result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time)
-            print(f"[Radiacode] Analysis complete: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
+            logger.info(f"[Radiacode] Analysis complete: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
         except Exception as e:
             import traceback
-            print(f"[Radiacode] Analysis error: {e}")
+            logger.error(f"[Radiacode] Analysis error: {e}")
             traceback.print_exc()
             # Return raw spectrum without analysis rather than failing
             result["analysis_error"] = str(e)
@@ -406,10 +409,10 @@ def get_accumulated_spectrum(analyze: bool = True):
         try:
             live_time = float(spectrum["duration"]) if spectrum["duration"] else 0.0
             result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time)
-            print(f"[Radiacode] Accumulated analysis: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
+            logger.info(f"[Radiacode] Accumulated analysis: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
         except Exception as e:
             import traceback
-            print(f"[Radiacode] Accumulated analysis error: {e}")
+            logger.error(f"[Radiacode] Accumulated analysis error: {e}")
             traceback.print_exc()
             result["analysis_error"] = str(e)
     

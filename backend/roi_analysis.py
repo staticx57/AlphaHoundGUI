@@ -20,6 +20,9 @@ from detector_efficiency import get_detector, interpolate_efficiency
 from isotope_roi_database import get_roi_isotope, get_roi_window, get_background_region
 from activity_calculator import calculate_activity_bq, bq_to_uci, calculate_mda_bq
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ROIResult:
@@ -332,7 +335,7 @@ class ROIAnalyzer:
             recommendations.append("Acquire for > 1 minute to improve confidence")
         
         # DEBUG: Print advanced fitting status
-        print(f"[DEBUG] Advanced Fitting - Success: {fit_success}, Resolution: {resolution}, FWHM: {fwhm}, Error: {uncertainty}")
+        logger.debug(f"[DEBUG] Advanced Fitting - Success: {fit_success}, Resolution: {resolution}, FWHM: {fwhm}, Error: {uncertainty}")
 
         return ROIResult(
             isotope_name=isotope_name,
@@ -439,7 +442,7 @@ class ROIAnalyzer:
         # === SPECIAL CASE: Takumar Lens ===
         # Thoriated lenses contain ThO2 with trace natural uranium
         # Skip enrichment ratio (meaningless) and report Th-234 activity instead
-        print(f"[DEBUG] Takumar check: source_type={source_type}, has_th234={has_th234}")
+        logger.debug(f"[DEBUG] Takumar check: source_type={source_type}, has_th234={has_th234}")
         if source_type == "takumar_lens" and has_th234:
             return {
                 "can_analyze": True,
@@ -539,7 +542,7 @@ class ROIAnalyzer:
                         if bi214_result.snr < 2.0:
                              warnings.append("Warning: Correction based on weak Bi-214 signal. Result allows approx.")
                 except Exception as e:
-                    print(f"Error correcting Ra-226: {e}")
+                    logger.error(f"Error correcting Ra-226: {e}")
             
             if ra226_interference:
                 # Only warn if we didn't correct it

@@ -12,6 +12,8 @@ Tested working with PyRIID 2.2.0:
 - Sources must use 3-level MultiIndex: ('Category', 'Isotope', 'Seed')
 - predict() modifies SampleSet in-place, doesn't return new object
 """
+import logging
+logger = logging.getLogger(__name__)
 import numpy as np
 from typing import List, Dict, Optional
 
@@ -21,41 +23,42 @@ try:
     from riid.models import MLPClassifier
     import pandas as pd
     HAS_RIID = True
-    print("[ML] PyRIID successfully imported")
+    logger.info("[ML] PyRIID successfully imported")
 except ImportError as e:
     HAS_RIID = False
     SampleSet = None
     MLPClassifier = None
     pd = None
-    print(f"[WARNING] PyRIID not available. ML identification disabled. Error: {e}")
+    logger.error(f"[WARNING] PyRIID not available. ML identification disabled. Error: {e}")
 except Exception as e:
     HAS_RIID = False
     SampleSet = None
     MLPClassifier = None
     pd = None
-    print(f"[ERROR] Unexpected error importing PyRIID: {e}")
+    logger.error(f"[ERROR] Unexpected error importing PyRIID: {e}")
 
 # Import the authoritative isotope database and IAEA intensity data
 try:
     from isotope_database import ISOTOPE_DATABASE_ADVANCED, get_gamma_intensity, HAS_IAEA_DATA
     HAS_ISOTOPE_DB = True
-    print(f"[ML] Loaded {len(ISOTOPE_DATABASE_ADVANCED)} isotopes from database")
+    logger.info(f"[ML] Loaded {len(ISOTOPE_DATABASE_ADVANCED)} isotopes from database")
 except ImportError:
     HAS_ISOTOPE_DB = False
     HAS_IAEA_DATA = False
     ISOTOPE_DATABASE_ADVANCED = {}
     def get_gamma_intensity(isotope, energy): return 1.0
-    print("[WARNING] Isotope database not found, using fallback isotopes")
+    logger.warning("[WARNING] Isotope database not found, using fallback isotopes")
 
 # Import real spectrum loader for training data augmentation
 try:
     from ml_data_loader import load_real_training_data
     HAS_REAL_DATA_LOADER = True
-    print("[ML] Real spectrum loader available")
+    logger.info("[ML] Real spectrum loader available")
 except ImportError:
     HAS_REAL_DATA_LOADER = False
     load_real_training_data = None
-    print("[WARNING] Real spectrum loader not available")
+    logger.warning("[WARNING] Real spectrum loader not available")
+
 
 
 # =========================================================
@@ -195,7 +198,7 @@ class MLIdentifier:
         self.reference_fwhm_fraction = profile['fwhm_662']
         self.reference_energy = 662.0  # keV (Cs-137 reference)
         
-        print(f"[ML] Model: {ML_MODEL_TYPES[self.model_type]['name']}, Detector: {profile['name']}")
+        logger.info(f"[ML] Model: {ML_MODEL_TYPES[self.model_type]['name']}, Detector: {profile['name']}")
         
         
     def energy_to_channel(self, energy_keV: float) -> int:
@@ -333,7 +336,7 @@ class MLIdentifier:
             return
             
         model_config = ML_MODEL_TYPES[self.model_type]
-        print(f"[ML] Training classifier on synthetic data ({model_config['name']})...")
+        logger.info(f"[ML] Training classifier on synthetic data ({model_config['name']})...")
         
         # Build isotope list from authoritative database
         # Filter to isotopes with gamma emissions (non-empty energy lists)
@@ -355,7 +358,7 @@ class MLIdentifier:
             
         isotopes = list(isotope_data.keys())
         base_samples = model_config['samples_per_isotope']  # Use model-specific sample count
-        print(f"[ML] Training on {len(isotopes)} isotopes with {base_samples} samples each")
+        logger.info(f"[ML] Training on {len(isotopes)} isotopes with {base_samples} samples each")
         
         # =========================================================
         # ABUNDANCE-WEIGHTED SAMPLE GENERATION
@@ -438,7 +441,7 @@ class MLIdentifier:
         )
         n_samples = n_single_samples + n_mixture_samples
         
-        print(f"[ML] Training samples: {n_single_samples} single + {n_mixture_samples} mixtures = {n_samples} total")
+        logger.info(f"[ML] Training samples: {n_single_samples} single + {n_mixture_samples} mixtures = {n_samples} total")
         
         # Create spectra as 2D matrix (rows=samples, cols=channels)
         spectra_matrix = np.random.poisson(5, (n_samples, self.n_channels)).astype(float)
@@ -550,7 +553,7 @@ class MLIdentifier:
         
         if HAS_REAL_DATA_LOADER and load_real_training_data:
             try:
-                print("[ML] Loading real spectra for training augmentation...")
+                logger.info("[ML] Loading real spectra for training augmentation...")
                 real_spectra_matrix, real_labels = load_real_training_data(
                     data_dir=None,  # Uses default data directory
                     target_channels=self.n_channels,
@@ -558,10 +561,10 @@ class MLIdentifier:
                 )
                 
                 if len(real_labels) > 0:
-                    print(f"[ML] Loaded {len(real_labels)} augmented samples from real spectra")
-                    print(f"[ML] Real labels: {set(real_labels)}")
+                    logger.info(f"[ML] Loaded {len(real_labels)} augmented samples from real spectra")
+                    logger.info(f"[ML] Real labels: {set(real_labels)}")
             except Exception as e:
-                print(f"[ML] Real spectra loading failed (non-critical): {e}")
+                logger.warning(f"[ML] Real spectra loading failed (non-critical): {e}")
                 real_spectra_matrix = None
                 real_labels = []
         
@@ -570,7 +573,7 @@ class MLIdentifier:
             # Append real spectra to synthetic
             spectra_matrix = np.vstack([spectra_matrix[:sample_idx], real_spectra_matrix])
             labels.extend(real_labels)
-            print(f"[ML] Combined training set: {sample_idx} synthetic + {len(real_labels)} real = {len(labels)} total")
+            logger.info(f"[ML] Combined training set: {sample_idx} synthetic + {len(real_labels)} real = {len(labels)} total")
         else:
             # Trim synthetic matrix to actual size
             spectra_matrix = spectra_matrix[:sample_idx]
@@ -602,9 +605,9 @@ class MLIdentifier:
             # Increased epochs from 25 to 50 for better training with real data
             self.model.fit(train_ss, epochs=50, target_level='Isotope', verbose=False)
             self.is_trained = True
-            print(f"[ML] Training complete. Model ready with {len(unique_isotopes)} isotopes.")
+            logger.info(f"[ML] Training complete. Model ready with {len(unique_isotopes)} isotopes.")
         except Exception as e:
-            print(f"[ML] Training failed: {e}")
+            logger.warning(f"[ML] Training failed: {e}")
             self.is_trained = False
             raise
     
@@ -676,7 +679,7 @@ class MLIdentifier:
             
             return results
         except Exception as e:
-            print(f"[ML] Prediction error: {e}")
+            logger.error(f"[ML] Prediction error: {e}")
             return []
     
     def export_model(self, output_path: str, format: str = 'onnx') -> dict:
@@ -862,7 +865,7 @@ def hybrid_identify(counts: List[int], peak_isotopes: List[Dict],
         try:
             ml_results = ml.identify(counts, top_k=10)
         except Exception as e:
-            print(f"[Hybrid] ML failed, using peak-matching only: {e}")
+            logger.warning(f"[Hybrid] ML failed, using peak-matching only: {e}")
     
     # Build combined score map
     combined = {}

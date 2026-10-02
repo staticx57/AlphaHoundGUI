@@ -29,6 +29,8 @@
 - [ ] PDF export button downloads a working report (`/export/pdf` was broken: missing import; also forced matplotlib to headless `Agg`)
 - [ ] Dose-rate calculator in the UI still works (`/analyze/dose-rate` now enforces the validated request model: activity ≥ 0, distance 0.01–1000 m)
 - [ ] Exports (N42/CSV/checkpoint) and N42 metadata editor still work after moving to `routers/export.py`
+- [ ] Server console output looks sane after switching ~180 `print` calls to `logging` (set `ALPHAHOUND_LOG_LEVEL=DEBUG` for more); live-device log lines (Radiacode/AlphaHound) appear at the right levels
+- [ ] With a real AlphaHound: `POST /device/spectrum` acquire works (was an UnboundLocalError; verified only with a mocked device)
 - [ ] Nothing depended on the deleted `js/main_restored_temp.js` (was unreferenced; recoverable from git history)
 
 ### ML & Analysis
@@ -38,6 +40,8 @@
 - [ ] Add background-dominated mixture training
 
 ### Technical Debt
+- [ ] **ROI advanced peak fitting never runs**: `roi_analysis.py` (~line 119) does `from .fitting_engine import ...` (relative import fails outside a package) and references undefined `target_energy`; the surrounding `except` swallows it so ROI always falls back to simple counting. Fixing changes ROI results, so validate against reference spectra first.
+- [ ] Replace remaining `print` calls in multi-line/other statements and the `[Tag]` message prefixes now duplicated by logger names
 - [x] Split `routers/analysis.py` (1500+ lines) into `analysis.py`, `export.py`, `nuclear.py` (same 37 routes)
 - [ ] Split `static/js/main.js` (3,100 lines) into feature modules *(needs browser to verify)*
 - [ ] Add unit tests for frontend JavaScript modules

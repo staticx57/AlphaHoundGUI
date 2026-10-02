@@ -3,6 +3,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["nuclear"])
 
 
@@ -75,7 +78,7 @@ def predict_decay_endpoint(request: DecayPredictionRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[Decay Prediction] Error: {e}")
+        logger.error(f"[Decay Prediction] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -97,7 +100,7 @@ def get_isotope_info_endpoint(request: IsotopeInfoRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[Isotope Info] Error: {e}")
+        logger.error(f"[Isotope Info] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

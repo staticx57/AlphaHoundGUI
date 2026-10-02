@@ -4,6 +4,9 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from report_generator import generate_pdf_report
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["export"])
 
 
@@ -48,25 +51,25 @@ def export_pdf(request: ReportRequest):
 @router.post("/export/n42")
 def export_n42(request: N42ExportRequest):
     """Export spectrum data as standards-compliant N42 XML file."""
-    print(f"[N42 Export] Endpoint called")
+    logger.info(f"[N42 Export] Endpoint called")
     try:
         from n42_exporter import generate_n42_xml
         
         # Convert Pydantic model to dict for exporter
         request_dict = request.dict()
         
-        print(f"[N42 Export] Generating XML for {len(request.counts)} channels...")
+        logger.info(f"[N42 Export] Generating XML for {len(request.counts)} channels...")
         # Generate N42 XML
         xml_content = generate_n42_xml(request_dict)
-        print(f"[N42 Export] XML generated: {len(xml_content)} chars")
+        logger.info(f"[N42 Export] XML generated: {len(xml_content)} chars")
         
         # Get filename from request or use default
         filename = request.filename.replace('.n42', '') + '.n42'
-        print(f"[N42 Export] Filename: {filename}")
+        logger.info(f"[N42 Export] Filename: {filename}")
         
         # Encode XML string to bytes for Response
         xml_bytes = xml_content.encode('utf-8')
-        print(f"[N42 Export] Encoded to {len(xml_bytes)} bytes, returning Response...")
+        logger.info(f"[N42 Export] Encoded to {len(xml_bytes)} bytes, returning Response...")
         
         return Response(
             content=xml_bytes,
@@ -77,10 +80,10 @@ def export_n42(request: N42ExportRequest):
             }
         )
     except ValueError as e:
-        print(f"[N42 Export] ValueError: {e}")
+        logger.error(f"[N42 Export] ValueError: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[N42 Export] Error: {e}")
+        logger.error(f"[N42 Export] Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -120,7 +123,7 @@ def export_csv_auto(request: dict):
             "message": f"Spectrum saved: {filename}"
         }
     except Exception as e:
-        print(f"CSV auto-save error: {e}")
+        logger.error(f"CSV auto-save error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save CSV: {str(e)}")
 
 
@@ -155,7 +158,7 @@ def export_n42_auto(request: dict):
             "message": f"Spectrum saved: {filename}"
         }
     except Exception as e:
-        print(f"N42 auto-save error: {e}")
+        logger.error(f"N42 auto-save error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save N42: {str(e)}")
 
 
@@ -182,11 +185,11 @@ def export_n42_checkpoint(request: dict):
             f.write(n42_content)
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] Checkpoint saved: {filepath}")
+        logger.info(f"[{timestamp}] Checkpoint saved: {filepath}")
         
         return {"success": True, "message": "Checkpoint saved"}
     except Exception as e:
-        print(f"Checkpoint save error: {e}")
+        logger.error(f"Checkpoint save error: {e}")
         # Don't fail the acquisition for checkpoint failures
         return {"success": False, "message": str(e)}
 
@@ -199,10 +202,10 @@ def delete_n42_checkpoint():
         filepath = os.path.join(os.path.dirname(__file__), '..', 'data', 'acquisitions', 'acquisition_in_progress.n42')
         if os.path.exists(filepath):
             os.remove(filepath)
-            print(f"Checkpoint file cleaned up: {filepath}")
+            logger.info(f"Checkpoint file cleaned up: {filepath}")
         return {"success": True}
     except Exception as e:
-        print(f"Checkpoint cleanup error: {e}")
+        logger.error(f"Checkpoint cleanup error: {e}")
         return {"success": False, "message": str(e)}
 
 

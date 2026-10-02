@@ -15,6 +15,8 @@ Usage:
     )
 """
 
+import logging
+logger = logging.getLogger(__name__)
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 
@@ -24,7 +26,8 @@ try:
     HAS_CURIE = True
 except ImportError:
     HAS_CURIE = False
-    print("[Curie Integration] curie not installed, using fallback data")
+    logger.warning("[Curie Integration] curie not installed, using fallback data")
+
 
 
 # ============================================================================
@@ -154,7 +157,7 @@ def get_isotope_gammas(isotope_name: str, min_intensity: float = 1.0) -> List[Di
         return sorted(result, key=lambda x: -x['intensity'])
     
     except Exception as e:
-        print(f"[Curie] Failed to get gammas for {isotope_name}: {e}")
+        logger.warning(f"[Curie] Failed to get gammas for {isotope_name}: {e}")
         return []
 
 

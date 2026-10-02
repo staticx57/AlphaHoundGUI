@@ -17,6 +17,9 @@ import xml.etree.ElementTree as ET
 import re
 import struct
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class RealSpectrumLoader:
     """Load and parse real gamma spectra for ML training."""
@@ -108,7 +111,7 @@ class RealSpectrumLoader:
             return counts, primary_isotope, metadata
             
         except Exception as e:
-            print(f"[ML Loader] Error loading {filepath}: {e}")
+            logger.error(f"[ML Loader] Error loading {filepath}: {e}")
             return None, None, {}
     
     def load_spe_spectrum(self, filepath: Path) -> Tuple[Optional[np.ndarray], Optional[str], Dict]:
@@ -165,7 +168,7 @@ class RealSpectrumLoader:
             return counts, primary_isotope, metadata
             
         except Exception as e:
-            print(f"[ML Loader] Error loading SPE {filepath}: {e}")
+            logger.error(f"[ML Loader] Error loading SPE {filepath}: {e}")
             return None, None, {}
     
     def load_csv_spectrum(self, filepath: Path) -> Tuple[Optional[np.ndarray], Optional[str], Dict]:
@@ -203,7 +206,7 @@ class RealSpectrumLoader:
             return counts, primary_isotope, metadata
             
         except Exception as e:
-            print(f"[ML Loader] Error loading CSV {filepath}: {e}")
+            logger.error(f"[ML Loader] Error loading CSV {filepath}: {e}")
             return None, None, {}
     
     def _extract_isotope_from_filename(self, filename: str) -> Optional[str]:
@@ -255,7 +258,7 @@ class RealSpectrumLoader:
         
         directory = Path(directory)
         if not directory.exists():
-            print(f"[ML Loader] Directory not found: {directory}")
+            logger.info(f"[ML Loader] Directory not found: {directory}")
             return []
         
         results = []
@@ -276,7 +279,7 @@ class RealSpectrumLoader:
                     if label or meta.get('total_counts', 0) > 1000:
                         results.append((counts, label, meta))
         
-        print(f"[ML Loader] Loaded {len(results)} spectra from {directory}")
+        logger.info(f"[ML Loader] Loaded {len(results)} spectra from {directory}")
         return results
     
     def prepare_training_data(self, spectra: List[Tuple[np.ndarray, str, Dict]], 
@@ -328,7 +331,7 @@ class RealSpectrumLoader:
         
         spectra_matrix = np.array(augmented_spectra)
         
-        print(f"[ML Loader] Prepared {len(augmented_labels)} augmented training samples")
+        logger.info(f"[ML Loader] Prepared {len(augmented_labels)} augmented training samples")
         return spectra_matrix, augmented_labels
 
 
@@ -358,12 +361,12 @@ if __name__ == "__main__":
     # Load from acquisitions directory
     spectra = loader.load_all_from_directory()
     
-    print(f"\nLoaded {len(spectra)} spectra:")
+    logger.info(f"\nLoaded {len(spectra)} spectra:")
     for counts, label, meta in spectra[:5]:
-        print(f"  - {meta['filename']}: {len(counts)} channels, label={label}")
+        logger.info(f"  - {meta['filename']}: {len(counts)} channels, label={label}")
     
     # Prepare for training
     if spectra:
         X, y = loader.prepare_training_data(spectra, target_channels=1024, augment_count=10)
-        print(f"\nTraining data shape: {X.shape}")
-        print(f"Labels: {set(y)}")
+        logger.info(f"\nTraining data shape: {X.shape}")
+        logger.info(f"Labels: {set(y)}")

@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 # ========== IAEA DATA INTEGRATION ==========
 # Load authoritative gamma data from IAEA NDS
 # This provides intensity weights for better peak matching
@@ -6,15 +9,15 @@ try:
     from iaea_parser import load_all_isotopes, get_isotope_gammas
     IAEA_DATA = load_all_isotopes(min_intensity=0.5, top_n=15)
     HAS_IAEA_DATA = True
-    print(f"[Isotope Database] Loaded IAEA data for {len(IAEA_DATA)} isotopes")
+    logger.info(f"[Isotope Database] Loaded IAEA data for {len(IAEA_DATA)} isotopes")
 except ImportError:
     IAEA_DATA = {}
     HAS_IAEA_DATA = False
-    print("[Isotope Database] IAEA parser not available, using built-in data only")
+    logger.warning("[Isotope Database] IAEA parser not available, using built-in data only")
 except Exception as e:
     IAEA_DATA = {}
     HAS_IAEA_DATA = False
-    print(f"[Isotope Database] IAEA data load failed: {e}")
+    logger.warning(f"[Isotope Database] IAEA data load failed: {e}")
 
 # ========== CURIE X-RAY DATA INTEGRATION ==========
 # Provides characteristic X-ray emission lines for improved isotope ID
@@ -25,13 +28,14 @@ try:
         calculate_attenuation,
         HAS_CURIE
     )
-    print(f"[Isotope Database] Curie X-ray integration loaded (curie available: {HAS_CURIE})")
+    logger.info(f"[Isotope Database] Curie X-ray integration loaded (curie available: {HAS_CURIE})")
 except ImportError:
     HAS_CURIE = False
     _get_element_xrays = lambda *args, **kwargs: []
     _get_all_xrays_for_isotope = lambda *args, **kwargs: []
     calculate_attenuation = lambda *args, **kwargs: {'error': 'curie not installed'}
-    print("[Isotope Database] Curie integration not available")
+    logger.warning("[Isotope Database] Curie integration not available")
+
 
 
 def get_isotope_xrays(isotope_name: str):
@@ -217,6 +221,8 @@ ISOTOPE_DATABASE = ISOTOPE_DATABASE_SIMPLE
 
 # Custom Isotope Persistence
 CUSTOM_ISOTOPES_FILE = "custom_isotopes.json"
+import logging
+logger = logging.getLogger(__name__)
 import json
 import os
 
@@ -499,12 +505,12 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
                     # Cap confidence at min_confidence_single
                     base_confidence = min(base_confidence, min_conf_single)
                     validation_failed = True
-                    print(f"[Intrinsic] {isotope}: {matches}/{required_peaks} peaks - capped at {min_conf_single}%")
+                    logger.info(f"[Intrinsic] {isotope}: {matches}/{required_peaks} peaks - capped at {min_conf_single}%")
                 
                 # Low energy penalty for threshold-sensitive isotopes  
                 if rules.get("low_energy_penalty") and matches == 1:
                     base_confidence *= 0.6  # Additional 40% penalty
-                    print(f"[Intrinsic] {isotope}: Low energy penalty applied")
+                    logger.info(f"[Intrinsic] {isotope}: Low energy penalty applied")
             
             # Apply abundance weighting
             abundance_weight = ABUNDANCE_WEIGHTS.get(isotope, 1.0)
@@ -557,19 +563,19 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
                     manmade_in_top_peaks.add(iso)
     
     # DEBUG: Log suppression bypass
-    print(f"[DEBUG Suppress] top_peak_energies={top_peak_energies}")
-    print(f"[DEBUG Suppress] manmade_in_top_peaks={manmade_in_top_peaks}")
-    print(f"[DEBUG Suppress] chains_detected={chains_detected}")
-    print(f"[DEBUG Suppress] Cs-137 in isotope_matches: {'Cs-137' in isotope_matches}")
+    logger.info(f"[DEBUG Suppress] top_peak_energies={top_peak_energies}")
+    logger.info(f"[DEBUG Suppress] manmade_in_top_peaks={manmade_in_top_peaks}")
+    logger.info(f"[DEBUG Suppress] chains_detected={chains_detected}")
+    logger.info(f"[DEBUG Suppress] Cs-137 in isotope_matches: {'Cs-137' in isotope_matches}")
     
     if any_chain_detected:
         for iso in INCOMPATIBLE_WITH_NATURAL:
             if iso in isotope_matches:
                 # DON'T suppress if this isotope is in the top peaks
                 if iso in manmade_in_top_peaks:
-                    print(f"[DEBUG Suppress] BYPASSING suppression for {iso}")
+                    logger.info(f"[DEBUG Suppress] BYPASSING suppression for {iso}")
                     continue
-                print(f"[DEBUG Suppress] SUPPRESSING {iso}")
+                logger.info(f"[DEBUG Suppress] SUPPRESSING {iso}")
                 isotope_matches[iso]['confidence'] *= 0.1  # 90% reduction
                 isotope_matches[iso]['suppressed'] = True
                 isotope_matches[iso]['suppression_reason'] = 'incompatible_with_natural_chain'
@@ -585,9 +591,9 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
                 # Boost to 95% to rank above false positive multi-peak matches
                 old_conf = isotope_matches[iso]['confidence']
                 isotope_matches[iso]['confidence'] = max(old_conf, 95.0)
-                print(f"[DEBUG Boost] Boosted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
+                logger.info(f"[DEBUG Boost] Boosted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
     else:
-        print(f"[DEBUG Boost] Skipping boost - natural chain detected: {chains_detected}")
+        logger.info(f"[DEBUG Boost] Skipping boost - natural chain detected: {chains_detected}")
     
     # ========== DEMOTE NATURAL CHAIN ISOTOPES WHEN MAN-MADE DETECTED ==========
     # If we detected man-made sources in top peaks AND no natural chain, demote natural chain matches
@@ -600,7 +606,7 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
                 isotope_matches[iso]['confidence'] = min(old_conf, 40.0)
                 isotope_matches[iso]['suppressed'] = True
                 isotope_matches[iso]['suppression_reason'] = 'manmade_source_detected'
-                print(f"[DEBUG Demote] Demoted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
+                logger.info(f"[DEBUG Demote] Demoted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
     
     # If U-238 chain detected, also suppress U-235 chain isotopes
     if chains_detected['u238']:
@@ -651,9 +657,9 @@ def identify_decay_chains(peaks, identified_isotopes=None, energy_tolerance=20.0
     min_counts_threshold = max_peak_counts * RELATIVE_THRESHOLD
     
     # DEBUG: Log threshold calculation
-    print(f"[DEBUG Chain] max_peak_counts={max_peak_counts}, min_threshold={min_counts_threshold}")
-    print(f"[DEBUG Chain] Peak energies: {[p.get('energy', 0) for p in peaks[:6]]}")
-    print(f"[DEBUG Chain] Peak counts: {[p.get('counts', 0) for p in peaks[:6]]}")
+    logger.info(f"[DEBUG Chain] max_peak_counts={max_peak_counts}, min_threshold={min_counts_threshold}")
+    logger.info(f"[DEBUG Chain] Peak energies: {[p.get('energy', 0) for p in peaks[:6]]}")
+    logger.info(f"[DEBUG Chain] Peak counts: {[p.get('counts', 0) for p in peaks[:6]]}")
     
     # Build set of detected isotope names for exclusion checking
     detected_isotope_names = set()

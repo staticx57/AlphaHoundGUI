@@ -9,6 +9,9 @@ import struct
 import os
 from datetime import datetime
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def parse_chn_file(filepath):
     """
@@ -254,7 +257,7 @@ def parse_spectrum_file(filepath):
         except ImportError:
             pass
         except Exception as e:
-            print(f"[SpecUtils] Failed to parse {filepath}: {e}")
+            logger.warning(f"[SpecUtils] Failed to parse {filepath}: {e}")
         
         raise ValueError(f"Unsupported file type: {ext}. Install SandiaSpecUtils for extended format support.")
 
@@ -264,8 +267,8 @@ if __name__ == '__main__':
     import sys
     if len(sys.argv) > 1:
         result = parse_spectrum_file(sys.argv[1])
-        print(f"Channels: {result['num_channels']}")
-        print(f"Live time: {result['live_time']:.1f}s")
-        print(f"Real time: {result['real_time']:.1f}s")
-        print(f"Calibration: {result['calibration']}")
-        print(f"Total counts: {sum(result['counts'])}")
+        logger.info(f"Channels: {result['num_channels']}")
+        logger.info(f"Live time: {result['live_time']:.1f}s")
+        logger.info(f"Real time: {result['real_time']:.1f}s")
+        logger.info(f"Calibration: {result['calibration']}")
+        logger.info(f"Total counts: {sum(result['counts'])}")

@@ -45,6 +45,9 @@ except ImportError:
     UFloat = None
     uarray = None
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class EnhancedSpectrum:
     """
@@ -167,7 +170,7 @@ class EnhancedSpectrum:
                     livetime=livetime
                 )
             except Exception as e:
-                print(f"[EnhancedSpectrum] Becquerel init failed, using numpy: {e}")
+                logger.warning(f"[EnhancedSpectrum] Becquerel init failed, using numpy: {e}")
                 bq_spec = None
         
         return cls(
@@ -372,7 +375,7 @@ class EnhancedSpectrum:
                     _bq_spectrum=rebinned
                 )
             except Exception as e:
-                print(f"[EnhancedSpectrum] Becquerel rebin failed: {e}")
+                logger.warning(f"[EnhancedSpectrum] Becquerel rebin failed: {e}")
         
         # Manual rebinning (simplified - preserves total counts)
         new_edges = np.asarray(new_edges)

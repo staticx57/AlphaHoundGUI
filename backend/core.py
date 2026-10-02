@@ -15,6 +15,9 @@ except ImportError:
     def get_detector_min_energy(detector_name: str = "AlphaHound CsI(Tl)") -> float:
         return DETECTOR_PROFILES.get(detector_name, DETECTOR_PROFILES["AlphaHound CsI(Tl)"])["min_energy_keV"]
 
+import logging
+logger = logging.getLogger(__name__)
+
 # Default settings for Simple mode
 DEFAULT_SETTINGS = {
     "mode": "simple",
@@ -70,17 +73,17 @@ def apply_confidence_filtering(isotopes, chains, settings):
     """
     # Filter isotopes
     isotope_threshold = settings.get('isotope_min_confidence', 30.0)
-    print(f"[DEBUG Isotopes] Filtering {len(isotopes)} isotopes with threshold={isotope_threshold}")
+    logger.info(f"[DEBUG Isotopes] Filtering {len(isotopes)} isotopes with threshold={isotope_threshold}")
     
     for iso in isotopes[:5]:  # Show first 5 for debugging
-        print(f"[DEBUG Iso] {iso.get('isotope', 'Unknown')}: conf={iso.get('confidence', 0)}")
+        logger.info(f"[DEBUG Iso] {iso.get('isotope', 'Unknown')}: conf={iso.get('confidence', 0)}")
     
     filtered_isotopes = [
         iso for iso in isotopes 
         if iso.get('confidence', 0) >= isotope_threshold
     ]
     
-    print(f"[DEBUG Isotopes] After filtering: {len(filtered_isotopes)} isotopes remain")
+    logger.info(f"[DEBUG Isotopes] After filtering: {len(filtered_isotopes)} isotopes remain")
     
     # Limit isotopes if in simple mode
     max_isotopes = settings.get('max_isotopes', 999)
@@ -95,11 +98,11 @@ def apply_confidence_filtering(isotopes, chains, settings):
     chain_threshold = settings.get('chain_min_confidence', 30.0)
     min_isotopes = settings.get('chain_min_isotopes_medium', 3)
     
-    print(f"[DEBUG Chains] Filtering {len(chains)} chains with threshold={chain_threshold}, min_isotopes={min_isotopes}")
+    logger.info(f"[DEBUG Chains] Filtering {len(chains)} chains with threshold={chain_threshold}, min_isotopes={min_isotopes}")
     
     filtered_chains = []
     for chain in chains:
-        print(f"[DEBUG Chain] {chain.get('chain_name', 'Unknown')}: conf={chain.get('confidence', 0)}, num_detected={chain.get('num_detected', 0)}, num_key={chain.get('num_key_isotopes', 0)}")
+        logger.info(f"[DEBUG Chain] {chain.get('chain_name', 'Unknown')}: conf={chain.get('confidence', 0)}, num_detected={chain.get('num_detected', 0)}, num_key={chain.get('num_key_isotopes', 0)}")
         
         # Calculate confidence level
         percentage = (chain['num_detected'] / chain['num_key_isotopes'] * 100) if chain['num_key_isotopes'] > 0 else 0
@@ -122,11 +125,11 @@ def apply_confidence_filtering(isotopes, chains, settings):
         
         # Apply filter
         passes = chain['confidence'] >= chain_threshold and chain['num_detected'] >= min_isotopes
-        print(f"[DEBUG Chain] -> passes filter: {passes}")
+        logger.info(f"[DEBUG Chain] -> passes filter: {passes}")
         if passes:
             filtered_chains.append(chain)
     
-    print(f"[DEBUG Chains] After filtering: {len(filtered_chains)} chains remain")
+    logger.info(f"[DEBUG Chains] After filtering: {len(filtered_chains)} chains remain")
     
     # Re-sort by weighted confidence
     filtered_chains.sort(key=lambda x: x['confidence'], reverse=True)

@@ -20,6 +20,9 @@ try:
 except ImportError:
     HAS_ENHANCED_ANALYSIS = False
 
+import logging
+logger = logging.getLogger(__name__)
+
 def sanitize_for_json(obj):
     """Recursively sanitize object for JSON serialization."""
     if isinstance(obj, float):
@@ -73,7 +76,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
                 peaks = detect_peaks(energies, counts)
                 result["analysis_mode"] = "standard_fallback"
         except Exception as e:
-            print(f"[Analysis] Enhanced detection failed, falling back: {e}")
+            logger.warning(f"[Analysis] Enhanced detection failed, falling back: {e}")
             peaks = detect_peaks(energies, counts)
             result["analysis_mode"] = "standard"
     else:
@@ -116,7 +119,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
             # Also enhance isotope confidence scores
             all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
         except Exception as e:
-            print(f"[Analysis] Enhanced chain detection failed: {e}")
+            logger.warning(f"[Analysis] Enhanced chain detection failed: {e}")
             all_chains = identify_decay_chains(
                 peaks, all_isotopes, 
                 energy_tolerance=current_settings['energy_tolerance']
@@ -136,7 +139,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
             peaks = enhance_peaks_with_multiplet_fitting(energies, counts, peaks)
             result["peaks"] = peaks
         except Exception as e:
-            print(f"[Analysis] Multiplet fitting failed: {e}")
+            logger.warning(f"[Analysis] Multiplet fitting failed: {e}")
     
     result["isotopes"] = isotopes
     result["decay_chains"] = decay_chains

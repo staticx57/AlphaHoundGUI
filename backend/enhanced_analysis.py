@@ -13,6 +13,9 @@ This module is the main entry point for the enhanced analysis pipeline.
 from typing import List, Dict, Optional, Tuple
 import numpy as np
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def run_enhanced_analysis(
     energies: List[float],
@@ -55,7 +58,7 @@ def run_enhanced_analysis(
         results['modules_used'].append('peak_detection_enhanced')
         
     except ImportError as e:
-        print(f"[Enhanced Analysis] Peak detection module not available: {e}")
+        logger.warning(f"[Enhanced Analysis] Peak detection module not available: {e}")
         # Fallback to simple detection
         from scipy.signal import find_peaks
         energies_arr = np.array(energies)
@@ -77,7 +80,7 @@ def run_enhanced_analysis(
         results['modules_used'].append('chain_detection_enhanced')
         
     except ImportError as e:
-        print(f"[Enhanced Analysis] Chain detection module not available: {e}")
+        logger.warning(f"[Enhanced Analysis] Chain detection module not available: {e}")
         results['chains'] = []
     
     # Phase 3: Multiplet Fitting (for known overlap regions)
@@ -97,7 +100,7 @@ def run_enhanced_analysis(
                 })
                 
     except ImportError as e:
-        print(f"[Enhanced Analysis] Multiplet fitting module not available: {e}")
+        logger.warning(f"[Enhanced Analysis] Multiplet fitting module not available: {e}")
     
     # Phase 4: Enhanced Confidence Scoring (if isotopes identified)
     try:
@@ -112,7 +115,7 @@ def run_enhanced_analysis(
             results['modules_used'].append('confidence_scoring')
             
     except ImportError as e:
-        print(f"[Enhanced Analysis] Confidence scoring module not available: {e}")
+        logger.warning(f"[Enhanced Analysis] Confidence scoring module not available: {e}")
     
     return results
 
@@ -270,13 +273,13 @@ def check_modules() -> Dict[str, bool]:
 
 if __name__ == '__main__':
     # Quick test
-    print("Enhanced Analysis Module Check")
-    print("=" * 40)
+    logger.info("Enhanced Analysis Module Check")
+    logger.info("=" * 40)
     
     modules = check_modules()
     for name, available in modules.items():
         status = "✓" if available else "✗"
-        print(f"  {status} {name}")
+        logger.info(f"  {status} {name}")
     
     print()
-    print("Ready for enhanced analysis!" if all(modules.values()) else "Some modules missing")
+    logger.info("Ready for enhanced analysis!" if all(modules.values()) else "Some modules missing")

@@ -1,3 +1,13 @@
+import logging
+import os
+
+# Configure logging before project imports so import-time messages are shown.
+# Override verbosity with ALPHAHOUND_LOG_LEVEL=DEBUG|INFO|WARNING|ERROR.
+logging.basicConfig(
+    level=os.environ.get("ALPHAHOUND_LOG_LEVEL", "INFO").upper(),
+    format="%(levelname)s [%(name)s] %(message)s",
+)
+
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -5,10 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import os
 import asyncio
 from alphahound_serial import device as alphahound_device
 from routers import device, analysis, isotopes, device_radiacode, nuclear, export
+
+logger = logging.getLogger(__name__)
 
 # Track active WebSocket connections for session management
 active_websockets = set()
@@ -55,7 +66,7 @@ async def websocket_dose_stream(websocket: WebSocket):
     """WebSocket endpoint for real-time dose rate streaming with session management"""
     await websocket.accept()
     active_websockets.add(websocket)
-    print(f"[WebSocket] Client connected. Active connections: {len(active_websockets)}")
+    logger.info(f"[WebSocket] Client connected. Active connections: {len(active_websockets)}")
     
     try:
         while True:
@@ -66,18 +77,18 @@ async def websocket_dose_stream(websocket: WebSocket):
                 await websocket.send_json({"dose_rate": None, "status": "disconnected"})
             await asyncio.sleep(1)
     except Exception as e:
-        print(f"[WebSocket] Error: {e}")
+        logger.error(f"[WebSocket] Error: {e}")
     finally:
         # Remove from active connections
         active_websockets.discard(websocket)
-        print(f"[WebSocket] Client disconnected. Active connections: {len(active_websockets)}")
+        logger.info(f"[WebSocket] Client disconnected. Active connections: {len(active_websockets)}")
         
         # Auto-disconnect device if no active sessions (prevents zombie connections)
         # Grace period so a page refresh (disconnect then immediate reconnect) keeps the device.
         if len(active_websockets) == 0 and alphahound_device.is_connected():
             await asyncio.sleep(WS_DISCONNECT_GRACE_S)
             if len(active_websockets) == 0 and alphahound_device.is_connected():
-                print("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
+                logger.info("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
                 alphahound_device.disconnect()
         
         # Safely attempt to close - may already be closed by client

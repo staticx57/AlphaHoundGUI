@@ -3,6 +3,7 @@ from .analysis import sanitize_for_json
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import asyncio
+from datetime import datetime, timezone, timedelta
 import re
 from alphahound_serial import device as alphahound_device
 from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
@@ -132,6 +133,9 @@ async def acquire_spectrum(request: SpectrumRequest):
     # energies = [energy for count, energy in spectrum]  # OLD
     energies = [i * 3.0 for i in range(len(counts))]     # NEW (Forced 3.0 keV)
     
+    # Use actual duration if provided, otherwise use count_minutes
+    actual_duration_seconds = request.actual_duration_s if request.actual_duration_s else (count_minutes * 60)
+
     # Use common enhanced analysis pipeline
     result = {
         "counts": counts,
@@ -149,10 +153,8 @@ async def acquire_spectrum(request: SpectrumRequest):
     decay_chains = result.get("decay_chains", [])
     
     # Calculate acquisition timing for N42 export
-    from datetime import datetime, timezone, timedelta
-    
-    # Use actual duration if provided, otherwise use count_minutes
-    actual_duration_seconds = request.actual_duration_s if request.actual_duration_s else (count_minutes * 60)
+    end_time = datetime.now(timezone.utc)
+    start_time = end_time - timedelta(seconds=actual_duration_seconds)
     
     return sanitize_for_json({
         "counts": counts,

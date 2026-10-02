@@ -20,6 +20,9 @@ import asyncio
 import traceback
 from typing import Optional, List, Dict, Callable
 
+import logging
+logger = logging.getLogger(__name__)
+
 class AlphaHoundDevice:
     """Manager for AlphaHound serial communication"""
     
@@ -49,20 +52,20 @@ class AlphaHoundDevice:
     def connect(self, port: str, baudrate: int = 115200) -> bool:
         """Connect to AlphaHound device"""
         try:
-            print(f"[AlphaHound] Connecting to {port}...")
+            logger.info(f"[AlphaHound] Connecting to {port}...")
             self.serial_conn = serial.Serial(port, baudrate, timeout=1.0) # Increased timeout for safety
             self.stop_event.clear()
             self.read_thread = threading.Thread(target=self._read_worker, daemon=True)
             self.read_thread.start()
-            print("[AlphaHound] Connected and thread started.")
+            logger.info("[AlphaHound] Connected and thread started.")
             return True
         except Exception as e:
-            print(f"[AlphaHound] Connection error: {e}")
+            logger.error(f"[AlphaHound] Connection error: {e}")
             return False
     
     def disconnect(self):
         """Disconnect from device"""
-        print("[AlphaHound] Disconnecting...")
+        logger.info("[AlphaHound] Disconnecting...")
         self.stop_event.set()
         if self.serial_conn:
             try:
@@ -121,14 +124,14 @@ class AlphaHoundDevice:
                 return  # Success
             except Exception as e:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"[{timestamp}] [AlphaHound] Write error (attempt {attempt+1}/3): {e}")
+                logger.error(f"[{timestamp}] [AlphaHound] Write error (attempt {attempt+1}/3): {e}")
                 if attempt < 2:
                     time.sleep(0.5)  # Brief pause before retry
         
         # All retries failed
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [AlphaHound] Write failed after 3 attempts, disconnecting")
+        logger.warning(f"[{timestamp}] [AlphaHound] Write failed after 3 attempts, disconnecting")
         self.disconnect()
     
     def _read_worker(self):
@@ -138,7 +141,7 @@ class AlphaHoundDevice:
         expecting_spectrum = False
         last_dose_time = 0
         
-        print("[AlphaHound] Read thread active")
+        logger.info("[AlphaHound] Read thread active")
         
         while not self.stop_event.is_set() and self.serial_conn and self.serial_conn.is_open:
             try:
@@ -171,7 +174,7 @@ class AlphaHoundDevice:
                             
                         # Spectrum Start
                         if line == "Comp":
-                            print("[AlphaHound] Spectrum start detected")
+                            logger.info("[AlphaHound] Spectrum start detected")
                             spectrum_tmp = []
                             expecting_spectrum = True
                         
@@ -188,7 +191,7 @@ class AlphaHoundDevice:
                             
                             # Check completion
                             if len(spectrum_tmp) >= 1024:
-                                print(f"[AlphaHound] Spectrum complete: {len(spectrum_tmp)} channels")
+                                logger.info(f"[AlphaHound] Spectrum complete: {len(spectrum_tmp)} channels")
                                 self.spectrum = spectrum_tmp.copy()
                                 self.collecting_spectrum = False
                                 expecting_spectrum = False
@@ -220,10 +223,10 @@ class AlphaHoundDevice:
                 time.sleep(0.05)
                 
             except Exception as e:
-                print(f"[AlphaHound] Read thread exception: {e}")
+                logger.error(f"[AlphaHound] Read thread exception: {e}")
                 break
         
-        print("[AlphaHound] Read thread exiting")
+        logger.info("[AlphaHound] Read thread exiting")
         self.disconnect()
 
 # Global device instance
