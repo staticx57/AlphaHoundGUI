@@ -2492,6 +2492,7 @@ async function checkDeviceStatus() {
         const status = await api.getDeviceStatus();
         if (status.connected) {
             ui.setDeviceConnected(true);
+            updateDeviceUI('alphahound');  // enable controls when restoring a live connection after refresh
             // Update temperature if available
             if (status.temperature) {
                 ui.updateTemperature(status.temperature);

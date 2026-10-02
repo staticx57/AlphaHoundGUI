@@ -14,6 +14,8 @@
 - [x] **Documentation Overhaul**: ✅ Major README update with Radiacode, XRF, SNIP, spectrum algebra, server-managed acquisitions (2025-12-22)
 
 ### Pending Manual Verification (needs local browser / Radiacode hardware)
+> Verified in headless Chrome with a mocked device (`python backend/tests/ui_smoke.py`, 15 checks): page load without JS errors, Radiacode tab layout/IDs, View Configuration + accumulated-dose elements present, AlphaHound dose readout + safety alert, connection-restore enabling controls, background load flow. Still needs real hardware / eyes: live Radiacode values, PDF download, exports, other themes and mobile widths, real-CSV peak comparison.
+
 - [ ] Radiacode tab renders with no layout regressions after removing the hidden duplicate `radiacode-quick-panel` (and its duplicate IDs) from `index.html`
 - [ ] After connecting a Radiacode, Dose / SN / FW rows in Device Settings populate on first poll (~2s) instead of ~20s
 - [ ] Accumulated dose row shows `accumulated_dose_uSv` from `/radiacode/info/extended` and formats μSv/mSv correctly

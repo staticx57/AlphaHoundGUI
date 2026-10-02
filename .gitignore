@@ -32,3 +32,4 @@ output/
 
 # Cloned reference tools (not part of this project)
 external_tools/
+backend/tests/ui_smoke_out/

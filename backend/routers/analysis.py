@@ -323,12 +323,12 @@ def analyze_calibrate(request: CalibrationRequest):
 @router.post("/analyze/subtract-background")
 def analyze_subtract_background(request: BackgroundSubtractionRequest):
     try:
-        net_counts = subtract_background(
-            request.source_counts, 
-            request.background_counts, 
+        # Returns {net_counts: [...], background, gross_counts, algorithm, iterations}
+        return subtract_background(
+            request.source_counts,
+            request.background_counts,
             request.scaling_factor
         )
-        return {"net_counts": net_counts}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

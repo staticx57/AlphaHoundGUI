@@ -122,3 +122,15 @@ def test_device_spectrum_acquire_with_mock_device(client, monkeypatch):
     meta = response.json()["metadata"]
     assert meta["start_time"] < meta["end_time"] or meta["acquisition_time"] == 0
     assert len(response.json()["counts"]) == 1024
+
+
+def test_subtract_background_returns_flat_count_array(client):
+    """Regression: route wrapped the result dict, so net_counts was an object and the chart refused it."""
+    response = client.post("/analyze/subtract-background", json={
+        "source_counts": [10, 20, 30, 40],
+        "background_counts": [1, 2, 3, 50],
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["net_counts"] == [9.0, 18.0, 27.0, 0.0]  # negatives clamped to 0
+    assert body["background"] == [1.0, 2.0, 3.0, 50.0]

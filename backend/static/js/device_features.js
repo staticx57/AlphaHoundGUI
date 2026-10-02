@@ -76,6 +76,8 @@ export function updateDeviceUI(deviceType) {
     if (controlsPanel) {
         controlsPanel.classList.remove('device-disconnected');
     }
+    const connLabel = document.getElementById('device-conn-label');
+    if (connLabel) connLabel.textContent = 'Connected';
 
     // Find all elements with data-device-feature attribute
     document.querySelectorAll('[data-device-feature]').forEach(el => {
@@ -116,6 +118,8 @@ export function resetDeviceUI() {
     if (controlsPanel) {
         controlsPanel.classList.add('device-disconnected');
     }
+    const connLabel = document.getElementById('device-conn-label');
+    if (connLabel) connLabel.textContent = 'Not connected';
 
     // Disable all feature-gated elements
     document.querySelectorAll('[data-device-feature]').forEach(el => {
