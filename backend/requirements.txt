@@ -9,8 +9,7 @@ matplotlib
 pyserial
 websockets
 reportlab
-riid
-tensorflow
+scikit-learn
 pandas
 slowapi
 radiacode>=0.4.0

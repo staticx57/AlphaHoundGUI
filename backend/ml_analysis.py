@@ -1,50 +1,41 @@
 """
-ML-based isotope identification using PyRIID.
-Note: This module requires riid to be installed.
+ML-based isotope identification: a small MLP (scikit-learn) trained on synthetic spectra built from
+the isotope database (plus any labelled real spectra found in data/acquisitions).
 
 Uses isotope data from isotope_database.py which is sourced from:
 - IAEA Nuclear Data Services (NDS)
 - NNDC/ENSDF (National Nuclear Data Center)
 - CapGam capture gamma-ray database
 
-Tested working with PyRIID 2.2.0:
-- Spectra must be 2D matrix (rows=samples, cols=channels)
-- Sources must use 3-level MultiIndex: ('Category', 'Isotope', 'Seed')
-- predict() modifies SampleSet in-place, doesn't return new object
+Spectra are resampled onto the model's fixed energy grid before classification, so the device's
+own energy calibration is honoured (a Radiacode channel is ~2.4 keV, an AlphaHound's ~3 keV).
 """
 import logging
+import os
 logger = logging.getLogger(__name__)
 import numpy as np
 from typing import List, Dict, Optional
 
-# Try to import riid with proper error handling
+# scikit-learn provides the classifier. PyRIID is deliberately not used: it pins numpy 1.26 /
+# scipy 1.13 / TensorFlow 2.16, which cannot coexist with this app's dependencies, and here it was
+# only a thin MLP wrapper (the spectrum synthesis below is this project's own code).
 try:
-    from riid.data.sampleset import SampleSet
-    from riid.models import MLPClassifier
-    import pandas as pd
-    HAS_RIID = True
-    logger.info("[ML] PyRIID successfully imported")
+    from sklearn.neural_network import MLPClassifier
+    HAS_ML = True
 except ImportError as e:
-    HAS_RIID = False
-    SampleSet = None
+    HAS_ML = False
     MLPClassifier = None
-    pd = None
-    logger.error(f"[WARNING] PyRIID not available. ML identification disabled. Error: {e}")
-except Exception as e:
-    HAS_RIID = False
-    SampleSet = None
-    MLPClassifier = None
-    pd = None
-    logger.error(f"[ERROR] Unexpected error importing PyRIID: {e}")
+    logger.error(f"[WARNING] scikit-learn not available. ML identification disabled. Error: {e}")
 
 # Import the authoritative isotope database and IAEA intensity data
 try:
-    from isotope_database import ISOTOPE_DATABASE_ADVANCED, get_gamma_intensity, HAS_IAEA_DATA
+    from isotope_database import ISOTOPE_DATABASE_ADVANCED, get_gamma_intensity, HAS_IAEA_DATA, IAEA_DATA
     HAS_ISOTOPE_DB = True
     logger.info(f"[ML] Loaded {len(ISOTOPE_DATABASE_ADVANCED)} isotopes from database")
 except ImportError:
     HAS_ISOTOPE_DB = False
     HAS_IAEA_DATA = False
+    IAEA_DATA = {}
     ISOTOPE_DATABASE_ADVANCED = {}
     def get_gamma_intensity(isotope, energy): return 1.0
     logger.warning("[WARNING] Isotope database not found, using fallback isotopes")
@@ -166,7 +157,7 @@ DETECTOR_PROFILES = {
 
 
 class MLIdentifier:
-    """ML-based isotope identifier using PyRIID MLPClassifier.
+    """ML-based isotope identifier (scikit-learn MLP).
     
     Uses authoritative gamma-ray energies from IAEA NDS, NNDC/ENSDF databases
     to generate synthetic training spectra for comprehensive isotope identification.
@@ -186,6 +177,7 @@ class MLIdentifier:
             detector: Detector profile name (see DETECTOR_PROFILES)
         """
         self.model = None
+        self.classes_: List[str] = []
         self.is_trained = False
         self.model_type = model_type if model_type in ML_MODEL_TYPES else "hobby"
         
@@ -329,8 +321,8 @@ class MLIdentifier:
         
     def lazy_train(self):
         """Train model on synthetic data using authoritative isotope database."""
-        if not HAS_RIID:
-            raise ImportError("PyRIID not installed")
+        if not HAS_ML:
+            raise ImportError("scikit-learn not installed")
             
         if self.is_trained:
             return
@@ -374,6 +366,8 @@ class MLIdentifier:
             "Th-232": 3.0, "Tl-208": 3.0, "Ac-228": 3.0, "Pb-212": 3.0,
             # Common isotopes
             "K-40": 3.0, "Cs-137": 2.0, "Co-60": 2.0,
+            # Many-line artificial isotopes soak up noisy natural spectra: keep their prior low
+            "Eu-152": 0.4, "Se-75": 0.4, "Ir-192": 0.4, "Ba-133": 0.6,
             # Default weight = 1.0
         }
         
@@ -400,10 +394,25 @@ class MLIdentifier:
                 'ratios': [1.0, 5.0, 1.5],
                 'weight': 1.5
             },
-            'ThoriumMantle': {  # Gas lantern mantles - Th-232 chain
-                'isotopes': ['Tl-208', 'Ac-228', 'Pb-212', 'Th-232'],
-                'ratios': [1.0, 0.6, 0.4, 0.1],  # Tl-208 diagnostic at 2614 keV
-                'weight': 2.0
+            'ThoriumMantle': {  # Th-232 series in secular equilibrium (mantles, thoriated lenses/glass/rods)
+                'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228', 'Th-232'],
+                'ratios': [1.0, 1.0, 1.0, 0.36, 1.0, 1.0, 0.05],  # Tl-208 only 36% of Bi-212 decays
+                'weight': 3.0
+            },
+            'ThoriumMantleAged': {  # Ra-228 / Ac-228 depleted (older purified thorium): Th-228 end dominates
+                'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
+                'ratios': [0.3, 1.0, 1.0, 0.36, 1.0, 1.0],
+                'label': 'ThoriumMantle', 'weight': 2.0
+            },
+            'ThoriumMantleFresh': {  # Ac-228 enriched (fresh Ra-228 ingrowth)
+                'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
+                'ratios': [1.0, 0.6, 0.6, 0.22, 0.6, 0.6],
+                'label': 'ThoriumMantle', 'weight': 1.5
+            },
+            'RadiumEquilibrium': {  # Ra-226 with radon retained: Pb-214 / Bi-214 at full strength
+                'isotopes': ['Ra-226', 'Pb-214', 'Bi-214'],
+                'ratios': [0.3, 1.0, 1.0],
+                'label': 'RadiumDial', 'weight': 3.0
             },
             'MedicalWaste': {  # Hospital nuclear medicine waste
                 'isotopes': ['Tc-99m', 'I-131', 'Mo-99'],
@@ -427,351 +436,207 @@ class MLIdentifier:
             }
         }
         
-        # Calculate total samples with abundance weighting
-        # base_samples already set from model_config above
-        n_single_samples = sum(
-            int(base_samples * SAMPLE_WEIGHTS.get(iso, 1.0)) 
-            for iso in isotopes
-        )
-        
-        base_mixture_samples = 25
-        n_mixture_samples = sum(
-            int(base_mixture_samples * m['weight']) 
-            for m in mixtures.values()
-        )
-        n_samples = n_single_samples + n_mixture_samples
-        
-        logger.info(f"[ML] Training samples: {n_single_samples} single + {n_mixture_samples} mixtures = {n_samples} total")
-        
-        # Create spectra as 2D matrix (rows=samples, cols=channels)
-        spectra_matrix = np.random.poisson(5, (n_samples, self.n_channels)).astype(float)
-        labels = []
-        
-        sample_idx = 0
-        
-        # Generate single-isotope training data with abundance weighting
+        rng = np.random.default_rng(12345)
+        lines_for = {iso: self._lines(iso, isotope_data.get(iso, [])) for iso in isotopes}
+
+        spectra, labels = [], []
+        # Natural-series daughters never occur alone: they are only trained as part of the series
+        # mixtures below (a thorium lens must not be explained as "just Pb-214").
+        from source_templates import SERIES_MEMBERS
+        series_daughters = {m for parent, members in SERIES_MEMBERS.items() for m in members if m != parent}
         for isotope in isotopes:
-            energies = isotope_data.get(isotope, [])
-            
-            # Get weighted sample count for this isotope
-            n_samples_for_isotope = int(base_samples * SAMPLE_WEIGHTS.get(isotope, 1.0))
-            
-            for i in range(n_samples_for_isotope):
+            if isotope in series_daughters:
+                continue
+            for _ in range(int(base_samples * SAMPLE_WEIGHTS.get(isotope, 1.0))):
+                spectra.append(self.synthesize(lines_for[isotope] if isotope != 'Background' else [], rng,
+                                               is_background=(isotope == 'Background')))
                 labels.append(isotope)
-                
-                # Add characteristic peaks at each gamma energy
-                # Phase 3: Use calibration jitter for robustness
-                for energy_keV in energies:
-                    channel = self.energy_to_channel_with_jitter(energy_keV)
-                    
-                    # Skip if outside detector range
-                    if channel < 5 or channel >= self.n_channels - 5:
-                        continue
-                    
-                    # Use IAEA intensity data for realistic peak heights
-                    # Strong gamma lines (e.g., Bi-214 @ 609 keV = 45%) get taller peaks
-                    iaea_intensity = get_gamma_intensity(isotope, energy_keV)
-                    base_intensity = max(50, 500 * iaea_intensity)  # Scale by IAEA intensity
-                    peak_intensity = int(np.random.poisson(base_intensity) * (0.7 + np.random.random() * 0.6))
-                    
-                    # Add Gaussian-like peak with AlphaHound CsI(Tl) FWHM
-                    # Uses energy-dependent resolution (10% at 662 keV)
-                    fwhm = self.get_fwhm_channels(energy_keV)
-                    half_width = max(2, fwhm // 2)
-                    start_ch = max(0, channel - half_width)
-                    end_ch = min(self.n_channels, channel + half_width + 1)
-                    width = end_ch - start_ch
-                    
-                    if width > 0:
-                        peak_counts = np.random.poisson(max(1, peak_intensity // width), width)
-                        spectra_matrix[sample_idx, start_ch:end_ch] += peak_counts
-                        
-                        # Add Compton continuum for realistic CsI(Tl) response
-                        self.add_compton_continuum(spectra_matrix[sample_idx], energy_keV, peak_intensity)
-                
-                # Phase 2: Add environmental background (50% of samples)
-                if np.random.random() > 0.5:
-                    self.add_environmental_background(spectra_matrix[sample_idx])
-                
-                sample_idx += 1
-        
-        # Generate multi-isotope mixture training data with weighted sample counts
-        for mixture_name, mixture_info in mixtures.items():
-            mix_isotopes = mixture_info['isotopes']
-            mix_ratios = mixture_info['ratios']
-            mixture_weight = mixture_info.get('weight', 1.0)
-            n_samples_for_mixture = int(base_mixture_samples * mixture_weight)
-            
-            for i in range(n_samples_for_mixture):
-                # Label is the mixture name
-                labels.append(mixture_name)
-                
-                # Add peaks from all isotopes in the mixture with their relative intensities
-                for iso_idx, isotope in enumerate(mix_isotopes):
-                    if isotope not in isotope_data:
-                        continue
-                        
-                    energies = isotope_data[isotope]
-                    relative_strength = mix_ratios[iso_idx]
-                    
-                    for energy_keV in energies:
-                        # Phase 3: Use calibration jitter
-                        channel = self.energy_to_channel_with_jitter(energy_keV)
-                        
-                        if channel < 5 or channel >= self.n_channels - 5:
-                            continue
-                        
-                        # Scale intensity by IAEA data and mixture ratio
-                        iaea_intensity = get_gamma_intensity(isotope, energy_keV)
-                        base_intensity = max(50, 500 * iaea_intensity) * relative_strength
-                        peak_intensity = int(np.random.poisson(base_intensity) * (0.7 + np.random.random() * 0.6))
-                        
-                        # Use AlphaHound energy-dependent FWHM
-                        fwhm = self.get_fwhm_channels(energy_keV)
-                        half_width = max(2, fwhm // 2)
-                        start_ch = max(0, channel - half_width)
-                        end_ch = min(self.n_channels, channel + half_width + 1)
-                        width = end_ch - start_ch
-                        
-                        if width > 0:
-                            peak_counts = np.random.poisson(max(1, peak_intensity // width), width)
-                            spectra_matrix[sample_idx, start_ch:end_ch] += peak_counts
-                
-                # Phase 2: Add environmental background (50% of mixtures)
-                if np.random.random() > 0.5:
-                    self.add_environmental_background(spectra_matrix[sample_idx])
-                
-                sample_idx += 1
-        
-        # =========================================================
-        # REAL SPECTRA AUGMENTATION (Phase 1 of ML Improvement Plan)
-        # Load real labeled spectra from data/acquisitions for training
-        # Real data is weighted 10x compared to synthetic for better learning
-        # =========================================================
-        real_spectra_matrix = None
-        real_labels = []
-        
-        if HAS_REAL_DATA_LOADER and load_real_training_data:
+        for name, mix in mixtures.items():
+            def lines_by_nuclide(rng, mix=mix):
+                out = []
+                for iso, ratio in zip(mix['isotopes'], mix['ratios']):
+                    energies = isotope_data.get(iso) or ISOTOPE_DATABASE_ADVANCED.get(iso) or []
+                    k = ratio * float(np.exp(rng.normal(0, 0.35)))      # per-nuclide strength
+                    out += [(e, w * k) for e, w in self._lines(iso, energies)]
+                return out
+            for _ in range(int(25 * mix.get('weight', 1.0))):
+                # each constituent's strength varies per sample (disequilibrium, radon loss, ...)
+                jittered = lines_by_nuclide(rng)
+                spectra.append(self.synthesize(jittered, rng))
+                labels.append(mix.get('label', name))
+        spectra_matrix = np.array(spectra)
+        logger.info(f"[ML] Synthesised {len(labels)} training spectra")
+
+        # Labelled real spectra are opt-in: the loader labels by filename and resamples without
+        # regard to calibration, so it can teach the model wrong things (and leaks benchmark files).
+        if os.environ.get("ML_USE_REAL_DATA") == "1" and HAS_REAL_DATA_LOADER and load_real_training_data:
             try:
-                logger.info("[ML] Loading real spectra for training augmentation...")
-                real_spectra_matrix, real_labels = load_real_training_data(
-                    data_dir=None,  # Uses default data directory
-                    target_channels=self.n_channels,
-                    augment_count=10  # Each real spectrum creates 10 training samples
-                )
-                
+                real_x, real_labels = load_real_training_data(data_dir=None, target_channels=self.n_channels,
+                                                              augment_count=10)
                 if len(real_labels) > 0:
-                    logger.info(f"[ML] Loaded {len(real_labels)} augmented samples from real spectra")
-                    logger.info(f"[ML] Real labels: {set(real_labels)}")
+                    spectra_matrix = np.vstack([spectra_matrix, real_x])
+                    labels.extend(real_labels)
+                    logger.info(f"[ML] Added {len(real_labels)} augmented real spectra")
             except Exception as e:
                 logger.warning(f"[ML] Real spectra loading failed (non-critical): {e}")
-                real_spectra_matrix = None
-                real_labels = []
-        
-        # Combine synthetic and real spectra
-        if real_spectra_matrix is not None and len(real_labels) > 0:
-            # Append real spectra to synthetic
-            spectra_matrix = np.vstack([spectra_matrix[:sample_idx], real_spectra_matrix])
-            labels.extend(real_labels)
-            logger.info(f"[ML] Combined training set: {sample_idx} synthetic + {len(real_labels)} real = {len(labels)} total")
-        else:
-            # Trim synthetic matrix to actual size
-            spectra_matrix = spectra_matrix[:sample_idx]
-        
-        # Create SampleSet with 2D matrix spectra
-        train_ss = SampleSet()
-        train_ss.spectra = pd.DataFrame(spectra_matrix)
-        train_ss.spectra_type = 3  # Gross (supported by MLPClassifier)
-        train_ss.spectra_state = 1  # Counts
-        
-        # Create sources with 3-level MultiIndex: ('Category', 'Isotope', 'Seed')
-        unique_isotopes = list(set(labels))
-        sources_data = {}
-        for iso in unique_isotopes:
-            # One-hot encoding
-            col_key = ('Radionuclide', iso, '')
-            sources_data[col_key] = [1.0 if label == iso else 0.0 for label in labels]
-        
-        sources_df = pd.DataFrame(sources_data)
-        sources_df.columns = pd.MultiIndex.from_tuples(
-            sources_df.columns,
-            names=SampleSet.SOURCES_MULTI_INDEX_NAMES
-        )
-        train_ss.sources = sources_df
-        
-        # Train model with increased epochs for better convergence
+
+        unique_isotopes = sorted(set(labels))
         try:
-            self.model = MLPClassifier()
-            # Increased epochs from 25 to 50 for better training with real data
-            self.model.fit(train_ss, epochs=50, target_level='Isotope', verbose=False)
+            self.model = MLPClassifier(hidden_layer_sizes=(256, 128), max_iter=300, early_stopping=True,
+                                       n_iter_no_change=10, random_state=0)
+            # integer-encoded: scikit-learn's early-stopping scorer cannot handle string classes
+            self.classes_ = unique_isotopes
+            index = {name: i for i, name in enumerate(unique_isotopes)}
+            self.model.fit(self.features(spectra_matrix), np.array([index[l] for l in labels]))
             self.is_trained = True
-            logger.info(f"[ML] Training complete. Model ready with {len(unique_isotopes)} isotopes.")
+            logger.info(f"[ML] Training complete. Model ready with {len(unique_isotopes)} classes.")
         except Exception as e:
             logger.warning(f"[ML] Training failed: {e}")
             self.is_trained = False
             raise
-    
-    def identify(self, counts: List[int], top_k: int = 5) -> List[Dict]:
+
+    @staticmethod
+    def _lines(isotope: str, energies) -> List[tuple]:
+        """(energy keV, relative weight) for an isotope's gamma lines, weighted by IAEA intensity %."""
+        gammas = {}
+        if HAS_ISOTOPE_DB and IAEA_DATA and isotope in IAEA_DATA:
+            gammas = {round(e, 1): i for e, i in IAEA_DATA[isotope].get('gammas', []) or []}
+        out = []
+        for e in energies:
+            inten = next((i for ge, i in gammas.items() if abs(ge - e) < 2.0), 5.0)
+            out.append((float(e), max(float(inten), 0.5)))
+        return out
+
+    # Typical environmental background lines (keV, relative weight)
+    ENV_LINES = [(1461, 10.7), (609, 45.0 * 0.3), (352, 35.0 * 0.3), (2614, 36.0 * 0.15), (583, 30.0 * 0.15),
+                 (911, 26.0 * 0.15), (1764, 15.0 * 0.3)]
+
+    def synthesize(self, lines, rng, is_background: bool = False) -> np.ndarray:
+        """One synthetic spectrum on this model's grid.
+
+        Per sample (not per line): one gain/offset error, one resolution scale, one total-count level
+        and one source-to-background mix. Lines get Gaussian photopeaks with energy-dependent FWHM,
+        efficiency falling with energy, a Compton shelf, and low-energy continuum; Poisson noise last.
         """
-        Identify isotopes using ML model.
-        
+        n, kpc = self.n_channels, self.keV_per_channel
+        grid = np.arange(n) * kpc + kpc / 2                  # channel centre energies
+        gain = rng.uniform(0.97, 1.03)
+        offset = rng.uniform(-8.0, 8.0)
+        res_scale = rng.uniform(0.85, 1.2)
+
+        def shape(src_lines, peak_to_compton):
+            spec = np.zeros(n)
+            for energy, weight in src_lines:
+                e = (energy - offset) / gain                  # where this line lands on the (mis)calibrated axis
+                if e < 15 or e > grid[-1]:
+                    continue
+                area = weight * (max(energy, 30.0) / 100.0) ** -0.8
+                fwhm = self.reference_fwhm_fraction * res_scale * 662.0 * np.sqrt(e / 662.0)
+                sigma = max(fwhm / 2.355, kpc)
+                spec += area * np.exp(-0.5 * ((grid - e) / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi)) * kpc
+                if energy > 120:
+                    edge = e / (1 + 2 * e / 511.0)
+                    shelf = np.where(grid < edge, 1.0, 0.0) * (0.35 + 0.65 * grid / max(edge, 1.0))
+                    if shelf.sum() > 0:
+                        spec += area * peak_to_compton * shelf / shelf.sum()
+            return spec
+
+        src = np.zeros(n) if (is_background or not lines) else shape(lines, rng.uniform(0.8, 3.0))
+        bg = shape(self.ENV_LINES, 2.0)
+        bg_lowE = np.exp(-grid / 250.0)
+        bg = bg / max(bg.sum(), 1e-9) + 0.3 * bg_lowE / bg_lowE.sum()
+        total = 10 ** rng.uniform(3.7, 6.3)                   # 5 k .. 2 M counts
+        if is_background or src.sum() <= 0:
+            mix = bg / bg.sum()
+            total = 10 ** rng.uniform(3.3, 5.0)
+        else:
+            frac_bg = rng.uniform(0.02, 0.6) if rng.random() < 0.7 else 0.0
+            mix = (1 - frac_bg) * src / src.sum() + frac_bg * bg / bg.sum()
+        return rng.poisson(mix * total).astype(float)
+
+    @staticmethod
+    def features(spectra: np.ndarray) -> np.ndarray:
+        """Square-root (Poisson variance-stabilising) then L2-normalise each spectrum."""
+        x = np.sqrt(np.clip(np.atleast_2d(np.asarray(spectra, dtype=float)), 0, None))
+        norm = np.linalg.norm(x, axis=1, keepdims=True)
+        return x / np.where(norm > 0, norm, 1.0)
+
+    def resample(self, counts, energies=None) -> np.ndarray:
+        """Counts on this model's channel grid (channel i spans i*keV_per_channel upward).
+
+        With energies (channel energies of the input spectrum) the counts are redistributed over the
+        model's grid by interpolating the cumulative spectrum, which preserves the total and moves
+        every line to the right channel whatever the input calibration. Without energies the input
+        is assumed to already be on the model's grid (padded/truncated).
+        """
+        counts = np.asarray(counts, dtype=float)
+        if energies is not None and len(energies) == len(counts) and len(counts) > 1:
+            e = np.asarray(energies, dtype=float)
+            if np.all(np.diff(e) > 0):
+                step = np.median(np.diff(e))
+                edges_in = np.concatenate([[e[0] - step / 2], (e[:-1] + e[1:]) / 2, [e[-1] + step / 2]])
+                cum = np.concatenate([[0.0], np.cumsum(counts)])
+                grid = np.arange(self.n_channels + 1) * self.keV_per_channel
+                return np.diff(np.interp(grid, edges_in, cum))
+        out = np.zeros(self.n_channels)
+        n = min(len(counts), self.n_channels)
+        out[:n] = counts[:n]
+        return out
+
+    def identify(self, counts: List[int], top_k: int = 5, energies: Optional[List[float]] = None) -> List[Dict]:
+        """
+        Identify isotopes using the ML model.
+
         Args:
             counts: Spectrum counts array
             top_k: Number of top predictions to return
-            
+            energies: Optional channel energies (keV) of the input, used to resample onto the model grid
+
         Returns:
-            List of predictions with isotope name and confidence
+            List of predictions with isotope name and confidence (percent)
         """
-        if not HAS_RIID:
-            raise ImportError("PyRIID not installed")
-            
-        # Lazy load model
+        if not HAS_ML:
+            raise ImportError("scikit-learn not installed")
         if not self.is_trained:
             self.lazy_train()
-        
-        # Prepare spectrum array
-        spectrum_array = np.array(counts, dtype=float)
-        
-        # Resize spectrum to match training data if needed
-        if len(spectrum_array) != self.n_channels:
-            if len(spectrum_array) < self.n_channels:
-                padded = np.zeros(self.n_channels)
-                padded[:len(spectrum_array)] = spectrum_array
-                spectrum_array = padded
-            else:
-                spectrum_array = spectrum_array[:self.n_channels]
-        
-        # Create test SampleSet with 2D matrix format (1 sample x n_channels)
-        test_ss = SampleSet()
-        test_ss.spectra = pd.DataFrame(spectrum_array.reshape(1, -1))
-        test_ss.spectra_type = 3  # Gross
-        test_ss.spectra_state = 1  # Counts
-        
-        # Get predictions (predict modifies in-place)
+
+        spectrum = self.resample(counts, energies)
+        if spectrum.sum() <= 0:
+            return []
         try:
-            self.model.predict(test_ss)
-            
-            # Use prediction_probas for probability values
-            probas = test_ss.prediction_probas
-            
-            results = []
-            if probas is not None and not probas.empty:
-                for col in probas.columns:
-                    # Extract isotope name from multi-index column
-                    if isinstance(col, tuple):
-                        isotope_name = col[1] if len(col) > 1 else str(col)
-                    else:
-                        isotope_name = str(col)
-                    
-                    prob = float(probas[col].iloc[0])
-                    conf_pct = round(prob * 100, 2)
-                    
-                    if conf_pct > 1.0:  # Only return meaningful predictions
-                        results.append({
-                            'isotope': isotope_name,
-                            'confidence': conf_pct,
-                            'method': 'ML (PyRIID)'
-                        })
-                
-                # Sort by confidence and take top_k
-                results.sort(key=lambda x: x['confidence'], reverse=True)
-                results = results[:top_k]
-            
-            return results
+            probas = self.model.predict_proba(self.features(spectrum))[0]
         except Exception as e:
             logger.error(f"[ML] Prediction error: {e}")
             return []
-    
+        results = [
+            {'isotope': str(name), 'confidence': round(float(p) * 100, 2), 'method': 'ML (MLP)'}
+            for name, p in zip((self.classes_[int(i)] for i in self.model.classes_), probas) if p * 100 > 1.0
+        ]
+        results.sort(key=lambda x: x['confidence'], reverse=True)
+        return results[:top_k]
+
     def export_model(self, output_path: str, format: str = 'onnx') -> dict:
-        """
-        Export trained model to ONNX or TFLite format for deployment.
-        
-        Args:
-            output_path: Path to save the exported model
-            format: 'onnx' or 'tflite'
-        
-        Returns:
-            dict with export status and metadata
-        """
+        """Export the trained model to ONNX (requires the optional skl2onnx package)."""
+        if format.lower() != 'onnx':
+            return {'success': False, 'error': f"Unsupported format: {format} (only 'onnx')"}
         if not self.is_trained:
             self.lazy_train()
-        
-        if self.model is None:
-            return {'success': False, 'error': 'Model not trained'}
-        
         try:
-            if format.lower() == 'onnx':
-                return self._export_onnx(output_path)
-            elif format.lower() == 'tflite':
-                return self._export_tflite(output_path)
-            else:
-                return {'success': False, 'error': f'Unknown format: {format}'}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def _export_onnx(self, output_path: str) -> dict:
-        """Export to ONNX format."""
+            from skl2onnx import to_onnx
+        except ImportError:
+            return {'success': False, 'error': 'skl2onnx not installed. Run: pip install skl2onnx'}
         try:
-            import tf2onnx
-            import tensorflow as tf
-            
-            # Get the underlying Keras model from PyRIID
-            keras_model = self.model.model
-            
-            # Convert to ONNX
-            spec = (tf.TensorSpec((None, self.n_channels), tf.float32, name="input"),)
-            model_proto, _ = tf2onnx.convert.from_keras(keras_model, input_signature=spec)
-            
-            # Save
+            proto = to_onnx(self.model, np.zeros((1, self.n_channels), dtype=np.float32))
             if not output_path.endswith('.onnx'):
                 output_path += '.onnx'
-            
             with open(output_path, 'wb') as f:
-                f.write(model_proto.SerializeToString())
-            
-            return {
-                'success': True,
-                'format': 'onnx',
-                'path': output_path,
-                'input_shape': [self.n_channels],
-                'output_classes': list(self.model.model.output_names) if hasattr(self.model.model, 'output_names') else [],
-                'model_type': self.model_type
-            }
-        except ImportError:
-            return {'success': False, 'error': 'tf2onnx not installed. Run: pip install tf2onnx'}
+                f.write(proto.SerializeToString())
+            return {'success': True, 'format': 'onnx', 'path': output_path, 'input_shape': [self.n_channels],
+                    'output_classes': list(self.classes_), 'model_type': self.model_type,
+                    'note': 'Input is sqrt-then-L2-normalised counts on the model energy grid'}
         except Exception as e:
             return {'success': False, 'error': f'ONNX export failed: {e}'}
-    
-    def _export_tflite(self, output_path: str) -> dict:
-        """Export to TensorFlow Lite format."""
-        try:
-            import tensorflow as tf
-            
-            # Get the underlying Keras model
-            keras_model = self.model.model
-            
-            # Convert to TFLite
-            converter = tf.lite.TFLiteConverter.from_keras_model(keras_model)
-            converter.optimizations = [tf.lite.Optimize.DEFAULT]
-            tflite_model = converter.convert()
-            
-            # Save
-            if not output_path.endswith('.tflite'):
-                output_path += '.tflite'
-            
-            with open(output_path, 'wb') as f:
-                f.write(tflite_model)
-            
-            return {
-                'success': True,
-                'format': 'tflite',
-                'path': output_path,
-                'input_shape': [self.n_channels],
-                'size_bytes': len(tflite_model),
-                'model_type': self.model_type
-            }
-        except Exception as e:
-            return {'success': False, 'error': f'TFLite export failed: {e}'}
+
 
 # Global instances (one per model type + detector combination)
 _ml_identifiers = {}
@@ -784,11 +649,11 @@ def get_ml_identifier(model_type: str = "hobby", detector: str = "alphahound") -
         detector: Detector profile name ("alphahound", "radiacode_103", etc.)
         
     Returns:
-        MLIdentifier instance (trained or None if PyRIID not available)
+        MLIdentifier instance (None if scikit-learn is not available)
     """
     global _ml_identifiers
     
-    if not HAS_RIID:
+    if not HAS_ML:
         return None
     
     # Normalize model type and detector

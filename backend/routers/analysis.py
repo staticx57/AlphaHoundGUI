@@ -94,6 +94,8 @@ class BackgroundSubtractionRequest(BaseModel):
 class MLIdentifyRequest(BaseModel):
     """Request model for ML isotope identification."""
     counts: List[float] = Field(..., min_length=10, max_length=MAX_SPECTRUM_CHANNELS)
+    # Channel energies (keV) of the spectrum: lets the model resample onto its own energy grid
+    energies: Optional[List[float]] = Field(default=None, max_length=MAX_SPECTRUM_CHANNELS)
 
     @field_validator('counts')
     @classmethod
@@ -338,7 +340,7 @@ def analyze_subtract_background(request: BackgroundSubtractionRequest):
 @router.post("/analyze/ml-identify")
 def ml_identify(request: MLIdentifyRequest):
     """
-    Machine Learning isotope identification using PyRIID.
+    Machine Learning isotope identification (scikit-learn MLP trained on synthetic spectra).
     
     Includes:
     - Confidence thresholding (top result must be >20% to show)
@@ -346,14 +348,14 @@ def ml_identify(request: MLIdentifyRequest):
     - Anomaly flagging for low confidence predictions
     """
     try:
-        # Lazy import to avoid loading TensorFlow at startup (saves ~10-15s)
+        # Lazy import: the model is trained on first use
         from ml_analysis import get_ml_identifier
         
         ml = get_ml_identifier()
         if ml is None:
-            raise HTTPException(status_code=501, detail="PyRIID not installed")
+            raise HTTPException(status_code=501, detail="scikit-learn not installed")
         
-        raw_results = ml.identify(request.counts, top_k=5)
+        raw_results = ml.identify(request.counts, top_k=5, energies=request.energies)
         
         # ========== CONFIDENCE THRESHOLDING ==========
         # Only keep predictions with meaningful confidence
@@ -403,7 +405,7 @@ def ml_identify(request: MLIdentifyRequest):
             "top_confidence": results[0]['confidence'] if results else 0
         }
     except ImportError as e:
-        raise HTTPException(status_code=501, detail="PyRIID not installed")
+        raise HTTPException(status_code=501, detail="scikit-learn not installed")
     except Exception as e:
         logger.error(f"[ML] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -698,10 +700,10 @@ def get_detectors():
 @router.post("/analyze/export-model")
 def export_model_endpoint(request: dict):
     """
-    Export trained ML model to ONNX or TFLite format.
+    Export trained ML model to ONNX (needs the optional skl2onnx package).
     
     Args (JSON body):
-        format: 'onnx' or 'tflite'
+        format: 'onnx'
         model_type: 'hobby' or 'comprehensive'
     
     Returns:
@@ -715,15 +717,15 @@ def export_model_endpoint(request: dict):
         format = request.get('format', 'onnx').lower()
         model_type = request.get('model_type', 'hobby')
         
-        if format not in ['onnx', 'tflite']:
-            raise HTTPException(status_code=400, detail="Format must be 'onnx' or 'tflite'")
+        if format != 'onnx':
+            raise HTTPException(status_code=400, detail="Format must be 'onnx'")
         
         identifier = get_ml_identifier(model_type)
         if not identifier:
             raise HTTPException(status_code=500, detail="ML model not available")
         
         # Export to temp file
-        ext = '.onnx' if format == 'onnx' else '.tflite'
+        ext = '.onnx'
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp_path = tmp.name
         

@@ -1671,7 +1671,7 @@ function setupEventListeners() {
             const response = await fetch('/analyze/ml-identify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ counts: currentData.counts })
+                body: JSON.stringify({ counts: currentData.counts, energies: currentData.energies })
             });
 
             if (!response.ok) {
@@ -1700,7 +1700,7 @@ function setupEventListeners() {
                     `<span style="color: ${qualityColors[quality]}; font-size: 0.8rem; margin-left: 0.5rem;">${qualityLabels[quality]}</span>` : '';
 
                 resultsContainer.innerHTML = `
-                    <h4 style="margin-top: 0;">ML Predictions (PyRIID)${qualityBadge}</h4>
+                    <h4 style="margin-top: 0;">ML Predictions${qualityBadge}</h4>
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                         <thead>
                             <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
@@ -1768,7 +1768,7 @@ function setupEventListeners() {
             const response = await fetch('/analyze/ml-identify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ counts: currentData.counts })
+                body: JSON.stringify({ counts: currentData.counts, energies: currentData.energies })
             });
 
             if (!response.ok) {

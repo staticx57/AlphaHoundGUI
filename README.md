@@ -52,17 +52,18 @@
 - **Single-Line Penalty**: Caps single-peak matches at 60% confidence to prevent false positives
 - **Custom Isotope Library**: Add, edit, delete custom isotopes via UI with JSON import/export
 
-#### Machine Learning (PyRIID Integration)
+#### Machine Learning (scikit-learn MLP)
 - **Neural Network Classifier**: MLP trained on 90+ isotopes from IAEA/NNDC databases
 - **Multi-Isotope Mixtures**: Recognizes complex sources (UraniumGlass, ThoriumMantle, MedicalWaste, IndustrialGauge)
-- **Real Data Augmentation**: 220+ training samples from local N42/SPE/CSV spectra with auto-labeling
+- **Energy-grid resampling**: spectra are resampled onto the model's energy grid using the device's own calibration (Radiacode ~2.4 keV/channel, AlphaHound ~3 keV/channel)
+- **Real-data augmentation** (opt-in, `ML_USE_REAL_DATA=1`): filename-labelled local spectra; off by default because labels and calibration are not checked
 - **Environmental Background**: Trained on K-40, Bi-214, Tl-208 environmental peaks for background immunity
-- **Calibration Jitter**: ±10% gain and ±5 keV offset variation for detector drift robustness
+- **Calibration Jitter**: one ±3% gain / ±8 keV offset error per training spectrum (not per line), plus resolution and count-level variation
 - **Multi-Detector Profiles**: 8 detector configurations (AlphaHound CsI/BGO, Radiacode 103/103G/110/102, Generic NaI)
 - **Hybrid Scoring**: Combines ML (40%) + peak-matching (60%) for improved accuracy
 - **Compton Simulation**: Realistic CsI(Tl) detector response with continuum modeling
 - **~1500 Training Samples**: Balanced dataset with Poisson statistics and IAEA intensity weighting
-- **📖 See [PYRIID_GUIDE.md](PYRIID_GUIDE.md) for detailed ML usage and extension guide**
+- **Benchmark**: `python backend/tests/ml_benchmark.py` scores the model on the labelled real spectra
 
 #### Decay Chain Detection & Prediction
 - **Automatic Chain Recognition**: U-238, Th-232, U-235 decay chains with confidence scoring
@@ -408,7 +409,7 @@ AlphaHoundGUI/
 │   ├── isotope_database.py              # 100+ isotopes from IAEA/NNDC databases
 │   ├── peak_detection.py                # scipy-based peak finding
 │   ├── peak_detection_enhanced.py       # Advanced peak detection with multiplet support
-│   ├── ml_analysis.py                   # PyRIID ML integration
+│   ├── ml_analysis.py                   # ML identification (scikit-learn)
 │   ├── ml_data_loader.py                # Real data augmentation for ML training
 │   ├── spectral_analysis.py             # SNIP, Poisson fitting, advanced analysis
 │   ├── spectrum_algebra.py              # Spectrum math operations with error propagation
@@ -497,8 +498,7 @@ AlphaHoundGUI/
 - `matplotlib` - Spectrum plotting for PDF reports
 
 ### Machine Learning (Optional - for AI Identification)
-- `riid` (PyRIID 2.2.0) - Machine learning isotope identification
-- `tensorflow` - Neural network backend for ML classifier
+- `scikit-learn` - MLP classifier for AI identification (PyRIID was dropped: its numpy/scipy/TensorFlow pins conflict with the rest of the app)
 - `pandas` - Data structures for ML training
 - `curie` (nuclear-curie) - Authoritative nuclear decay data
 

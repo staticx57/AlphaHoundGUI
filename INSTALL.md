@@ -15,8 +15,8 @@ run_lightweight.bat
 ```
 
 ### **Full Mode** (with Machine Learning)
-✅ All features including PyRIID ML  
-❌ ~377MB dependencies (TensorFlow + ONNX)  
+✅ All features including AI identification (scikit-learn)  
+✅ Small extra dependency (scikit-learn, already included in the full install)  
 ⏱️ Longer installation time
 
 ```bash
@@ -33,9 +33,7 @@ run.bat
 - PySerial, WebSockets (device communication)
 
 ### Full Dependencies (adds)
-- PyRIID (~200MB)
-- TensorFlow (~150MB)
-- ONNX (~25MB)
+- scikit-learn (neural-network classifier for AI identification)
 
 > [!WARNING]
 > **Curie Database Initialization Issue**  
@@ -45,10 +43,10 @@ run.bat
 
 You can always upgrade from lightweight to full:
 ```bash
-python -m pip install git+https://github.com/sandialabs/pyriid.git@main
+python -m pip install scikit-learn
 ```
 
-The app automatically detects PyRIID and enables ML features if installed.
+The app automatically detects scikit-learn and enables ML features if installed. (PyRIID is no longer used: it pins numpy 1.26 / scipy 1.13 / TensorFlow 2.16, which conflict with the rest of the app.)
 
 ## 🌐 Usage
 
@@ -72,4 +70,4 @@ The app automatically detects PyRIID and enables ML features if installed.
 | PDF Export | ✅ | ✅ |
 | Device Control (AlphaHound) | ✅ | ✅ |
 | Rate Limiting (API Security) | ✅ | ✅ |
-| ML Identification (PyRIID) | ❌ | ✅ |
+| ML Identification (scikit-learn) | ❌ | ✅ |
