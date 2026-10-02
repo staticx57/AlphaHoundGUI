@@ -59,6 +59,7 @@ class ROIResult:
     # Optional MDA for non-detects
     mda_bq: Optional[float] = None
     mda_uci: Optional[float] = None
+    activity_uncertainty_bq: Optional[float] = None  # 1-sigma statistical (counting) uncertainty
     
     # Optional ratio analysis
     ratio_analysis: Optional[Dict] = None
@@ -247,6 +248,7 @@ class ROIAnalyzer:
         # Calculate activity (only if detected)
         activity_bq = None
         activity_uci = None
+        activity_uncertainty_bq = None
         mda_bq = None
         mda_uci = None
         
@@ -259,6 +261,8 @@ class ROIAnalyzer:
             # Calculate Activity using centralized engine
             activity_bq = calculate_activity_bq(net_counts, acquisition_time_s, efficiency, branching_ratio)
             activity_uci = bq_to_uci(activity_bq)
+            # Activity is linear in net counts, so scale the counting uncertainty identically
+            activity_uncertainty_bq = calculate_activity_bq(uncertainty, acquisition_time_s, efficiency, branching_ratio)
         else:
             pass
         
@@ -340,6 +344,7 @@ class ROIAnalyzer:
             uncertainty_sigma=uncertainty,
             activity_bq=activity_bq,
             activity_uci=activity_uci,
+            activity_uncertainty_bq=activity_uncertainty_bq,
             mda_bq=mda_bq,
             mda_uci=mda_uci,
             detector=self.detector_name,
@@ -800,9 +805,9 @@ def analyze_roi(
         "background_counts": round(result.background_counts, 1),
         "net_counts": round(result.net_counts, 1),
         "uncertainty_sigma": round(result.uncertainty_sigma, 1),
-        "uncertainty_sigma": round(result.uncertainty_sigma, 1),
         "activity_bq": round(result.activity_bq, 2) if result.activity_bq else None,
         "activity_uci": round(result.activity_uci, 6) if result.activity_uci else None,
+        "activity_uncertainty_bq": round(result.activity_uncertainty_bq, 2) if result.activity_uncertainty_bq else None,
         "mda_bq": round(result.mda_bq, 2) if result.mda_bq else None,
         "detector": result.detector,
         "acquisition_time_s": result.acquisition_time_s,

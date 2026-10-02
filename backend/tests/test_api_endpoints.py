@@ -76,3 +76,23 @@ def test_cpu_bound_analysis_routes_run_in_threadpool():
         if route.path == "/upload":
             continue  # awaits file.read()
         assert not inspect.iscoroutinefunction(route.endpoint), route.path
+
+
+def test_roi_reports_activity_uncertainty(client):
+    """Activity must carry a 1-sigma uncertainty scaling like the net-count uncertainty."""
+    import math
+    counts = [5.0] * 1024
+    for i in range(88, 99):
+        counts[i] += int(400 * math.exp(-((i - 93) ** 2) / 8))
+    response = client.post("/analyze/roi", json={
+        "energies": [float(i) for i in range(1024)],
+        "counts": counts,
+        "isotope": "Th-234 (93 keV)",
+        "acquisition_time_s": 600,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["activity_bq"] and body["activity_uncertainty_bq"]
+    rel_activity = body["activity_uncertainty_bq"] / body["activity_bq"]
+    rel_counts = body["uncertainty_sigma"] / body["net_counts"]
+    assert rel_activity == pytest.approx(rel_counts, rel=0.05)

@@ -1939,7 +1939,7 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
         // Format results
         let activityStr;
         if (data.activity_bq) {
-            activityStr = `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)} Bq</span> (${data.activity_uci.toFixed(6)} μCi)`;
+            activityStr = `<span style="color: var(--primary-color); font-weight: 600;">${data.activity_bq.toFixed(1)}${data.activity_uncertainty_bq ? ' ± ' + data.activity_uncertainty_bq.toFixed(1) : ''} Bq</span> (${data.activity_uci.toFixed(6)} μCi)`;
         } else if (data.mda_bq) {
             activityStr = `<span style="color: var(--text-secondary);">&lt; ${data.mda_bq.toFixed(1)} Bq (Limit)</span>`;
         } else {
