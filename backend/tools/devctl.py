@@ -15,7 +15,9 @@ reconnecting it normally needs someone at the browser. This does the whole cycle
 
 Exit status is 0 on success and 1 on failure, so it can be chained. The port is remembered in
 backend/data/devctl_state.json (override with --port). A server started by `restart` runs with
-ALPHAHOUND_KEEP_CONNECTED=1, so closing the last browser tab does not release the device.
+ALPHAHOUND_KEEP_CONNECTED=1, so closing the last browser tab does not release the device, and (when the
+AlphaHound was connected) with ALPHAHOUND_AUTOCONNECT_PORT / ALPHAHOUND_AUTORECONNECT=1, so the server itself
+reconnects after a USB drop or a silent device. `disconnect` is respected until the next `connect`.
 Set ALPHAHOUND_URL to manage a server that is not on http://127.0.0.1:3200.
 """
 import argparse
@@ -144,10 +146,15 @@ def stop_server():
     return True
 
 
-def start_server(log_path):
+def start_server(log_path, port=None):
+    """Start the server detached. With a port, it connects the AlphaHound itself and a watchdog keeps it connected
+    (a USB drop or a silent device is recovered; a deliberate `devctl disconnect` is respected)."""
     env = dict(os.environ)
     env["PYTHONIOENCODING"] = "utf-8"
     env.setdefault("ALPHAHOUND_KEEP_CONNECTED", "1")
+    if port:
+        env.setdefault("ALPHAHOUND_AUTOCONNECT_PORT", port)
+        env.setdefault("ALPHAHOUND_AUTORECONNECT", "1")
     kwargs = {}
     if os.name == "nt":
         kwargs["creationflags"] = (subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
@@ -281,9 +288,16 @@ def cmd_status(args):
     if not up:
         return False
     st = alphahound_status() or {}
+    code, h = call("GET", "/device/health")
+    h = h if code == 200 and isinstance(h, dict) else {}
     if st.get("connected"):
         say(f"alphahound: connected, dose {st.get('dose_rate')} uRem/h, temp {st.get('temperature')} C, "
             f"cps {st.get('cps')}")
+        age = h.get("data_age_s")
+        note = "" if age is None or age < 10 else "  <-- no data for a while"
+        say(f"alphahound link: port {h.get('port')}, last data {age}s ago, connected for {h.get('connected_for_s')}s{note}")
+    elif h.get("user_disconnected"):
+        say("alphahound: disconnected on purpose (a watchdog will not reconnect it until the next connect)")
     else:
         say("alphahound: not connected")
     say(f"radiacode: {'connected' if radiacode_connected() else 'not connected'}")
@@ -311,7 +325,13 @@ def cmd_restart(args):
     if not stop_server():
         return False
     time.sleep(2)  # let the OS release the serial port the old process held
-    if not start_server(pathlib.Path(args.log)):
+    keep_port = None
+    if not args.no_reconnect and (ah_was or args.always_connect):
+        try:
+            keep_port = pick_port(args.port)
+        except SystemExit:
+            keep_port = None
+    if not start_server(pathlib.Path(args.log), keep_port):
         return False
     ok = True
     if not args.no_reconnect:
@@ -325,7 +345,11 @@ def cmd_restart(args):
 def cmd_ensure(args):
     if not server_up():
         say("ensure: server is down, starting it")
-        if not start_server(pathlib.Path(args.log)):
+        try:
+            keep_port = pick_port(args.port)
+        except SystemExit:
+            keep_port = None
+        if not start_server(pathlib.Path(args.log), keep_port):
             return False
     return connect_alphahound(args.port, args.wait)
 

@@ -59,8 +59,14 @@ async def connect_device(request: ConnectRequest):
 
 @router.post("/disconnect")
 async def disconnect_device():
-    alphahound_device.disconnect()
+    alphahound_device.disconnect(user=True)
     return {"status": "disconnected"}
+
+
+@router.get("/health")
+async def device_health():
+    """Link health: connected, seconds since the last data, last error, whether it was disconnected on purpose."""
+    return alphahound_device.get_health()
 
 @router.get("/status")
 async def device_status():

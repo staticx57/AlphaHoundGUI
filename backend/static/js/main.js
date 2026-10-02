@@ -762,6 +762,8 @@ function setupEventListeners() {
             // Show AlphaHound connection, hide Radiacode
             alphahoundRow.style.display = 'flex';
             radiacodeRow.style.display = 'none';
+            const quickPanel = document.getElementById('device-quick-panel');
+            if (quickPanel) quickPanel.dataset.device = 'alphahound';
 
             // Update title
             if (deviceTitle) deviceTitle.textContent = 'AlphaHound Device';
@@ -775,6 +777,8 @@ function setupEventListeners() {
             // Show Radiacode connection, hide AlphaHound
             radiacodeRow.style.display = 'flex';
             alphahoundRow.style.display = 'none';
+            const quickPanel = document.getElementById('device-quick-panel');
+            if (quickPanel) quickPanel.dataset.device = 'radiacode';
 
             // Update title
             if (deviceTitle) deviceTitle.textContent = 'Radiacode Device';
@@ -2569,7 +2573,7 @@ function ensureCpsCharts() {
     ahCpsCharts = {};
     for (const [key, color] of Object.entries(spec)) {
         const canvas = document.getElementById(`ah-chart-${key}`);
-        if (canvas) ahCpsCharts[key] = new DoseRateChart(canvas, { label: key, color, maxPoints: 120 });
+        if (canvas) ahCpsCharts[key] = new DoseRateChart(canvas, { label: key, color, maxPoints: 120, hideAxis: true, lineWidth: 1.5 });
     }
 }
 
@@ -2589,12 +2593,22 @@ function ensureDeviceScreen() {
         rateUnit: document.getElementById('ah-screen-rate-unit')?.value,
     });
     const modeSelect = document.getElementById('ah-screen-mode');
-    if (modeSelect) {
-        modeSelect.innerHTML = SCREEN_MODES.map((m) => `<option value="${m.id}">Mode ${m.id}: ${m.name}</option>`).join('');
-        modeSelect.value = String(deviceScreen.mode.id);
-        modeSelect.addEventListener('change', () => deviceScreen.setMode(modeSelect.value));
-        deviceScreen.onModeChange = (m) => { modeSelect.value = String(m.id); };
+    const slotSelect = document.getElementById('ah-screen-slot');
+    if (slotSelect) {
+        slotSelect.innerHTML = [1, 2, 3, 4].map((n) => `<option value="${n}">M${n}</option>`).join('');
+        slotSelect.value = String(deviceScreen.slotIndex + 1);
+        slotSelect.addEventListener('change', () => deviceScreen.setSlot(Number(slotSelect.value) - 1));
     }
+    if (modeSelect) {
+        modeSelect.innerHTML = SCREEN_MODES.map((m) => `<option value="${m.id}">${m.id} · ${m.name}</option>`).join('');
+        modeSelect.value = String(deviceScreen.mode.id);
+        // choosing a mode assigns it to the slot that is currently selected
+        modeSelect.addEventListener('change', () => deviceScreen.setMode(modeSelect.value));
+    }
+    deviceScreen.onModeChange = (m, slot) => {
+        if (modeSelect) modeSelect.value = String(m.id);
+        if (slotSelect) slotSelect.value = String(slot + 1);
+    };
     document.getElementById('ah-screen-dose-unit')?.addEventListener('change', (e) => deviceScreen.setUnit(e.target.value));
     document.getElementById('ah-screen-rate-unit')?.addEventListener('change', (e) => deviceScreen.setRateUnit(e.target.value));
     // The arrows press the same buttons as the existing display controls: E/Q go to the device and the replica steps
@@ -2649,6 +2663,7 @@ async function refreshAlphaHoundDetails() {
         const d = await api.getDeviceDetails();
         ahDetailsFailures = 0;
         ahSet('ah-port', d.port ? `${d.port} @ ${d.baudrate}` : '--');
+        setTitleChip(d.port ? `${d.port} · connected` : '');
         ahSet('ah-temp', d.temperature != null ? `${d.temperature.toFixed(1)} \u00b0C` : '--');
         ahSet('ah-comp', d.comp_factor != null ? d.comp_factor.toFixed(4) : '--');
         ahSet('ah-dose', fmtDoseText(d.dose_rate_uRem_h));
@@ -2677,7 +2692,16 @@ function startAlphaHoundDetails() {
     if (!ahDetailsInterval) ahDetailsInterval = setInterval(refreshAlphaHoundDetails, 5000);
 }
 
+/** Small "COM8 . connected" tag next to the device name (the connection box is hidden while connected). */
+function setTitleChip(text) {
+    const chip = document.getElementById('ah-title-chip');
+    if (!chip) return;
+    chip.textContent = text;
+    chip.style.display = text ? 'inline-block' : 'none';
+}
+
 function stopAlphaHoundDetails() {
+    setTitleChip('');
     if (ahDetailsInterval) {
         clearInterval(ahDetailsInterval);
         ahDetailsInterval = null;

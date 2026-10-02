@@ -119,7 +119,7 @@ def test_restart_sequence_and_reconnect(monkeypatch):
     monkeypatch.setattr(devctl, "radiacode_connected", lambda: False)
     monkeypatch.setattr(devctl, "call", fake_call({("GET", "/device/details"): [(200, {"port": "COM8"})]}))
     monkeypatch.setattr(devctl, "stop_server", lambda: order.append("stop") or True)
-    monkeypatch.setattr(devctl, "start_server", lambda log: order.append("start") or True)
+    monkeypatch.setattr(devctl, "start_server", lambda log, *a, **k: order.append("start") or True)
     monkeypatch.setattr(devctl, "connect_alphahound", lambda port, wait: order.append(f"connect:{port}") or True)
     assert devctl.main(["restart"]) == 0
     assert order == ["stop", "start", "connect:None"]
@@ -131,7 +131,7 @@ def test_restart_does_not_connect_a_device_that_was_not_connected(monkeypatch):
     monkeypatch.setattr(devctl, "alphahound_status", lambda: {"connected": False})
     monkeypatch.setattr(devctl, "radiacode_connected", lambda: False)
     monkeypatch.setattr(devctl, "stop_server", lambda: True)
-    monkeypatch.setattr(devctl, "start_server", lambda log: True)
+    monkeypatch.setattr(devctl, "start_server", lambda log, *a, **k: True)
     monkeypatch.setattr(devctl, "connect_alphahound", lambda port, wait: order.append("connect") or True)
     assert devctl.main(["restart"]) == 0 and order == []
     assert devctl.main(["restart", "--always-connect"]) == 0 and order == ["connect"]
@@ -145,14 +145,14 @@ def test_restart_fails_if_the_server_will_not_stop_or_start(monkeypatch):
     monkeypatch.setattr(devctl, "stop_server", lambda: False)
     assert devctl.main(["restart"]) == 1
     monkeypatch.setattr(devctl, "stop_server", lambda: True)
-    monkeypatch.setattr(devctl, "start_server", lambda log: False)
+    monkeypatch.setattr(devctl, "start_server", lambda log, *a, **k: False)
     assert devctl.main(["restart"]) == 1
 
 
 def test_ensure_starts_a_down_server_then_connects(monkeypatch):
     order = []
     monkeypatch.setattr(devctl, "server_up", lambda: False)
-    monkeypatch.setattr(devctl, "start_server", lambda log: order.append("start") or True)
+    monkeypatch.setattr(devctl, "start_server", lambda log, *a, **k: order.append("start") or True)
     monkeypatch.setattr(devctl, "connect_alphahound", lambda port, wait: order.append("connect") or True)
     assert devctl.main(["ensure"]) == 0 and order == ["start", "connect"]
 
@@ -179,3 +179,50 @@ def test_listening_pids_parses_windows_netstat(monkeypatch):
     monkeypatch.setattr(devctl.os, "name", "nt")
     monkeypatch.setattr(devctl.subprocess, "run", lambda *a, **k: R())
     assert devctl.listening_pids(3200) == {33916}               # not the :32000 listener, not the clients
+
+
+def test_start_server_enables_the_watchdog_only_when_given_a_port(monkeypatch, tmp_path):
+    envs = []
+
+    class FakeProc:
+        pid = 1234
+
+    monkeypatch.setattr(devctl.subprocess, "Popen", lambda *a, **k: envs.append(k["env"]) or FakeProc())
+    monkeypatch.setattr(devctl, "wait_for", lambda cond, timeout, interval=0.5: True)
+    for key in ("ALPHAHOUND_AUTOCONNECT_PORT", "ALPHAHOUND_AUTORECONNECT"):
+        monkeypatch.delenv(key, raising=False)
+    assert devctl.start_server(tmp_path / "a.log", "COM8")
+    assert envs[0]["ALPHAHOUND_AUTOCONNECT_PORT"] == "COM8" and envs[0]["ALPHAHOUND_AUTORECONNECT"] == "1"
+    assert envs[0]["ALPHAHOUND_KEEP_CONNECTED"] == "1"
+    assert devctl.start_server(tmp_path / "b.log")
+    assert "ALPHAHOUND_AUTOCONNECT_PORT" not in envs[1] and "ALPHAHOUND_AUTORECONNECT" not in envs[1]
+
+
+def test_restart_hands_the_port_to_the_server(monkeypatch):
+    passed = []
+    monkeypatch.setattr(devctl, "alphahound_status", lambda: {"connected": True})
+    monkeypatch.setattr(devctl, "radiacode_connected", lambda: False)
+    monkeypatch.setattr(devctl, "call", fake_call({("GET", "/device/details"): [(200, {"port": "COM8"})],
+                                                  ("GET", "/device/ports"): [PORTS]}))
+    monkeypatch.setattr(devctl, "stop_server", lambda: True)
+    monkeypatch.setattr(devctl, "start_server", lambda log, port=None: passed.append(port) or True)
+    monkeypatch.setattr(devctl, "connect_alphahound", lambda port, wait: True)
+    assert devctl.main(["restart"]) == 0
+    assert passed == ["COM8"]
+    passed.clear()
+    assert devctl.main(["restart", "--no-reconnect"]) == 0 and passed == [None]
+
+
+def test_status_shows_link_health_and_a_deliberate_disconnect(monkeypatch, capsys):
+    monkeypatch.setattr(devctl, "server_up", lambda: True)
+    monkeypatch.setattr(devctl, "radiacode_connected", lambda: False)
+    monkeypatch.setattr(devctl, "alphahound_status", lambda: {"connected": True, "dose_rate": 60.0, "temperature": 29.0, "cps": None})
+    monkeypatch.setattr(devctl, "call", fake_call({("GET", "/device/health"): [(200, {"port": "COM8", "data_age_s": 42.0,
+                                                                                    "connected_for_s": 100.0})]}))
+    assert devctl.main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert "last data 42.0s ago" in out and "no data for a while" in out
+    monkeypatch.setattr(devctl, "alphahound_status", lambda: {"connected": False})
+    monkeypatch.setattr(devctl, "call", fake_call({("GET", "/device/health"): [(200, {"user_disconnected": True})]}))
+    devctl.main(["status"])
+    assert "disconnected on purpose" in capsys.readouterr().out

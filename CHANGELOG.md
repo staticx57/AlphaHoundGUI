@@ -15,6 +15,10 @@
 - **Dose log survives restarts**: kept in `backend/data/dose_log.jsonl` (loaded at startup, trimmed when it grows far past 100 000 rows; `ALPHAHOUND_DOSE_LOG=off` keeps it in memory only).
 - **Channel statistics per acquisition**: mean gamma / beta / alpha CPS and peak total CPS are recorded during an AlphaHound acquisition, shown in the metadata panel, returned in `/device/acquisition/status` (`channels`) and written to the N42 `AcquisitionInfo`.
 
+- **Self-healing connection** (opt-in, on by default for `devctl`-started servers): a watchdog reconnects the AlphaHound after a USB drop or a silent device; a deliberate Disconnect is respected. `GET /device/health`.
+- **Display replica follows the device's real behaviour**: four configurable mode slots (E/Q step through them), the guide's mode set (Rolling = alpha + beta, ABY AVG, LP Spark, Sleep digits, G-Force), the check/X rule. Tested: the device reports nothing when its mode changes, so the slots must be set once by hand.
+- **Display quality and layout**: the replica renders at 4x with an OLED pixel grid, a bezel and device-style buttons; the empty connection box is hidden while connected (Disconnect and a port chip move into the title row); the readings are two columns; the whole device area fits a 1280x800 window.
+
 ### Fixed
 - **Real-time dose spikes**: the device streams its own dose value (~5 per second) and answers `D`/`DA`/`DB` and `P` with values ~10x larger (nSv/h scale). The driver treated every bare number as the dose, so each `DB` reply briefly put a 10x spike in the readout. `DB` is now only a fallback for firmware without the stream.
 - **Dead dose sparkline for the AlphaHound** (the chart was created without a canvas).

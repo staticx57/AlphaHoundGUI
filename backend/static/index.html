@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=16">
+    <link rel="stylesheet" href="/static/style.css?v=19">
     <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Chart.js loaded async for performance -->
@@ -85,13 +85,17 @@
                     <!-- Unified Device Panel (shows for both tabs) -->
                     <div id="device-quick-panel">
                         <!-- Device Title (simple, not in flex header) -->
-                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <img src="/static/icons/device.svg" class="icon icon-xl" alt="Device">
                             <h3 id="device-title" style="margin: 0;">AlphaHound Device</h3>
+                            <span id="ah-title-chip" class="ah-title-chip" style="display: none;"></span>
+                            <!-- Disconnect (shown by ui.setDeviceConnected once connected) -->
+                            <button id="btn-disconnect-alphahound" class="ah-disconnect"
+                                style="display: none;" title="Disconnect the AlphaHound">Disconnect</button>
                         </div>
 
                         <!-- Connection Controls Box (Full Width Row) -->
-                        <div
+                        <div id="device-connection-box"
                             style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-secondary);">
 
                             <!-- AlphaHound Connection Row -->
@@ -107,11 +111,6 @@
                                 </div>
                                 <button id="btn-connect-device" class="btn-primary"
                                     style="padding: 0.5rem 1.5rem; flex-shrink: 0;">Connect</button>
-                                <!-- Disconnect (shown by ui.setDeviceConnected once connected) -->
-                                <button id="btn-disconnect-alphahound"
-                                    style="padding: 0.5rem 1.5rem; background: var(--error-color); color: white; display: none; flex-shrink: 0;">
-                                    Disconnect
-                                </button>
                             </div>
 
                             <!-- Radiacode Connection Row -->
@@ -351,78 +350,81 @@
 
                     <!-- AlphaHound details + display replica (AlphaHound only) -->
                     <div id="alphahound-details-panel" data-device-feature="alphaDetails"
-                        style="display: none; margin-top: 1rem;">
-                        <details open
-                            style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
-                            <summary
-                                style="cursor: pointer; font-weight: 700; color: var(--text-primary); user-select: none; font-size: 0.85rem;">
-                                AlphaHound Details &amp; Screen
-                            </summary>
-                            <div class="ah-details-grid" style="margin-top: 0.75rem;">
+                        style="display: none; margin-top: 0.25rem;">
+                        <details open class="ah-card">
+                            <summary class="ah-card-title">AlphaHound details &amp; screen</summary>
+                            <div class="ah-details-grid">
                                 <!-- Display replica -->
                                 <div class="ah-screen-box">
-                                    <canvas id="ah-screen" class="ah-screen-canvas"
-                                        aria-label="Replica of the AlphaHound display"></canvas>
+                                    <div class="ah-bezel">
+                                        <canvas id="ah-screen" class="ah-screen-canvas"
+                                            aria-label="Replica of the AlphaHound display"></canvas>
+                                    </div>
+                                    <div class="ah-buttons" role="group" aria-label="Device buttons">
+                                        <button id="btn-screen-prev" class="ah-dev-btn" aria-label="Left button: previous mode slot"
+                                            title="Left button: previous mode slot (also sent to the device as Q)">&lsaquo;</button>
+                                        <span class="ah-dev-btn ah-dev-btn-mid" aria-hidden="true"
+                                            title="Centre button: no command is known for it"></span>
+                                        <button id="btn-screen-next" class="ah-dev-btn" aria-label="Right button: next mode slot"
+                                            title="Right button: next mode slot (also sent to the device as E)">&rsaquo;</button>
+                                    </div>
                                     <div class="ah-screen-controls">
-                                        <button id="btn-screen-prev" class="btn-secondary" title="Previous display mode (also sent to the device)"
-                                            style="padding: 0.25rem 0.6rem;">&lsaquo;</button>
-                                        <select id="ah-screen-mode" title="Display mode shown by the replica"></select>
-                                        <button id="btn-screen-next" class="btn-secondary" title="Next display mode (also sent to the device)"
-                                            style="padding: 0.25rem 0.6rem;">&rsaquo;</button>
+                                        <select id="ah-screen-slot" title="Which of the device's four mode slots (M1-M4) it is on"></select>
+                                        <select id="ah-screen-mode" title="The mode held by this slot (set it to match the device's Mode Selection menu)"></select>
                                     </div>
                                     <div class="ah-screen-options">
-                                        <label>Dose
-                                            <select id="ah-screen-dose-unit">
-                                                <option value="uRem">&micro;Rem/h</option>
-                                                <option value="uSv">&micro;Sv/h</option>
-                                            </select>
-                                        </label>
-                                        <label>Rate
-                                            <select id="ah-screen-rate-unit">
-                                                <option value="CPS">CPS</option>
-                                                <option value="CPM">CPM</option>
-                                            </select>
-                                        </label>
+                                        <select id="ah-screen-dose-unit" title="Dose unit shown on the screen (the device offers Rem or Sv)">
+                                            <option value="uRem">&micro;Rem/h</option>
+                                            <option value="uSv">&micro;Sv/h</option>
+                                        </select>
+                                        <select id="ah-screen-rate-unit" title="Count-rate unit shown on the screen (the device's Units setting)">
+                                            <option value="CPS">CPS</option>
+                                            <option value="CPM">CPM</option>
+                                        </select>
                                     </div>
-                                    <p class="ah-screen-note">The device does not report which mode it is showing or its
-                                        button presses: use the arrows (they also press E/Q on the device) or pick the
-                                        mode it is on. Modes 5-7 need data the serial link does not carry.</p>
+                                    <details class="ah-note">
+                                        <summary>About this replica</summary>
+                                        <p>The device shows one of four mode slots (M1-M4) and its E/Q buttons step through
+                                            them, but it does not tell us which slot it is on, what the slots hold, or when
+                                            a button is pressed or the device is shaken. Set the slot and its mode once to
+                                            match the device; the arrows (which also press E/Q on it) then keep them in
+                                            step. Modes 5-7 and G-Force need data the serial link does not carry. Battery
+                                            level and the light-tight symbol are not sent either, so they are not drawn.</p>
+                                    </details>
                                 </div>
 
-                                <!-- Details -->
+                                <!-- Readings -->
                                 <div class="ah-details-box">
                                     <dl class="ah-kv">
                                         <dt>Port</dt><dd id="ah-port">--</dd>
                                         <dt>Temperature</dt><dd id="ah-temp">--</dd>
-                                        <dt>Compensation</dt><dd id="ah-comp">--</dd>
                                         <dt>Dose rate</dt><dd id="ah-dose">--</dd>
+                                        <dt>Compensation</dt><dd id="ah-comp">--</dd>
                                         <dt>Dose (5 s avg)</dt><dd id="ah-dose-avg" title="Mean of the last 5 s of readings: single readings are noisy">--</dd>
-                                        <dt>Gamma</dt><dd id="ah-cps-gamma">--</dd>
-                                        <dt>Beta</dt><dd id="ah-cps-beta">--</dd>
-                                        <dt>Alpha</dt><dd id="ah-cps-alpha">--</dd>
-                                        <dt>Total</dt><dd id="ah-cps-total">--</dd>
                                         <dt>Dose log</dt><dd id="ah-log-count">--</dd>
                                     </dl>
                                     <div class="ah-cps-charts" aria-label="Count rate history">
-                                        <div class="ah-cps-chart"><span style="color: #38bdf8;">&gamma; gamma cps</span>
+                                        <div class="ah-cps-chart">
+                                            <div class="ah-cps-head"><span style="color: #38bdf8;">&gamma; gamma</span><b id="ah-cps-gamma">--</b></div>
                                             <div class="ah-cps-chart-box"><canvas id="ah-chart-gamma"></canvas></div></div>
-                                        <div class="ah-cps-chart"><span style="color: #f59e0b;">&beta; beta cps</span>
+                                        <div class="ah-cps-chart">
+                                            <div class="ah-cps-head"><span style="color: #f59e0b;">&beta; beta</span><b id="ah-cps-beta">--</b></div>
                                             <div class="ah-cps-chart-box"><canvas id="ah-chart-beta"></canvas></div></div>
-                                        <div class="ah-cps-chart"><span style="color: #ef4444;">&alpha; alpha cps</span>
+                                        <div class="ah-cps-chart">
+                                            <div class="ah-cps-head"><span style="color: #ef4444;">&alpha; alpha</span><b id="ah-cps-alpha">--</b></div>
                                             <div class="ah-cps-chart-box"><canvas id="ah-chart-alpha"></canvas></div></div>
                                     </div>
+                                    <div class="ah-total-row">Total <b id="ah-cps-total">--</b></div>
                                     <div class="ah-actions">
                                         <button id="btn-dose-csv" class="btn-secondary" style="padding: 0.3rem 0.7rem;"
                                             title="Download the dose-rate history (with gamma/beta/alpha CPS) as CSV">Dose CSV</button>
                                         <button id="btn-dose-clear" class="btn-secondary" style="padding: 0.3rem 0.7rem;"
-                                            title="Clear the recorded dose-rate history">Clear Dose Log</button>
-                                    </div>
-                                    <div class="ah-actions">
+                                            title="Clear the recorded dose-rate history">Clear dose log</button>
                                         <label title="Re-download the cumulative gamma spectrum on a timer while idle">
                                             <input type="checkbox" id="ah-auto-refresh"> Auto-refresh spectrum every
                                         </label>
                                         <input type="number" id="ah-auto-interval" value="10" min="5" max="600" step="1"
-                                            style="width: 60px;"> s
+                                            style="width: 56px;"> s
                                     </div>
                                     <details class="ah-probe">
                                         <summary>Command probe</summary>
@@ -430,7 +432,7 @@
                                             <select id="ah-probe-cmd" title="Read-only commands only">
                                                 <option value="D">D (dose)</option>
                                                 <option value="DA">DA (dose A)</option>
-                                                <option value="DB">DB (dose B, polled)</option>
+                                                <option value="DB">DB (dose B)</option>
                                                 <option value="P">P (gamma/beta/alpha CPS)</option>
                                             </select>
                                             <button id="btn-probe" class="btn-secondary" style="padding: 0.3rem 0.7rem;">Send</button>

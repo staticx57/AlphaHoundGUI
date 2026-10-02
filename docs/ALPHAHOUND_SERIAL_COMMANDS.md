@@ -2,6 +2,10 @@
 
 Discovered through serial probing on 2025-12-15.
 
+> **Update 2026-10-02:** the firmware has changed since these notes (a dose stream, `P` now returns the gamma/beta/alpha `CPS:` line, `L` a temperature
+> table, dose replies about 10x larger). See [ALPHAHOUND_SERIAL.md](ALPHAHOUND_SERIAL.md) for the current behaviour. The single-character command parsing below still
+> applies: never send a multi-letter string, because every letter is a command (an `E` in it changes the display mode).
+
 ## Connection Settings
 - Baud Rate: 9600
 - Standard serial settings (8N1)

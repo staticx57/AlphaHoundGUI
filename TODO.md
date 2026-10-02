@@ -28,6 +28,8 @@ Open items:
 Done and verified on the live AB+G (COM8): `P` polling and CPS parsing, dose stream vs `DB` reply fix, details panel, display replica (Mode 4 compared with RadView's product photos), dose log CSV, `devctl restart` with automatic reconnect.
 - [ ] Compare the replica and the numbers with the physical screen: which unit does the device show, and is `DB` / the `P` dose field really nSv/h (the data say 10x the stream; the unit is inferred, not documented)?
 - [ ] What do `D`, `DA` and `DB` differ in (all three replied with ~the same value on this firmware)?
+- [x] Can the replica be synced to the real screen? Tested: no. The device reports nothing on a mode change (E x12 on the raw port: no text, no stream change; `K` only jitters). It cycles four user-configured slots (M1-M4), so the replica has slots too and the user sets them once. A physical button or a shake is invisible to the app.
+- [ ] Ask RadView whether the firmware can report the current mode/slot, or whether a command reads the Mode Selection menu.
 - [ ] Modes 5-7 of the replica (alpha/beta spectroscopy, radon approximation) need data the serial link does not give; revisit if RadView documents more commands.
 - [ ] `A`, `B`, `RA`, `RB`, `SpecA`, `SpecB`, `COUNT`, `ALL`, `?` return nothing; their effect is unknown (not sent by the app).
 - [x] The dose log is persisted (`backend/data/dose_log.jsonl`) and survives restarts; the dose-rate average, count-rate charts and per-acquisition channel statistics are in.

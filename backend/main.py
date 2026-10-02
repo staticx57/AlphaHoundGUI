@@ -30,7 +30,12 @@ WS_DISCONNECT_GRACE_S = 10  # seconds to wait for a reconnect before releasing t
 # Unattended operation (both opt-in; the defaults keep the interactive behaviour):
 #   ALPHAHOUND_KEEP_CONNECTED=1       do not release the AlphaHound when the last browser tab closes
 #   ALPHAHOUND_AUTOCONNECT_PORT=COM8  connect to this serial port at startup (retried while it is busy)
-KEEP_CONNECTED = os.environ.get("ALPHAHOUND_KEEP_CONNECTED", "").strip().lower() in ("1", "true", "yes")
+#   ALPHAHOUND_AUTORECONNECT=1        with the port above: keep it connected, reconnecting after a USB drop or a
+#                                     silent device (a deliberate Disconnect is respected until the next Connect)
+_TRUE = ("1", "true", "yes")
+AUTORECONNECT = os.environ.get("ALPHAHOUND_AUTORECONNECT", "").strip().lower() in _TRUE
+# A watchdog that keeps the device connected must not be undone by the "last browser tab closed" release
+KEEP_CONNECTED = AUTORECONNECT or os.environ.get("ALPHAHOUND_KEEP_CONNECTED", "").strip().lower() in _TRUE
 
 # Rate limiter: 60 requests per minute per IP
 limiter = Limiter(key_func=get_remote_address)
@@ -70,6 +75,49 @@ async def revalidate_ui_files(request: Request, call_next):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
+WATCHDOG_INTERVAL_S = 5.0
+WATCHDOG_SILENCE_S = 20.0   # a connected device normally sends several dose lines per second
+
+
+def watchdog_step(port: str, silence_s: float = WATCHDOG_SILENCE_S) -> str:
+    """One watchdog pass. Returns what it did: paused | ok | reconnected | failed | restarted | waiting."""
+    dev = alphahound_device
+    if dev.user_disconnected:
+        return "paused"
+    if dev.is_connected():
+        health = dev.get_health()
+        age = health.get("data_age_s")
+        since = health.get("connected_for_s") or 0
+        # silent for too long (device switched off, cable half out): drop the link and reopen it
+        if (age is not None and age > silence_s) or (age is None and since > silence_s):
+            logger.warning(f"[Watchdog] No data from the AlphaHound for {age or since}s: reconnecting")
+            dev.disconnect()
+            time.sleep(1.0)
+            return "restarted" if dev.connect(port) else "failed"
+        return "ok"
+    if dev.connect(port):
+        logger.info(f"[Watchdog] AlphaHound reconnected on {port}")
+        return "reconnected"
+    return "failed"
+
+
+def _watchdog_loop(port: str):
+    failures = 0
+    while True:
+        time.sleep(WATCHDOG_INTERVAL_S)
+        try:
+            result = watchdog_step(port)
+        except Exception as e:  # never let the watchdog die
+            logger.error(f"[Watchdog] {e}")
+            continue
+        if result == "failed":
+            failures += 1
+            if failures == 1 or failures % 12 == 0:   # about once a minute, not every pass
+                logger.warning(f"[Watchdog] {port}: {alphahound_device.get_last_error()} (failure {failures})")
+        else:
+            failures = 0
+
+
 def autoconnect_alphahound(port: str, attempts: int = 15, delay_s: float = 2.0) -> bool:
     """Connect the AlphaHound at startup. A just-restarted server often finds the port still held, so retry."""
     for attempt in range(1, attempts + 1):
@@ -99,6 +147,8 @@ async def _startup_autoconnect():
     port = os.environ.get("ALPHAHOUND_AUTOCONNECT_PORT", "").strip()
     if port:
         threading.Thread(target=autoconnect_alphahound, args=(port,), daemon=True, name="autoconnect").start()
+        if AUTORECONNECT:
+            threading.Thread(target=_watchdog_loop, args=(port,), daemon=True, name="watchdog").start()
 
 
 # Mount static files

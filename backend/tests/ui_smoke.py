@@ -270,12 +270,34 @@ with sync_playwright() as p:
     pi.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
     pi.wait_for_function("document.getElementById('ah-cps-gamma').textContent.includes('cps')", timeout=8000)
     check("I a Disconnect button is visible once connected", pi.is_visible("#btn-disconnect-alphahound"))
+    check("I the empty connection box is hidden while connected", not pi.is_visible("#device-connection-box"))
+    check("I the title row carries the port chip", "COM8" in pi.inner_text("#ah-title-chip") and pi.is_visible("#ah-title-chip"),
+          pi.inner_text("#ah-title-chip"))
+    pi.click("#tab-radiacode")
+    check("I on the Radiacode tab the connection box is back and the AlphaHound Disconnect button is not shown",
+          pi.is_visible("#device-connection-box") and not pi.is_visible("#btn-disconnect-alphahound"))
+    pi.click("#tab-alphahound")
+    check("I back on the AlphaHound tab the box is hidden again", not pi.is_visible("#device-connection-box")
+          and pi.is_visible("#btn-disconnect-alphahound"))
+    pi.set_viewport_size({"width": 1280, "height": 800})
+    pi.wait_for_timeout(400)
+    bottoms = pi.evaluate("""() => ({ acquire: document.getElementById('btn-start-acquire').getBoundingClientRect().bottom,
+                                      live: document.querySelector('.device-live-data').getBoundingClientRect().bottom,
+                                      height: innerHeight })""")
+    check("I the whole device area fits a 1280x800 window", bottoms["acquire"] <= 800 and bottoms["live"] <= 800, str(bottoms))
+    for width in (1000, 800):
+        pi.set_viewport_size({"width": width, "height": 800})
+        pi.wait_for_timeout(300)
+        check(f"I no horizontal overflow at {width}px", pi.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    pi.set_viewport_size({"width": 1400, "height": 1000})
+    pi.wait_for_timeout(300)
     check("I the details panel is visible", pi.is_visible("#alphahound-details-panel"))
     check("I port and log size come from /device/details",
           "COM8" in pi.inner_text("#ah-port") and "42" in pi.inner_text("#ah-log-count"), pi.inner_text("#ah-port"))
+    cps_vals = pi.evaluate("""() => ['gamma', 'beta', 'alpha', 'total'].map(k => parseFloat(document.getElementById('ah-cps-' + k).textContent))""")
     check("I gamma/beta/alpha/total CPS are shown",
-          all(x in pi.inner_text(f"#ah-cps-{k}") for k, x in (("gamma", "270"), ("beta", "150.5"), ("alpha", "6.25"), ("total", "426"))),
-          pi.inner_text("#ah-cps-total"))
+          cps_vals[0] >= 270 and abs(cps_vals[1] - 150.5) < 0.01 and abs(cps_vals[2] - 6.25) < 0.01 and abs(cps_vals[3] - 426.75) < 0.01,
+          str(cps_vals))
     check("I real-time dose is shown", "\u00b5Rem" in pi.inner_text("#rc-dose-display") and pi.inner_text("#rc-dose-display")[:2].strip().isdigit(),
           pi.inner_text("#rc-dose-display"))
     spark_js = """() => { const c = document.getElementById('rcDoseRateChart'); const ch = window.Chart && Chart.getChart(c);
@@ -288,15 +310,32 @@ with sync_playwright() as p:
     pi.wait_for_function(f"({chart_js})().every(n => n >= 3)", timeout=6000)
     check("I gamma / beta / alpha count-rate charts are drawing", all(n >= 3 for n in pi.evaluate(chart_js)), str(pi.evaluate(chart_js)))
     check("I the smoothed dose is shown", "64.50" in pi.inner_text("#ah-dose-avg"), pi.inner_text("#ah-dose-avg"))
-    check("I the display replica offers all 11 modes", pi.evaluate("document.getElementById('ah-screen-mode').options.length") == 11)
+    check("I the display replica offers every mode and four slots",
+          pi.evaluate("document.getElementById('ah-screen-mode').options.length") == 12
+          and pi.evaluate("document.getElementById('ah-screen-slot').options.length") == 4)
+    check("I the replica starts on slot M1", pi.input_value("#ah-screen-slot") == "1")
     pi.select_option("#ah-screen-mode", "4")
     pi.wait_for_timeout(600)
     lit = pi.evaluate("""() => { const c = document.getElementById('ah-screen'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-                                  let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n }""")
-    check("I the replica draws the ABY split screen", lit > 300, str(lit))
+                                  let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n / (d.length / 4) }""")
+    check("I the replica draws the ABY split screen", lit > 0.05, f"{lit:.3f} of the pixels lit")
+    check("I the replica is rendered at 4x (512 px)", pi.evaluate("document.getElementById('ah-screen').width") == 512)
     pi.click("#btn-screen-next")
-    pi.wait_for_function("document.getElementById('ah-screen-mode').value === '5'", timeout=4000)
-    check("I the replica's arrow presses the device's display button and steps the mode", ah["next_calls"] == 1)
+    pi.wait_for_function("document.getElementById('ah-screen-slot').value === '2'", timeout=4000)
+    check("I the replica's arrow presses the device's display button and steps to the next SLOT",
+          ah["next_calls"] == 1 and pi.input_value("#ah-screen-mode") == "9", pi.input_value("#ah-screen-mode"))
+    pi.select_option("#ah-screen-slot", "3")
+    check("I picking a slot shows the mode that slot holds", pi.input_value("#ah-screen-mode") == "1")
+    pi.select_option("#ah-screen-mode", "12")
+    pi.select_option("#ah-screen-slot", "1")
+    check("I changing a slot's mode leaves the other slots alone",
+          pi.input_value("#ah-screen-mode") == "4" and ah["next_calls"] == 1)
+    pi.select_option("#ah-screen-slot", "3")
+    check("I the new mode was kept in that slot", pi.input_value("#ah-screen-mode") == "12")
+    pi.reload(wait_until="networkidle")
+    pi.wait_for_function("document.getElementById('ah-screen-slot').value === '3'", timeout=8000)
+    check("I the slots and the current slot are remembered across a reload",
+          pi.input_value("#ah-screen-mode") == "12")
     pi.click(".ah-probe summary")
     pi.select_option("#ah-probe-cmd", "P")
     pi.click("#btn-probe")
@@ -312,7 +351,9 @@ with sync_playwright() as p:
     check("I the count-rate charts are released on disconnect", pi.evaluate("typeof Chart !== 'undefined' && !Chart.getChart(document.getElementById('ah-chart-gamma'))"))
     check("I the replica shows NO DEVICE when disconnected", pi.evaluate("""() => { const c = document.getElementById('ah-screen');
           const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0;
-          for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n < 1500 }"""))
+          for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n / (d.length / 4) < 0.06 }"""))
+    check("I the connection box and Connect button are back after disconnecting",
+          pi.is_visible("#device-connection-box") and pi.is_visible("#btn-connect-device") and not pi.is_visible("#ah-title-chip"))
     check("I no JS errors during the AlphaHound flow", not errs_i, "; ".join(errs_i[:3]))
     ctx_i.close()
 

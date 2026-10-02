@@ -226,3 +226,115 @@ def test_alphahound_cps_helper_for_the_acquisition_manager(monkeypatch):
     monkeypatch.setattr(dev, "is_connected", lambda: True)
     monkeypatch.setattr(dev, "get_cps", lambda *a, **k: {"gamma": 1.0, "beta": 2.0, "alpha": 3.0})
     assert device_router.alphahound_cps()["beta"] == 2.0
+
+
+# ---------- health + watchdog ----------
+
+def test_health_endpoint_and_user_disconnect_flag(client, monkeypatch):
+    monkeypatch.setattr(dev, "is_connected", lambda: False)
+    h = client.get("/device/health").json()
+    assert h["connected"] is False and h["data_age_s"] is None and "user_disconnected" in h
+    seen = {}
+    monkeypatch.setattr(dev, "disconnect", lambda user=False: seen.update(user=user))
+    assert client.post("/device/disconnect").json() == {"status": "disconnected"}
+    assert seen == {"user": True}                      # a Disconnect from the UI or devctl is deliberate
+
+
+def test_driver_remembers_a_deliberate_disconnect_until_the_next_connect(monkeypatch):
+    import alphahound_serial as ah
+
+    class Port:
+        is_open = True
+        in_waiting = 0
+        def read(self, n): return b""
+        def write(self, d): pass
+        def close(self): self.is_open = False
+
+    d = ah.AlphaHoundDevice()
+    monkeypatch.setattr(ah.serial, "Serial", lambda *a, **k: Port())
+    assert d.connect("COM8") and d.user_disconnected is False and d.connected_since is not None
+    d.disconnect()                                     # internal (write failure, release): not deliberate
+    assert d.user_disconnected is False and d.connected_since is None
+    assert d.connect("COM8")
+    d.disconnect(user=True)
+    assert d.user_disconnected is True
+    assert d.connect("COM8") and d.user_disconnected is False
+    d.disconnect()
+
+
+class _Dev:
+    """Stand-in for the driver in watchdog tests."""
+
+    def __init__(self, connected=True, user=False, age=1.0, since=100.0, connect_ok=True):
+        self.user_disconnected, self._connected, self.age, self.since = user, connected, age, since
+        self.connect_ok, self.log = connect_ok, []
+
+    def is_connected(self): return self._connected
+    def get_health(self): return {"data_age_s": self.age, "connected_for_s": self.since}
+    def get_last_error(self): return "busy"
+    def disconnect(self, user=False): self._connected = False; self.log.append("disconnect")
+    def connect(self, port):
+        self.log.append(f"connect:{port}")
+        self._connected = self.connect_ok
+        return self.connect_ok
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    monkeypatch.setattr(main.time, "sleep", lambda s: None)
+
+
+def test_watchdog_respects_a_deliberate_disconnect(monkeypatch, no_sleep):
+    d = _Dev(connected=False, user=True)
+    monkeypatch.setattr(main, "alphahound_device", d)
+    assert main.watchdog_step("COM8") == "paused" and d.log == []
+
+
+def test_watchdog_leaves_a_healthy_link_alone(monkeypatch, no_sleep):
+    d = _Dev(age=0.4)
+    monkeypatch.setattr(main, "alphahound_device", d)
+    assert main.watchdog_step("COM8") == "ok" and d.log == []
+
+
+def test_watchdog_reconnects_after_a_usb_drop(monkeypatch, no_sleep):
+    d = _Dev(connected=False)
+    monkeypatch.setattr(main, "alphahound_device", d)
+    assert main.watchdog_step("COM8") == "reconnected" and d.log == ["connect:COM8"]
+    d2 = _Dev(connected=False, connect_ok=False)
+    monkeypatch.setattr(main, "alphahound_device", d2)
+    assert main.watchdog_step("COM8") == "failed"
+
+
+def test_watchdog_restarts_a_silent_link(monkeypatch, no_sleep):
+    d = _Dev(age=45.0)                                  # open port, but no dose line for 45 s
+    monkeypatch.setattr(main, "alphahound_device", d)
+    assert main.watchdog_step("COM8") == "restarted" and d.log == ["disconnect", "connect:COM8"]
+    d2 = _Dev(age=None, since=60.0)                      # connected a minute ago and never heard anything
+    monkeypatch.setattr(main, "alphahound_device", d2)
+    assert main.watchdog_step("COM8") == "restarted"
+    d3 = _Dev(age=None, since=3.0)                       # just connected: give it time
+    monkeypatch.setattr(main, "alphahound_device", d3)
+    assert main.watchdog_step("COM8") == "ok"
+    d4 = _Dev(age=45.0, connect_ok=False)
+    monkeypatch.setattr(main, "alphahound_device", d4)
+    assert main.watchdog_step("COM8") == "failed"
+
+
+def test_watchdog_loop_survives_errors(monkeypatch):
+    calls = {"n": 0}
+
+    def step(port):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("boom")
+        return "failed"
+
+    def sleeper(s):
+        if calls["n"] >= 4:
+            raise KeyboardInterrupt
+    monkeypatch.setattr(main, "watchdog_step", step)
+    monkeypatch.setattr(main.time, "sleep", sleeper)
+    monkeypatch.setattr(dev, "get_last_error", lambda: "busy")
+    with pytest.raises(KeyboardInterrupt):
+        main._watchdog_loop("COM8")
+    assert calls["n"] >= 4                               # kept going after the exception

@@ -1148,7 +1148,7 @@ export class DoseRateChart {
                 datasets: [{
                     data: this.data,
                     borderColor: lineColor,
-                    borderWidth: 2,
+                    borderWidth: this.options.lineWidth || 2,
                     backgroundColor: lineColor.startsWith('#') ? lineColor + '20' :
                         lineColor.startsWith('rgba') ? lineColor.replace(/[\d.]+\)$/, '0.2)') :
                             lineColor.replace(/\)$/, ', 0.2)').replace(/^rgb/, 'rgba'),
@@ -1170,7 +1170,7 @@ export class DoseRateChart {
                 scales: {
                     x: { display: false }, // Tiny chart, no X axis
                     y: {
-                        display: true,
+                        display: !this.options.hideAxis,
                         position: 'right',
                         ticks: {
                             color: styles.getPropertyValue('--text-secondary').trim() || '#64748b',

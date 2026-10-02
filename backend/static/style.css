@@ -2016,11 +2016,63 @@ select.feature-disabled {
 }
 
 /* ---- AlphaHound details panel + display replica ---- */
+
+/* Title row: name, port chip and Disconnect on one line */
+.ah-title-chip {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+    white-space: nowrap;
+}
+
+.ah-disconnect {
+    margin-left: auto;
+    padding: 0.3rem 0.9rem;
+    font-size: 0.8rem;
+    background: var(--error-color);
+    color: #fff;
+    border-radius: 6px;
+}
+
+/* Nothing but a Disconnect button used to sit in the connection box: hide the row (and the box when it is the
+   only row showing) while the AlphaHound is connected */
+#alphahound-connection-row.ah-connected {
+    display: none !important;
+}
+
+#device-connection-box:has(#alphahound-connection-row.ah-connected[style*="display: flex"]) {
+    display: none;
+}
+
+/* The AlphaHound disconnect button belongs to the AlphaHound tab only */
+#device-quick-panel[data-device="radiacode"] #btn-disconnect-alphahound,
+#device-quick-panel[data-device="radiacode"] #ah-title-chip {
+    display: none !important;
+}
+
+.ah-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.45rem 0.75rem 0.55rem;
+}
+
+.ah-card-title {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--text-primary);
+    user-select: none;
+    font-size: 0.85rem;
+}
+
 .ah-details-grid {
     display: grid;
-    grid-template-columns: 276px 1fr;
+    grid-template-columns: 250px minmax(0, 1fr);
     gap: 1rem;
     align-items: start;
+    margin-top: 0.6rem;
 }
 
 @media (max-width: 760px) {
@@ -2029,30 +2081,85 @@ select.feature-disabled {
     }
 }
 
-.ah-screen-canvas {
-    display: block;
-    width: 256px;
-    height: 256px;
-    background: #000;
-    border: 2px solid var(--border-color);
-    border-radius: 8px;
-    image-rendering: pixelated;
+/* The display: a dark bezel around a canvas rendered at 4x with a faint pixel grid, and device-style buttons */
+.ah-bezel {
+    background: linear-gradient(145deg, #2a2f36, #14171b);
+    border-radius: 14px;
+    padding: 10px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
-.ah-screen-controls,
-.ah-screen-options,
+.ah-screen-canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #000;
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px #000, inset 0 0 10px rgba(0, 0, 0, 0.9);
+    filter: drop-shadow(0 0 2px rgba(190, 235, 255, 0.28));
+}
+
+.ah-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr 1fr;
+    gap: 8px;
+    padding: 0 6px;
+    margin-top: 6px;
+}
+
+.ah-dev-btn {
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: linear-gradient(#3a4049, #22262c);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1;
+    box-shadow: 0 2px 0 #0b0d0f, inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+}
+
+.ah-dev-btn:hover {
+    color: var(--text-primary);
+}
+
+.ah-dev-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #0b0d0f;
+}
+
+.ah-dev-btn-mid {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.ah-screen-controls {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.ah-screen-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.ah-screen-controls select,
+.ah-screen-options select {
+    font-size: 0.75rem;
+    min-width: 0;
+}
+
 .ah-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem 0.6rem;
     margin-top: 0.5rem;
-}
-
-.ah-screen-controls select {
-    flex: 1;
-    min-width: 0;
-    font-size: 0.75rem;
 }
 
 .ah-screen-options label,
@@ -2064,19 +2171,31 @@ select.feature-disabled {
     gap: 0.3rem;
 }
 
-.ah-screen-note {
-    font-size: 0.65rem;
-    color: var(--text-secondary);
-    margin: 0.5rem 0 0;
-    max-width: 256px;
+.ah-note,
+.ah-probe {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
 }
 
+.ah-note summary,
+.ah-probe summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.ah-note p {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    margin: 0.4rem 0 0;
+}
+
+/* Readings: two label/value pairs per row */
 .ah-kv {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.2rem 0.75rem;
+    grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+    gap: 0.25rem 0.75rem;
     margin: 0;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
 }
 
 .ah-kv dt {
@@ -2087,16 +2206,54 @@ select.feature-disabled {
     margin: 0;
     font-weight: 600;
     color: var(--text-primary);
+    overflow-wrap: anywhere;
 }
 
-.ah-probe {
-    margin-top: 0.75rem;
-    font-size: 0.8rem;
+/* Count-rate charts: name and live value above a small history plot */
+.ah-cps-charts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.7rem;
 }
 
-.ah-probe summary {
-    cursor: pointer;
+.ah-cps-chart {
+    background: var(--bg-primary);
+    border-radius: 6px;
+    padding: 0.3rem 0.45rem 0.2rem;
+    min-width: 0;
+}
+
+.ah-cps-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ah-cps-head b {
+    color: var(--text-primary);
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ah-cps-chart-box {
+    position: relative;
+    height: 78px;
+}
+
+.ah-total-row {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
+}
+
+.ah-total-row b {
+    color: var(--text-primary);
 }
 
 .ah-probe-output {
@@ -2107,28 +2264,4 @@ select.feature-disabled {
     font-size: 0.75rem;
     min-height: 2.5rem;
     white-space: pre-wrap;
-}
-
-.ah-cps-charts {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-}
-
-.ah-cps-chart {
-    background: var(--bg-primary);
-    border-radius: 6px;
-    padding: 0.3rem 0.4rem;
-    min-width: 0;
-}
-
-.ah-cps-chart span {
-    font-size: 0.65rem;
-    font-weight: 700;
-}
-
-.ah-cps-chart-box {
-    position: relative;
-    height: 56px;
 }

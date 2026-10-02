@@ -1,16 +1,18 @@
 /**
  * Replica of the AlphaHound AB+G display (128x128 monochrome OLED).
  *
- * The device has 11 display modes (RadView's product page lists them as Mode 1-7 and 9-12; there is
- * no Mode 8). Each is redrawn here from the data this app actually receives over the serial link:
- * dose rate, gamma/beta/alpha count rates ('P' reply) and the gamma spectrum ('G' reply).
+ * Built from RadView's AB+G user guide and product page. The device shows ONE of up to four mode
+ * "slots" (M1-M4, chosen in its Mode Selection menu); its left/right buttons, a shake, and the serial
+ * E / Q commands step through those four slots. This replica models the same thing: four slots, each
+ * holding a mode, and a current slot that E / Q (the GUI arrows) advance.
  *
- * Not available over serial, so shown as such rather than invented: the alpha/beta spectra
- * (Modes 5 and 6), the radon approximation (Mode 7), battery level and screen brightness.
- *
- * The device does not report which mode it is showing or when its buttons are pressed, so the
- * replica keeps its own mode: step it with the GUI buttons (which also send E/Q to the device)
- * or pick the mode the device is on from the selector.
+ * What the serial link carries and what it does not:
+ *  - carried: dose rate, gamma/beta/alpha count rates ('P'), the gamma spectrum ('G').
+ *  - NOT carried: which slot or mode the device is on (it reports nothing when the mode changes: tested),
+ *    its slot configuration, button presses, shakes, battery level, brightness, the light-leak sensor,
+ *    alpha/beta pulse-height data (2D/3D spectroscopy), the radon estimate, the accelerometer.
+ * So the replica cannot read the device's mode: set the slots and the current slot once to match the
+ * device, and keep stepping with the GUI arrows (a physical button press or shake is invisible to us).
  */
 
 const W = 128;
@@ -20,20 +22,34 @@ const DIM = '#4f7f99';
 const BG = '#000000';
 const UREM_TO_USV = 0.01;
 const MAX_HISTORY_S = 3600;
+const SLOT_COUNT = 4;
+// The canvas is rendered at 4x with a faint grid between the 128x128 logical pixels, so it reads as an OLED
+// and stays crisp at any size (drawing code keeps working in 128x128 units).
+export const SCREEN_SCALE = 4;
+const SCALE = SCREEN_SCALE;
 
+/**
+ * All modes. Names follow the product page; `ab` marks modes that use the alpha/beta scintillator
+ * (the device shows a check mark in the top bar for those and an X otherwise), `needs` marks data the
+ * serial link does not carry.
+ */
 export const SCREEN_MODES = [
-    { id: 1, name: 'Rolling Graph' },
-    { id: 2, name: 'Low Power Sparkles' },
-    { id: 3, name: 'Average Counts' },
-    { id: 4, name: 'ABY Split Sparkles' },
-    { id: 5, name: 'Basic AB 2D Spectroscopy' },
-    { id: 6, name: 'Basic AB 3D Spectroscopy' },
-    { id: 7, name: 'Radon Approximation' },
-    { id: 9, name: 'Gamma Spectroscopy' },
-    { id: 10, name: 'Spectrogram' },
-    { id: 11, name: 'Analog Gauge' },
-    { id: 12, name: 'Power Saver Mode' },
+    { id: 1, name: 'Rolling Graph', ab: true },
+    { id: 2, name: 'Low Power Sparkles', ab: true },
+    { id: 3, name: 'Average Counts', ab: true },
+    { id: 4, name: 'ABY Split Sparkles', ab: true },
+    { id: 5, name: 'Basic AB 2D Spectroscopy', ab: true, needs: 'alpha/beta pulse heights' },
+    { id: 6, name: 'Basic AB 3D Spectroscopy', ab: true, needs: 'alpha/beta pulse heights' },
+    { id: 7, name: 'Radon Approximation', ab: true, needs: 'the device radon estimate' },
+    { id: 9, name: 'Gamma Spectroscopy', ab: false },
+    { id: 10, name: 'Spectrogram', ab: false },
+    { id: 11, name: 'Analog Gauge', ab: false },
+    { id: 12, name: 'Power Saver Mode', ab: false },
+    { id: 13, name: 'G-Force', ab: false, needs: 'the accelerometer' },
 ];
+
+/** Slots a new device is a reasonable guess for; the user sets the real ones once. */
+export const DEFAULT_SLOTS = [4, 9, 1, 3];
 
 /** Format a count rate the way the device does: 2 decimals below 1000, whole numbers above. */
 export function formatRate(v) {
@@ -52,6 +68,13 @@ export function formatDose(uRemPerHour, unit) {
     }
     const v = uRemPerHour;
     return { value: v >= 100 ? v.toFixed(0) : (v >= 10 ? v.toFixed(1) : v.toFixed(2)), unit: 'uRem/h' };
+}
+
+/** Sleep-mode readout: the dose as a zero-padded whole number of at least three digits (uRem/h) or uSv/h. */
+export function formatSleepDose(uRemPerHour, unit) {
+    if (uRemPerHour === null || uRemPerHour === undefined || Number.isNaN(uRemPerHour)) return '---';
+    const v = unit === 'uSv' ? uRemPerHour * UREM_TO_USV : uRemPerHour;
+    return String(Math.max(0, Math.round(v))).padStart(3, '0');
 }
 
 /** Probability that a pixel is lit for a given count rate (more counts, denser sparkles). */
@@ -82,13 +105,20 @@ export function binSpectrum(counts, bins) {
     return out;
 }
 
+/** Validate a stored slot list: exactly SLOT_COUNT known mode ids, else the defaults. */
+export function sanitizeSlots(slots) {
+    const ok = Array.isArray(slots) && slots.length === SLOT_COUNT
+        && slots.every((id) => SCREEN_MODES.some((m) => m.id === Number(id)));
+    return ok ? slots.map(Number) : DEFAULT_SLOTS.slice();
+}
+
 export class DeviceScreen {
     constructor(canvas, options = {}) {
         this.canvas = canvas;
         this.ctx = canvas ? canvas.getContext('2d') : null;
         if (canvas) {
-            canvas.width = W;
-            canvas.height = H;
+            canvas.width = W * SCALE;
+            canvas.height = H * SCALE;
         }
         this.unit = options.unit === 'uSv' ? 'uSv' : 'uRem';
         this.rateUnit = options.rateUnit === 'CPM' ? 'CPM' : 'CPS';
@@ -100,31 +130,56 @@ export class DeviceScreen {
         this.snapshots = [];       // gamma rate per energy bin between successive spectra
         this._prevSpectrum = null; // {counts, t}
         this.timer = null;
-        this.modeIndex = 0;
+        this.slots = DEFAULT_SLOTS.slice();
+        this.slotIndex = 0;
         this.onModeChange = null;
         try {
-            const saved = Number(localStorage.getItem('ahScreenMode'));
-            const idx = SCREEN_MODES.findIndex((m) => m.id === saved);
-            if (idx >= 0) this.modeIndex = idx;
-        } catch (e) { /* storage unavailable: start on the first mode */ }
+            this.slots = sanitizeSlots(JSON.parse(localStorage.getItem('ahScreenSlots')));
+            const saved = Number(localStorage.getItem('ahScreenSlot'));
+            if (Number.isInteger(saved) && saved >= 0 && saved < SLOT_COUNT) this.slotIndex = saved;
+        } catch (e) { /* storage unavailable or empty: use the defaults */ }
     }
 
-    get mode() { return SCREEN_MODES[this.modeIndex]; }
+    /** The mode shown right now: the one in the current slot. */
+    get mode() { return SCREEN_MODES.find((m) => m.id === this.slots[this.slotIndex]); }
 
-    setMode(id) {
-        const idx = SCREEN_MODES.findIndex((m) => m.id === Number(id));
-        if (idx < 0) return false;
-        this.modeIndex = idx;
-        try { localStorage.setItem('ahScreenMode', String(SCREEN_MODES[idx].id)); } catch (e) { /* ignore */ }
-        if (this.onModeChange) this.onModeChange(this.mode);
+    _save() {
+        try {
+            localStorage.setItem('ahScreenSlots', JSON.stringify(this.slots));
+            localStorage.setItem('ahScreenSlot', String(this.slotIndex));
+        } catch (e) { /* ignore */ }
+    }
+
+    _changed() {
+        this._save();
+        if (this.onModeChange) this.onModeChange(this.mode, this.slotIndex);
         this.draw();
+    }
+
+    /** Put a mode into a slot (what the device's Mode Selection menu does). */
+    setSlotMode(slotIndex, modeId) {
+        const i = Number(slotIndex);
+        if (!(i >= 0 && i < SLOT_COUNT) || !SCREEN_MODES.some((m) => m.id === Number(modeId))) return false;
+        this.slots[i] = Number(modeId);
+        this._changed();
         return true;
     }
 
-    /** Next (+1) or previous (-1) mode, wrapping like the device's buttons. */
+    /** Declare which slot the device is on (use this to re-sync after a physical button press or shake). */
+    setSlot(slotIndex) {
+        const i = Number(slotIndex);
+        if (!(i >= 0 && i < SLOT_COUNT)) return false;
+        this.slotIndex = i;
+        this._changed();
+        return true;
+    }
+
+    /** Assign a mode to the CURRENT slot. */
+    setMode(id) { return this.setSlotMode(this.slotIndex, id); }
+
+    /** Next (+1) or previous (-1) slot, wrapping like the device's buttons and the E / Q commands. */
     step(delta) {
-        const n = SCREEN_MODES.length;
-        return this.setMode(SCREEN_MODES[(this.modeIndex + (delta >= 0 ? 1 : -1) + n) % n].id);
+        return this.setSlot((this.slotIndex + (delta >= 0 ? 1 : SLOT_COUNT - 1)) % SLOT_COUNT);
     }
 
     setUnit(unit) { this.unit = unit === 'uSv' ? 'uSv' : 'uRem'; this.draw(); }
@@ -150,6 +205,7 @@ export class DeviceScreen {
             this.cps = { gamma: cps.gamma || 0, beta: cps.beta || 0, alpha: cps.alpha || 0 };
             this.history.push({
                 t: now, total: this.cps.gamma + this.cps.beta + this.cps.alpha,
+                ab: this.cps.beta + this.cps.alpha,
                 gamma: this.cps.gamma, beta: this.cps.beta, alpha: this.cps.alpha,
             });
             const cutoff = now - MAX_HISTORY_S * 1000;
@@ -187,6 +243,26 @@ export class DeviceScreen {
     draw(now = performance.now()) {
         const ctx = this.ctx;
         if (!ctx) return;
+        ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+        this._render(now);
+        this._pixelGrid();
+    }
+
+    /** A faint dark grid between the logical pixels (drawn in device pixels, over everything). */
+    _pixelGrid() {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.30)';
+        for (let i = 0; i <= W; i++) {
+            ctx.fillRect(i * SCALE - 1, 0, 1, H * SCALE);
+            ctx.fillRect(0, i * SCALE - 1, W * SCALE, 1);
+        }
+        ctx.restore();
+    }
+
+    _render(now) {
+        const ctx = this.ctx;
         ctx.imageSmoothingEnabled = false;
         ctx.fillStyle = BG;
         ctx.fillRect(0, 0, W, H);
@@ -200,13 +276,14 @@ export class DeviceScreen {
             case 2: this._lowPowerSparkles(); break;
             case 3: this._averageCounts(now); break;
             case 4: this._splitSparkles(); break;
-            case 5: this._unavailable('AB 2D SPEC', ['no alpha/beta', 'spectrum over', 'serial link']); break;
-            case 6: this._unavailable('AB 3D SPEC', ['no alpha/beta', 'spectrum over', 'serial link']); break;
-            case 7: this._unavailable('RADON APPROX', ['calculated on', 'the device only']); break;
+            case 5: this._unavailable('AB 2D SPEC', ['no alpha/beta', 'pulse heights', 'over serial'], 'brand'); break;
+            case 6: this._unavailable('AB 3D SPEC', ['no alpha/beta', 'pulse heights', 'over serial'], 'brand'); break;
+            case 7: this._unavailable('RADON APPROX', ['calculated on', 'the device only'], 'brand'); break;
             case 9: this._gammaSpectrum(); break;
             case 10: this._spectrogram(); break;
             case 11: this._analogGauge(); break;
-            case 12: this._powerSaver(); break;
+            case 12: this._sleep(); break;
+            case 13: this._unavailable('G-FORCE', ['accelerometer', 'not on serial'], 'dose'); break;
             default: break;
         }
     }
@@ -229,17 +306,31 @@ export class DeviceScreen {
         ctx.stroke();
     }
 
-    _header() {
-        const d = formatDose(this.dose, this.unit);
-        this._text(d.value, 2, 8, 14, FG, 'left');
-        this._text(d.unit, 92, 9, 9, FG, 'right');
-        // connection check mark (the device shows a status tick here; battery and brightness are not
-        // reported over serial so they are not drawn)
+    /**
+     * Top bar. 'dose': the dose rate and unit (as in most modes); 'brand': the "RadView" title (average,
+     * spectroscopy and radon modes). The right-hand mark follows the device's rule: a check when the mode
+     * uses the alpha/beta scintillator and it is reporting, an X otherwise. Battery level and the light-tight
+     * sun symbol are not sent over serial, so they are not drawn.
+     */
+    _header(kind = 'dose') {
+        if (kind === 'brand') {
+            this._text('RadView', 2, 8, 11, FG, 'left');
+        } else {
+            const d = formatDose(this.dose, this.unit);
+            this._text(d.value, 2, 8, 14, FG, 'left');
+            this._text(d.unit, 92, 9, 9, FG, 'right');
+        }
         const ctx = this.ctx;
+        const working = this.mode.ab && this.cps !== null;
         ctx.strokeStyle = FG;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(112, 9); ctx.lineTo(116, 13); ctx.lineTo(124, 4);
+        if (working) {
+            ctx.moveTo(112, 9); ctx.lineTo(116, 13); ctx.lineTo(124, 4);
+        } else {
+            ctx.moveTo(113, 4); ctx.lineTo(123, 13);
+            ctx.moveTo(123, 4); ctx.lineTo(113, 13);
+        }
         ctx.stroke();
         ctx.fillStyle = FG;
         ctx.fillRect(1, 17, W - 2, 1);
@@ -249,12 +340,15 @@ export class DeviceScreen {
         return this.cps ? this.cps.gamma + this.cps.beta + this.cps.alpha : null;
     }
 
-    _footer() {
-        const total = this._total();
-        const v = total === null ? null : (this.rateUnit === 'CPM' ? total * 60 : total);
+    _rateText(perSecond) {
+        return perSecond === null || perSecond === undefined ? '--'
+            : formatRate(this.rateUnit === 'CPM' ? perSecond * 60 : perSecond);
+    }
+
+    _footer(perSecond = this._total()) {
         this.ctx.fillStyle = FG;
         this.ctx.fillRect(1, 106, W - 2, 1);
-        this._text(`${this.rateUnit}:${formatRate(v)}`, 2, 118, 13, FG, 'left');
+        this._text(`${this.rateUnit}:${this._rateText(perSecond)}`, 2, 118, 13, FG, 'left');
     }
 
     _sparkles(x, y, w, h, density) {
@@ -266,6 +360,7 @@ export class DeviceScreen {
         }
     }
 
+    /** Mode "ABY Spark": alpha, beta and gamma sparkle panels, rate at the bottom. */
     _splitSparkles() {
         this._header();
         const labels = [['α', 'alpha'], ['β', 'beta'], ['γ', 'gamma']];
@@ -281,48 +376,64 @@ export class DeviceScreen {
         this._footer();
     }
 
+    /** Mode "LP Spark": nothing but an "LP" tag and one sparkle per count. */
     _lowPowerSparkles() {
         this._sparkles(0, 0, W, H, sparkleDensity(this._total() || 0, 400) * 0.6);
-        const d = formatDose(this.dose, this.unit);
         this.ctx.fillStyle = BG;
-        this.ctx.fillRect(W - 54, H - 14, 54, 14);
-        this._text(d.value, W - 2, H - 7, 11, FG, 'right');
+        this.ctx.fillRect(2, 2, 24, 14);
+        this._text('LP', 4, 9, 11, FG, 'left');
     }
 
+    /**
+     * Mode "Rolling": the alpha + beta count rate as a scaling step graph with a "bkg" level
+     * (the guide: alpha and beta combined, gamma not included; the device takes a background first).
+     */
     _rollingGraph(now) {
         this._header();
         const pts = this.history.filter((h) => now - h.t <= 120 * 1000);
-        const max = Math.max(1, ...pts.map((p) => p.total)) * 1.1;
+        const series = pts.map((p) => p.ab);
+        const max = Math.max(1, ...series) * 1.15;
         const ctx = this.ctx;
-        this._rect(1, 20, W - 2, 84, DIM, 3);
+        this._rect(1, 20, W - 2, 84, FG, 3);
+        const first = series.slice(0, Math.min(20, series.length)).sort((a, b) => a - b);
+        const bkg = first.length ? first[Math.floor(first.length / 2)] : null;
+        const yOf = (v) => 101 - (v / max) * 76;
         ctx.strokeStyle = FG;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        pts.forEach((p, i) => {
-            const x = 3 + ((W - 6) * i) / Math.max(1, pts.length - 1);
-            const y = 102 - (p.total / max) * 78;
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        let lastY = null;
+        series.forEach((v, i) => {
+            const x = 3 + ((W - 6) * i) / Math.max(1, series.length - 1);
+            const y = yOf(v);
+            if (i === 0) ctx.moveTo(x, y); else { ctx.lineTo(x, lastY); ctx.lineTo(x, y); }   // hold, then step
+            lastY = y;
         });
         ctx.stroke();
-        this._text(formatRate(max / 1.1), W - 4, 27, 8, DIM, 'right');
-        this._footer();
+        if (bkg !== null) {
+            ctx.fillStyle = DIM;
+            for (let x = 3; x < W - 3; x += 4) ctx.fillRect(x, Math.round(yOf(bkg)), 2, 1);
+            this._text('bkg', W - 5, Math.max(28, yOf(bkg) - 6), 9, FG, 'right');
+        }
+        this._footer(pts.length ? pts[pts.length - 1].ab : null);
     }
 
+    /** Mode "ABY AVG": alpha, beta and total over a longer window (60 s here). */
     _averageCounts(now) {
-        this._header();
-        const rows = [['10s', 10], ['1m', 60], ['5m', 300]];
-        rows.forEach(([label, secs], i) => {
-            const avg = windowAverage(this.history, now, secs);
-            const v = avg === null ? null : (this.rateUnit === 'CPM' ? avg * 60 : avg);
-            const y = 30 + i * 22;
-            this._text(`AVG ${label}`, 2, y, 9, DIM, 'left');
-            this._text(formatRate(v), W - 3, y + 9, 13, FG, 'right');
+        this._header('brand');
+        const avgOf = (pick) => windowAverage(this.history, now, 60, pick);
+        const rows = [['α:', avgOf((h) => h.alpha)], ['β:', avgOf((h) => h.beta)],
+            [`${this.rateUnit}:`, avgOf((h) => h.total)]];
+        rows.forEach(([label, v], i) => {
+            const y = 33 + i * 24;
+            this._rect(1, y - 11, W - 2, 22, FG, 3);
+            this._text(label, 5, y, 11, FG, 'left');
+            this._text(this._rateText(v), W - 5, y, 12, FG, 'right');
         });
-        this._footer();
+        this._footer(avgOf((h) => h.total));
     }
 
-    _unavailable(title, lines) {
-        this._header();
+    _unavailable(title, lines, headerKind) {
+        this._header(headerKind);
         this._text(title, 64, 34, 12, FG, 'center');
         lines.forEach((ln, i) => this._text(ln, 64, 58 + i * 13, 9, DIM, 'center'));
         this._footer();
@@ -331,7 +442,7 @@ export class DeviceScreen {
     _gammaSpectrum() {
         this._header();
         const ctx = this.ctx;
-        this._rect(1, 20, W - 2, 84, DIM, 3);
+        this._rect(1, 20, W - 2, 84, FG, 3);
         if (!this.spectrum) {
             this._text('NO SPECTRUM', 64, 52, 10, DIM, 'center');
             this._text('Get Current or', 64, 68, 8, DIM, 'center');
@@ -341,20 +452,23 @@ export class DeviceScreen {
         }
         const bins = binSpectrum(this.spectrum.counts, W - 6);
         const max = Math.max(1, ...bins);
-        ctx.fillStyle = FG;
+        ctx.strokeStyle = FG;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
         bins.forEach((c, i) => {
-            const h = Math.round(Math.sqrt(c / max) * 78);
-            if (h > 0) ctx.fillRect(3 + i, 102 - h, 1, h);
+            const y = 102 - Math.round(Math.sqrt(c / max) * 78);
+            if (i === 0) ctx.moveTo(3 + i, y); else ctx.lineTo(3 + i, y);
         });
+        ctx.stroke();
         const e = this.spectrum.energies;
-        if (e && e.length) this._text(`${Math.round(e[e.length - 1])}keV`, W - 4, 27, 8, DIM, 'right');
+        if (e && e.length) this._text(`${Math.round(e[e.length - 1])} keV`, W - 4, 27, 8, DIM, 'right');
         this._footer();
     }
 
     _spectrogram() {
         this._header();
         const ctx = this.ctx;
-        this._rect(1, 20, W - 2, 84, DIM, 3);
+        this._rect(1, 20, W - 2, 84, FG, 3);
         if (this.snapshots.length < 1) {
             this._text('NEEDS 2+ SPECTRA', 64, 52, 9, DIM, 'center');
             this._text('turn on Auto-refresh', 64, 68, 8, DIM, 'center');
@@ -407,9 +521,9 @@ export class DeviceScreen {
         this._text(`${d.value} ${d.unit}`, 64, 119, 11, FG, 'center');
     }
 
-    _powerSaver() {
-        this._text('PWR SAVE', 64, 60, 9, DIM, 'center');
-        const d = formatDose(this.dose, this.unit);
-        this._text(d.value, 4, H - 7, 8, DIM, 'left');
+    /** Power saver / sleep: the lowest-power screen, just the dose as large zero-padded digits. */
+    _sleep() {
+        this._text(formatSleepDose(this.dose, this.unit), 64, 56, 46, FG, 'center');
+        this._text(this.unit === 'uSv' ? 'uSv/h' : 'uRem/h', W - 3, H - 8, 9, FG, 'right');
     }
 }

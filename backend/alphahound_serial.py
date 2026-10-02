@@ -101,6 +101,8 @@ class AlphaHoundDevice:
         self.port_busy: bool = False
         self.port: Optional[str] = None
         self.baudrate: Optional[int] = None
+        self.user_disconnected: bool = False   # True after a deliberate disconnect: a watchdog must not undo it
+        self.connected_since: Optional[float] = None
         self._log_lock = threading.Lock()
         self._last_numeric_time: float = 0.0   # wall clock of the last bare-number (dose) line
         self._spectrum_requested_at: float = 0.0
@@ -135,6 +137,8 @@ class AlphaHoundDevice:
             self.read_thread.start()
             self.port = port
             self.baudrate = baudrate
+            self.user_disconnected = False
+            self.connected_since = time.time()
             logger.info("[AlphaHound] Connected and thread started.")
             return True
         except Exception as e:
@@ -150,9 +154,11 @@ class AlphaHoundDevice:
                 self.last_error = f"Could not open {port}: {text}"
             return False
     
-    def disconnect(self):
-        """Disconnect from device"""
+    def disconnect(self, user: bool = False):
+        """Disconnect from device. user=True marks a deliberate disconnect (the watchdog then leaves it alone)."""
         logger.info("[AlphaHound] Disconnecting...")
+        if user:
+            self.user_disconnected = True
         self.stop_event.set()
         if self.serial_conn:
             try:
@@ -163,6 +169,7 @@ class AlphaHoundDevice:
         self.current_dose = 0.0 # Reset dose to indicate disconnect
         self.cps = None
         self.port = None
+        self.connected_since = None
     
     def is_connected(self) -> bool:
         """Check if device is connected"""
@@ -214,6 +221,20 @@ class AlphaHoundDevice:
 
     def get_last_error(self) -> Optional[str]:
         return self.last_error
+
+    def get_health(self) -> Dict[str, Optional[float]]:
+        """Is the link alive? Ages are seconds since the last dose / CPS line (None = never seen)."""
+        now = time.time()
+        connected = self.is_connected()
+        return {
+            "connected": connected,
+            "port": self.port,
+            "user_disconnected": self.user_disconnected,
+            "connected_for_s": round(now - self.connected_since, 1) if connected and self.connected_since else None,
+            "data_age_s": round(now - self._last_numeric_time, 1) if connected and self._last_numeric_time else None,
+            "cps_age_s": round(time.monotonic() - self.cps_time, 1) if connected and self.cps_time else None,
+            "last_error": self.last_error,
+        }
 
     # ------------------------------------------------------------ persistent dose log
     def enable_log_persistence(self, path: str) -> int:

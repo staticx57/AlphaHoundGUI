@@ -41,13 +41,31 @@ real-time dose.
 Connecting a busy port returns 409 with a readable message. An AlphaHound acquisition also records the mean gamma / beta / alpha CPS and
 peak total CPS (`channels` in the acquisition status, `AcquisitionInfo` in the N42).
 
-## Display replica
+## Display replica and the device's mode slots
 
-The details panel reproduces the 128x128 OLED (`static/js/device_screen.js`). The product page lists 11 modes (1-7 and 9-12; there is
-no Mode 8). Built from what the link carries: 1 Rolling Graph, 2 Low Power Sparkles, 3 Average Counts, 4 ABY Split Sparkles,
-9 Gamma Spectroscopy, 10 Spectrogram (from successive spectra), 11 Analog Gauge, 12 Power Saver. Not reproducible from serial data and shown as
-such: 5 and 6 (alpha/beta spectroscopy needs per-event pulse heights, not rates) and 7 (radon approximation, computed on the device). The device
-does not report its current mode or button presses, so the replica keeps its own mode.
+The details panel reproduces the 128x128 OLED (`static/js/device_screen.js`, rendered at 4x with a faint pixel grid), following RadView's
+[AB+G user guide](https://www.radviewdetection.com/s/AlphaHoundABG.pdf) and [product page](https://www.radviewdetection.com/abg).
+
+**The device does not cycle through all its modes.** It has four mode *slots* (M1-M4, filled in its Mode Selection menu from the 11 or so
+modes), and its buttons, a shake, and the serial `E` / `Q` commands step through those four slots. The replica models exactly that: four
+slots, a current slot, arrows that press E/Q on the device and advance the slot.
+
+**There is no telemetry for it.** Tested on the AB+G (2026-10-02): pressing `E` twelve times on the raw port produced no text line and no change
+in the dose stream's cadence or scale, and the values returned by `K` only jitter (live noise statistics). The device does not report which slot
+or mode it is on, what the slots hold, button presses or shakes, battery level, brightness, the light-tight sensor, or the accelerometer. So the replica cannot read the
+device's mode: set the slot and its mode once to match the device and keep stepping with the GUI arrows; a physical button press or a shake is invisible to the app.
+
+Built from the data the link carries: ABY Spark (4), ABY AVG (3), Rolling (1, alpha + beta only, as in the guide), LP Spark (2),
+Gamma Spectroscopy (9), Spectrogram (10), Analog Gauge (11), Sleep / Power Saver (12, large dose digits). Shown as unavailable: 2D and 3D AB spectroscopy (5, 6: need
+alpha/beta pulse heights), Radon (7: computed on the device) and G-Force (13: accelerometer). The product page lists modes 1-7 and 9-12 (there is no Mode 8); the guide adds
+G-Force and the Sleep mode. The top-bar mark follows the guide: a check when the mode uses the alpha/beta scintillator and it reports, an X otherwise.
+
+## Firmware differences
+
+The December 2025 notes (`ALPHAHOUND_SERIAL_COMMANDS.md`) describe an older firmware: `P` answered `UB=C`, `L` an activity threshold, no unprompted dose stream,
+and `D`/`DA`/`DB` on the uRem/h scale. The firmware measured on 2026-10-02 streams the dose by itself, answers `P` with the `CPS:` line, answers `L` with a
+temperature calibration table, and replies to `D`/`DA`/`DB` about 10x larger than the stream. `D`, `DA` and `DB` agree with each other within noise on both.
+The driver therefore decides at run time: with a stream it never sends `DB`; without one it falls back to `DB` polling.
 
 ## Managing it without a browser
 
@@ -63,6 +81,12 @@ python backend/tools/devctl.py probe P
 python backend/tools/devctl.py rc-connect --mac AA:BB:CC:DD:EE:FF   # Radiacode over Bluetooth
 ```
 
-Server options for unattended use: `ALPHAHOUND_AUTOCONNECT_PORT=COM8` connects at startup (retrying while the port is busy) and
+Server options for unattended use (a server started by `devctl restart` or `ensure` enables the first three when it
+knows the port): `ALPHAHOUND_AUTOCONNECT_PORT=COM8` connects at startup (retrying while the port is busy),
+`ALPHAHOUND_AUTORECONNECT=1` runs a watchdog that reconnects after a USB drop (seen once in testing: `ClearCommError ... The device does not
+recognize the command`) or when the device goes silent for 20 s, and implies `ALPHAHOUND_KEEP_CONNECTED=1`, which keeps the device when the last
+browser tab closes. A deliberate Disconnect (the button, `devctl disconnect`) is respected by the watchdog until the next Connect.
+`GET /device/health` shows the link state (data age, last error, whether it was disconnected on purpose) and `devctl status` prints it.
+Old note kept for reference: `ALPHAHOUND_AUTOCONNECT_PORT=COM8` connects at startup (retrying while the port is busy) and
 `ALPHAHOUND_KEEP_CONNECTED=1` keeps the device when the last browser tab closes (a server started by `devctl restart` has it set).
 The server log of a `devctl`-started server is `%TEMP%\alphahound_server.log`.
