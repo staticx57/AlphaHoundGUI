@@ -352,6 +352,12 @@ To access the application from other devices on your network:
    - Example: `http://192.168.1.100:3200`
 4. **Firewall**: Ensure port 3200 is open in your firewall
 
+**Security**: there is no login. Anyone who can reach port 3200 can read spectra, control a connected detector (including
+clearing its spectrum) and write files under `backend/data/`. Use it on a network you trust and keep the port closed to the
+internet. To keep it to this computer, start the server on the loopback address instead (from `backend/`):
+`python -m uvicorn main:app --host 127.0.0.1 --port 3200`. Cross-origin browser access is off unless
+`ALPHAHOUND_CORS_ORIGINS` lists the origins.
+
 **Use Cases**:
 - Control detector remotely from tablet/phone
 - View spectrum analysis from multiple screens
