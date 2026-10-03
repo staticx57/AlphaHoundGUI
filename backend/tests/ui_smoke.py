@@ -919,6 +919,44 @@ with sync_playwright() as p:
           not after["disabled"] and after["html"] == label_before and after["opacity"] in ("", "1"), str(after)[:200])
     check("T and raises no uncaught error", not any("not defined" in e for e in errs_t), "; ".join(errs_t[:3]))
     ctx_t.close()
+
+    # U. Sections that live in their own modules but share state with main.js: the background button reads the spectrum main.js
+    #    loaded (currentData, through a getter), and the overlays the comparison buttons add and clear are the ones main.js counts
+    ctx_u = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pu = ctx_u.new_page()
+    errs_u = []
+    pu.on("pageerror", lambda e: errs_u.append(f"pageerror: {e}"))
+    pu.on("dialog", lambda d: (errs_u.append("native dialog: " + d.message), d.dismiss()))
+    pu.goto(URL, wait_until="networkidle")
+    csv_rows = "\n".join(f"{3.0 + 7.4 * i:.2f},{30 + (500 if 80 < i < 90 else 0)}" for i in range(128))
+    csv_file = {"name": "shared_state.csv", "mimeType": "text/csv", "buffer": ("Energy (keV),Counts\n" + csv_rows + "\n").encode()}
+    pu.evaluate("document.getElementById('btn-set-current-bg').click()")          # nothing loaded yet: it must not set a background
+    pu.wait_for_timeout(300)
+    check("U with no spectrum loaded the background button sets nothing",
+          pu.evaluate("getComputedStyle(document.getElementById('bg-active-indicator')).display") == "none")
+    pu.set_input_files("#file-input", files=[csv_file])
+    pu.wait_for_selector("#result-summary", state="visible", timeout=20000)
+    pu.wait_for_function("window.Chart && Chart.getChart(document.getElementById('spectrumChart'))", timeout=10000)
+    pu.evaluate("document.getElementById('btn-set-current-bg').click()")
+    pu.wait_for_function("getComputedStyle(document.getElementById('bg-active-indicator')).display !== 'none'", timeout=8000)
+    check("U the background button uses the spectrum main.js loaded", True)
+    pu.evaluate("document.getElementById('btn-clear-bg').click()")
+    pu.wait_for_function("getComputedStyle(document.getElementById('bg-active-indicator')).display === 'none'", timeout=8000)
+    check("U clearing the background hides the badge again", True)
+    pu.evaluate("document.getElementById('btn-compare').click()")
+    pu.wait_for_timeout(500)
+    count_one = pu.inner_text("#overlay-count")
+    check("U comparison mode puts the current spectrum in the overlays", count_one.startswith("1 ") and pu.evaluate(
+        "getComputedStyle(document.getElementById('compare-panel')).display") == "flex", count_one)
+    pu.set_input_files("#compare-file-input", files=[csv_file])
+    pu.wait_for_function("document.getElementById('overlay-count').textContent.startsWith('2 ')", timeout=10000)
+    check("U a second file adds a second overlay", True)
+    pu.evaluate("document.getElementById('btn-clear-overlays').click()")
+    pu.wait_for_timeout(400)
+    count_zero = pu.inner_text("#overlay-count")
+    check("U clearing the overlays empties the list main.js counts", count_zero.startswith("0 "), count_zero)
+    check("U no JS errors or native dialogs in these flows", not errs_u, "; ".join(errs_u[:3]))
+    ctx_u.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]
