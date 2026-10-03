@@ -114,6 +114,18 @@ export function summaryFacts({ counts, metadata, peaks } = {}) {
     };
 }
 
+/** One sentence for a screen reader describing what the spectrum chart shows. */
+export function describeSpectrum({ counts, peaks, metadata, isCalibrated = true } = {}) {
+    const channels = Array.isArray(counts) ? counts.length : 0;
+    const total = totalCounts(counts);
+    const live = liveSeconds(metadata);
+    const list = (Array.isArray(peaks) ? peaks : []).slice(0, 6)
+        .map((p) => (isCalibrated === false ? `channel ${Math.round(p.energy)}` : `${Math.round(p.energy)} keV`));
+    const more = Array.isArray(peaks) && peaks.length > 6 ? ` and ${peaks.length - 6} more` : '';
+    const where = list.length ? `${peaks.length} peak${peaks.length > 1 ? 's' : ''}, at ${list.join(', ')}${more}.` : 'No peaks detected.';
+    return `Gamma spectrum, ${channels} channels, ${formatCount(total)} counts${live ? ` collected over ${formatDuration(live)}` : ''}. ${where}`;
+}
+
 /** "Same spectrum, more counts" (a live acquisition growing), "new" (a different spectrum) or "same". */
 export function spectrumChange(previous, current) {
     if (!previous) return 'new';

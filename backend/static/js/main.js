@@ -11,6 +11,11 @@ import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
 import { notify, notifyAuto, confirmDialog, infoDialog, setNotifier } from './dialogs.js';
 import { ChannelPanel } from './channels.js';
 import { spectrumSignature } from './summary.js';
+import { formatDoseRate, formatDoseTotal, resolveUnit, getDosePref, setDosePref, toUSv, fromUSv, unitLabel, UREM_PER_USV, safeStorage } from './units.js';
+import { AlertCenter, loadAlerts, saveAlerts, DEFAULT_ALERTS } from './alerts.js';
+import { initA11y } from './a11y.js';
+
+initA11y();
 import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
 
 // Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
@@ -30,6 +35,10 @@ let deviceScreen = null; // AlphaHound display replica
 let ahDetailsInterval = null; // AlphaHound details refresh timer
 let ahAutoRefreshTimer = null; // AlphaHound spectrum auto-refresh timer
 let ahAutoRefreshBusy = false;
+// Dose / count-rate alerts for both devices; the readout is tinted while the dose alert is active
+const alertCenter = new AlertCenter(document, safeStorage(), (key, active) => {
+    if (key === 'dose') document.getElementById('rc-dose-display')?.classList.toggle('dose-alert', active);
+});
 let channelPanel = null; // AlphaHound gamma / beta / alpha channel panel (cards, meter, share bar, history chart)
 let lastCheckpointTime = 0; // Checkpoint save tracking
 const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
@@ -67,17 +76,9 @@ async function pollRadiacodeDose() {
         const result = await api.getRadiacodeDose();
         const doseEl = document.getElementById('rc-dose-display');
         if (doseEl && result.dose_rate_uSv_h !== undefined) {
-            // Format dose rate with proper precision
             const dose = result.dose_rate_uSv_h;
-            let displayValue;
-            if (dose >= 1000) {
-                displayValue = (dose / 1000).toFixed(2) + ' mSv/h';
-            } else if (dose >= 1) {
-                displayValue = dose.toFixed(2) + ' μSv/h';
-            } else {
-                displayValue = (dose * 1000).toFixed(1) + ' nSv/h';
-            }
-            doseEl.textContent = displayValue;
+            doseEl.textContent = formatDoseRate(dose, resolveUnit(getDosePref(), 'uSv')).text;
+            alertCenter.updateDose(dose);
 
             // Update sparkline chart if initialized
             if (rcDoseChart) {
@@ -93,7 +94,8 @@ async function pollRadiacodeDose() {
                 const accumEl = document.getElementById('rc-accumulated-dose');
                 const accum = extendedInfo.accumulated_dose_uSv;
                 const sess = extendedInfo.session_dose;
-                const fmtDose = (v) => v >= 1000 ? (v / 1000).toFixed(3) + ' mSv' : (v >= 1 ? v.toFixed(2) + ' µSv' : (v * 1000).toFixed(1) + ' nSv');
+                const doseUnit = resolveUnit(getDosePref(), 'uSv');
+                const fmtDose = (v) => formatDoseTotal(v, doseUnit);
                 if (accumEl && (accum === null || accum === undefined) && sess) {
                     // This firmware does not serve the device's own dose counter over this connection:
                     // show the app's running total (integrated dose rate since connect / Reset Dose).
@@ -105,9 +107,7 @@ async function pollRadiacodeDose() {
                     accumEl.textContent = 'n/a';
                     accumEl.title = 'The RadiaCode interface does not report the device dose counter.';
                 } else if (accumEl && typeof accum === 'number') {
-                    accumEl.textContent = accum >= 1000
-                        ? (accum / 1000).toFixed(3) + ' mSv'
-                        : accum.toFixed(2) + ' μSv';
+                    accumEl.textContent = fmtDose(accum);
                 }
                 // The same total next to the live dose rate, where it is visible without opening Device Settings
                 const totalEl = document.getElementById('rc-dose-total');
@@ -188,6 +188,7 @@ async function pollRadiacodeDose() {
  */
 function showRadiacodeDisconnectedUI() {
     stopRadiacodeDosePolling();
+    alertCenter.reset(['dose']);
     ui.setDeviceConnected(false);
     resetDeviceUI();
     const connectBtn = document.getElementById('btn-connect-radiacode');
@@ -1196,6 +1197,7 @@ function setupEventListeners() {
     document.getElementById('close-settings').addEventListener('click', () => {
         document.getElementById('settings-modal').style.display = 'none';
     });
+    setupDoseAndAlertSettings();
 
     // Simple/Advanced Mode Toggle
     document.querySelectorAll('input[name="analysis-mode"]').forEach(radio => {
@@ -2501,8 +2503,13 @@ const ahSet = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
 };
-const fmtDoseText = (uRem) => (uRem === null || uRem === undefined)
-    ? '--' : `${uRem.toFixed(2)} \u00b5Rem/h (${(uRem * 0.01).toFixed(3)} \u00b5Sv/h)`;
+/** The AlphaHound's dose (given in uRem/h) in the chosen unit first, the other in brackets. */
+const fmtDoseText = (uRem) => {
+    if (uRem === null || uRem === undefined) return '--';
+    const uSv = uRem / UREM_PER_USV;
+    const first = resolveUnit(getDosePref(), 'uRem');
+    return `${formatDoseRate(uSv, first).text} (${formatDoseRate(uSv, first === 'uRem' ? 'uSv' : 'uRem').text})`;
+};
 let ahDetailsFailures = 0;
 
 /** The live-dose sparkline canvas is shared with the Radiacode: (re)create its chart for the AlphaHound. */
@@ -2515,6 +2522,84 @@ function ensureDoseSparkline() {
     }
     canvas.offsetHeight;  // force layout so the canvas has dimensions
     rcDoseChart = new DoseRateChart(canvas, { label: 'Dose Rate', colorVar: '--secondary-color', maxPoints: 60 });
+}
+
+/** Settings: dose unit and alert limits. They apply immediately (no Apply button needed) and are remembered. */
+function setupDoseAndAlertSettings() {
+    const $ = (id) => document.getElementById(id);
+    const unitSel = $('pref-dose-unit');
+    if (!unitSel) return;
+    const showLimit = () => {
+        const unit = resolveUnit(getDosePref(), 'uRem');
+        const st = loadAlerts(safeStorage());
+        $('pref-alert-dose-value').value = Number(fromUSv(st.doseUSvH, unit).toPrecision(4));
+        $('pref-alert-dose-unit').textContent = unitLabel(unit);
+    };
+    const notifyHint = () => {
+        const hint = $('pref-notify-state');
+        if (!hint) return;
+        const N = window.Notification;
+        hint.textContent = !N ? 'Not supported by this browser.'
+            : N.permission === 'denied' ? 'Blocked in the browser settings.' : '';
+    };
+    const load = () => {
+        const st = loadAlerts(safeStorage());
+        unitSel.value = getDosePref();
+        $('pref-alert-dose').checked = st.doseEnabled;
+        $('pref-alert-cps').checked = st.cpsEnabled;
+        $('pref-alert-cps-value').value = st.cps;
+        $('pref-alert-sound').checked = st.sound;
+        $('pref-alert-notify').checked = st.notify;
+        showLimit();
+        notifyHint();
+    };
+    const store = () => {
+        const unit = resolveUnit(getDosePref(), 'uRem');
+        const st = loadAlerts(safeStorage());
+        const limit = parseFloat($('pref-alert-dose-value').value);
+        const cps = parseFloat($('pref-alert-cps-value').value);
+        saveAlerts({
+            doseEnabled: $('pref-alert-dose').checked,
+            doseUSvH: limit > 0 ? toUSv(limit, unit) : st.doseUSvH,
+            cpsEnabled: $('pref-alert-cps').checked,
+            cps: cps > 0 ? cps : st.cps,
+            sound: $('pref-alert-sound').checked,
+            notify: $('pref-alert-notify').checked,
+        }, safeStorage());
+        alertCenter.reload();
+    };
+    unitSel.addEventListener('change', () => {
+        const before = resolveUnit(getDosePref(), 'uRem');
+        const limitUSv = toUSv(parseFloat($('pref-alert-dose-value').value) || 0, before);   // keep the limit when the unit changes
+        if (limitUSv > 0) saveAlerts({ ...loadAlerts(safeStorage()), doseUSvH: limitUSv }, safeStorage());
+        setDosePref(unitSel.value);
+        showLimit();
+        alertCenter.reload();
+        showToast('Dose unit updated; readouts change with their next reading.', 'info');
+    });
+    ['pref-alert-dose', 'pref-alert-dose-value', 'pref-alert-cps', 'pref-alert-cps-value', 'pref-alert-sound'].forEach((id) => {
+        $(id).addEventListener('change', store);
+    });
+    $('pref-alert-notify').addEventListener('change', async (e) => {
+        if (e.target.checked && window.Notification && Notification.permission === 'default') {
+            try { await Notification.requestPermission(); } catch (err) { /* ignore */ }
+        }
+        if (e.target.checked && (!window.Notification || Notification.permission !== 'granted')) e.target.checked = false;
+        notifyHint();
+        store();
+    });
+    $('btn-alert-test')?.addEventListener('click', () => {
+        alertCenter.test();
+        showToast('Test alert: you should hear a beep if sound is on.', 'info');
+    });
+    $('btn-alert-reset')?.addEventListener('click', () => {
+        saveAlerts({ ...DEFAULT_ALERTS }, safeStorage());
+        setDosePref('auto');
+        load();
+        alertCenter.reload();
+    });
+    $('btn-settings')?.addEventListener('click', load);
+    load();
 }
 
 /** Our channel panel (cards, log meter, share bar, history chart): created once, reused across connections. */
@@ -2595,6 +2680,7 @@ function onAlphaHoundCps(cps) {
         return;
     }
     if (channelPanel) channelPanel.update(cps);
+    alertCenter.updateCps((+cps.gamma || 0) + (+cps.beta || 0) + (+cps.alpha || 0));
     if (deviceScreen) deviceScreen.setReadings({ cps });
 }
 
@@ -2607,6 +2693,7 @@ function startAlphaHoundMonitoring() {
     api.setupDoseWebSocket(
         (rate) => {
             ui.updateDoseDisplay(rate);
+            alertCenter.updateDose(rate / UREM_PER_USV);
             if (rcDoseChart) rcDoseChart.update(rate);
             if (doseChart) doseChart.update(rate);
             if (deviceScreen) deviceScreen.setReadings({ dose: rate });
@@ -2665,6 +2752,7 @@ function setTitleChip(text) {
 
 function stopAlphaHoundDetails() {
     setTitleChip('');
+    alertCenter.reset();
     if (ahDetailsInterval) {
         clearInterval(ahDetailsInterval);
         ahDetailsInterval = null;
@@ -2874,7 +2962,7 @@ async function startAcquisition() {
                 if (expEl) {
                     const ex = status.exposure;
                     expEl.textContent = ex
-                        ? '· ' + (ex.exposure_uSv < 1 ? (ex.exposure_uSv * 1000).toFixed(1) + ' nSv' : ex.exposure_uSv.toFixed(3) + ' µSv')
+                        ? '· ' + formatDoseTotal(ex.exposure_uSv, resolveUnit(getDosePref(), 'uSv'))
                         : '';
                 }
 

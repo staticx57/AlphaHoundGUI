@@ -1,7 +1,8 @@
 import { api } from './api.js';
+import { formatDoseRate, resolveUnit, getDosePref, UREM_PER_USV } from './units.js';
 import {
     summarizeIdentification, compareIdentifications, peakMatches, summaryFacts, formatCount, formatDuration,
-    spectrumSignature, spectrumChange, confidenceLabel,
+    spectrumSignature, spectrumChange, confidenceLabel, describeSpectrum,
 } from './summary.js';
 
 export class AlphaHoundUI {
@@ -77,7 +78,7 @@ export class AlphaHoundUI {
                 </div>
                 <h2>Drop new file to replace</h2>
                 <p>or click to browse local files</p>
-                <input type="file" id="file-input" accept=".n42,.xml,.csv">
+                <input type="file" id="file-input" accept=".n42,.xml,.csv" aria-label="Choose a spectrum file">
             `;
         }, 1000);
     }
@@ -87,7 +88,7 @@ export class AlphaHoundUI {
             <div class="upload-icon"><img src="/static/icons/error.svg" style="width: 48px; height: 48px; filter: invert(1);"></div>
             <h2>Error. Try again.</h2>
             <p style="color: #ef4444; font-size: 0.8rem; margin-top: 0.5rem;">${message}</p>
-            <input type="file" id="file-input" accept=".n42,.xml,.csv">
+            <input type="file" id="file-input" accept=".n42,.xml,.csv" aria-label="Choose a spectrum file">
         `;
     }
 
@@ -514,6 +515,9 @@ export class AlphaHoundUI {
                 ? 'Peaks are shown in channels; calibrate the spectrum to identify isotopes.'
                 : 'No known gamma lines matched the detected peaks. A longer acquisition or a stronger source helps.');
         }
+        document.getElementById('spectrumChart')?.setAttribute('aria-label', describeSpectrum({
+            counts: data.counts, peaks: data.peaks, metadata: data.metadata, isCalibrated: data.is_calibrated,
+        }));
         const facts = summaryFacts({ counts: data.counts, metadata: data.metadata, peaks: data.peaks });
         set('rs-peaks', String(facts.peaks));
         set('rs-counts', formatCount(facts.total));
@@ -945,42 +949,14 @@ export class AlphaHoundUI {
         return `https://www.nndc.bnl.gov/nudat3/`;
     }
 
+    /** @param {number|null} doseRate the AlphaHound's dose rate in uRem/h; shown in the unit chosen in Settings */
     updateDoseDisplay(doseRate) {
         if (!this.elements.doseDisplay) return;
+        const unit = resolveUnit(getDosePref(), 'uRem');
         if (doseRate !== null && doseRate !== undefined) {
-            this.elements.doseDisplay.textContent = `${doseRate.toFixed(2)} µRem/hr`;
-
-            // Safety Warning / Distance Estimation
-            // Limit: 2000 µRem/hr (2 mRem/hr)
-            if (doseRate > 2000) {
-                this.elements.doseDisplay.style.color = '#ef4444';
-                // Estimate distance to drop to 2000 assuming point source Inverse Square Law
-                // D_safe = D_current * sqrt(Rate_current / Limit)
-                // Assuming current distance is ~10cm (handheld)
-                const safeDistCm = 10 * Math.sqrt(doseRate / 2000);
-
-                // Update or create alert
-                let safetyAlert = document.getElementById('safety-alert');
-                if (!safetyAlert) {
-                    safetyAlert = document.createElement('div');
-                    safetyAlert.id = 'safety-alert';
-                    safetyAlert.style.cssText = 'position: fixed; top: 80px; right: 20px; background: #ef4444; color: white; padding: 10px; border-radius: 8px; font-weight: bold; z-index: 2000; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: pulse 2s infinite;';
-                    document.body.appendChild(safetyAlert);
-
-                    // Add pulse animation
-                    const style = document.createElement('style');
-                    style.innerHTML = `@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }`;
-                    document.head.appendChild(style);
-                }
-                safetyAlert.innerHTML = `<img src="/static/icons/warning.svg" style="width: 16px; height: 16px; vertical-align: middle; filter: brightness(0) invert(1);"> HIGH RADIATION<br><div style="font-size:0.8em; font-weight:normal; margin-top:4px;">Safe Distance (2 mR/hr):<br>Approx. ${(safeDistCm / 100).toFixed(1)} meters</div>`;
-                safetyAlert.style.display = 'block';
-            } else {
-                this.elements.doseDisplay.style.color = '';
-                const safetyAlert = document.getElementById('safety-alert');
-                if (safetyAlert) safetyAlert.style.display = 'none';
-            }
+            this.elements.doseDisplay.textContent = formatDoseRate(doseRate / UREM_PER_USV, unit).text;
         } else {
-            this.elements.doseDisplay.textContent = '-- µRem/hr';
+            this.elements.doseDisplay.textContent = formatDoseRate(null, unit).text;
         }
     }
 
@@ -999,7 +975,7 @@ export class AlphaHoundUI {
     updateConnectionStatus(status) {
         if (!this.elements.doseDisplay) return;
         if (status === 'connected') {
-            this.elements.doseDisplay.textContent = '-- µRem/hr';
+            this.elements.doseDisplay.textContent = formatDoseRate(null, resolveUnit(getDosePref(), 'uRem')).text;
         } else if (status === 'connecting') {
             this.elements.doseDisplay.textContent = 'Connecting...';
         } else {

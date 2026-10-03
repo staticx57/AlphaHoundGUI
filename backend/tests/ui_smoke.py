@@ -81,15 +81,16 @@ with sync_playwright() as p:
 
     def ws_handler(ws):
         ws.send(json.dumps({"dose_rate": 2500.0}))
+        ws.send(json.dumps({"dose_rate": 2500.0}))      # an alert needs two readings above the limit in a row
 
     page.route_web_socket("**/ws/dose", ws_handler)
     page.goto(URL, wait_until="networkidle")
     page.wait_for_timeout(2500)
     page.screenshot(path=os.path.join(OUT, "b_dose.png"))
     text = page.inner_text("#rc-dose-display")
-    check("B dose readout updated", "2500" in text, text)
+    check("B dose readout updated", "2.50 mRem/h" in text, text)
     alert_visible = page.evaluate(
-        "() => { const a=document.getElementById('safety-alert'); return !!a && a.style.display!=='none' }")
+        "() => { const a=document.getElementById('safety-alert'); return !!a && !a.hidden }")
     check("B high-dose safety alert shown", alert_visible)
     check("B restored connection enables controls + label", page.inner_text("#device-conn-label") == "Connected"
           and not page.evaluate("() => document.getElementById('unified-device-controls').classList.contains('device-disconnected')"))
@@ -337,7 +338,7 @@ with sync_playwright() as p:
     pi.click("[data-ch-window='60']")
     check("I the history window can be shortened", pi.evaluate("Chart.getChart(document.getElementById('ch-chart')).options.scales.x.min") == -60)
     pi.click("[data-ch-window='300']")
-    check("I the smoothed dose is shown", "64.50" in pi.inner_text("#ah-dose-avg"), pi.inner_text("#ah-dose-avg"))
+    check("I the smoothed dose is shown", "64.5" in pi.inner_text("#ah-dose-avg") and "0.65" in pi.inner_text("#ah-dose-avg"), pi.inner_text("#ah-dose-avg"))
     check("I the display replica offers every mode and four slots",
           pi.evaluate("document.getElementById('ah-screen-mode').options.length") == 12
           and pi.evaluate("document.getElementById('ah-screen-slot').options.length") == 4)
@@ -532,6 +533,79 @@ with sync_playwright() as p:
     check("M no horizontal overflow with a result on a phone", pm.evaluate("document.documentElement.scrollWidth <= innerWidth"))
     check("M no JS errors or native dialogs", not errs_m, "; ".join(errs_m[:3]))
     ctx_m.close()
+
+    # N. Alerts and the dose-unit preference (AlphaHound mocked: dose ~0.65 uSv/h, ~430 cps)
+    import sys as _sys
+    _sys.path.insert(0, HERE)
+    from ah_mock import install as _install_ah
+    ctx_n = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pn = ctx_n.new_page()
+    errs_n = []
+    pn.on("pageerror", lambda e: errs_n.append(f"pageerror: {e}"))
+    pn.on("dialog", lambda d: (errs_n.append("native dialog: " + d.message), d.dismiss()))
+    pn.add_init_script("""
+        if (!localStorage.getItem('alertSettings')) {
+            localStorage.setItem('alertSettings', JSON.stringify({ doseEnabled: true, doseUSvH: 0.5, cpsEnabled: true, cps: 300 }));
+        }
+        window.__beeps = 0;
+        window.AudioContext = class {
+            constructor() { this.currentTime = 0; this.destination = {}; }
+            createOscillator() { window.__beeps++; return { frequency: {}, connect() { return { connect() {} }; }, start() {}, stop() {} }; }
+            createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() { return { connect() {} }; } }; }
+        };
+    """)
+    _install_ah(pn, burst=0)
+    pn.goto(URL, wait_until="networkidle")
+    pn.select_option("#port-select", "COM8")
+    pn.click("#btn-connect-device")
+    pn.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
+    pn.wait_for_function("(() => { const a = document.getElementById('safety-alert'); return !!a && !a.hidden })()", timeout=10000)
+    banner = pn.inner_text("#safety-alert")
+    check("N a dose above the user's limit raises the banner (two readings in a row)", "High dose rate" in banner, banner)
+    check("N the count-rate limit raises its own line", "High count rate" in banner and "cps" in banner, banner)
+    check("N the banner is a live alert region and the readout is tinted",
+          pn.get_attribute("#safety-alert", "role") == "alert" and "dose-alert" in pn.get_attribute("#rc-dose-display", "class"))
+    check("N the banner offers a Dismiss button that is reachable", pn.is_visible("#safety-alert .safety-dismiss"))
+    pn.click("#safety-alert .safety-dismiss")
+    pn.wait_for_timeout(1400)
+    check("N a dismissed banner stays away while the same alert continues", pn.evaluate("document.getElementById('safety-alert').hidden"))
+    pn.click("#btn-settings")
+    check("N Settings shows the limits in the unit on screen (uRem/h by default for the AlphaHound)",
+          abs(float(pn.input_value("#pref-alert-dose-value")) - 50) < 0.01 and "Rem" in pn.inner_text("#pref-alert-dose-unit"),
+          pn.input_value("#pref-alert-dose-value") + " " + pn.inner_text("#pref-alert-dose-unit"))
+    pn.click("#pref-alert-sound")
+    pn.fill("#pref-alert-dose-value", "1000")
+    pn.press("#pref-alert-dose-value", "Tab")
+    pn.wait_for_function("!document.getElementById('rc-dose-display').classList.contains('dose-alert')", timeout=5000)
+    check("N raising the dose limit ends that alert at once", True)
+    pn.click("#pref-alert-cps")
+    pn.wait_for_function("document.getElementById('safety-alert').hidden", timeout=5000)
+    check("N switching the count alert off clears the banner", True)
+    pn.select_option("#pref-dose-unit", "uSv")
+    pn.wait_for_function("document.getElementById('rc-dose-display').textContent.includes('Sv/h')", timeout=6000)
+    check("N the dose unit preference changes the live readout", "µSv/h" in pn.inner_text("#rc-dose-display"), pn.inner_text("#rc-dose-display"))
+    pn.wait_for_function("document.getElementById('ah-dose').textContent.trim().startsWith('0.')", timeout=6000)
+    check("N ... and the details panel shows the chosen unit first and the other in brackets",
+          pn.inner_text("#ah-dose").count("Rem") == 1 and pn.inner_text("#ah-dose").index("Sv") < pn.inner_text("#ah-dose").index("Rem"),
+          pn.inner_text("#ah-dose"))
+    check("N the limit field converts with the unit (1000 uRem/h = 10 uSv/h)",
+          abs(float(pn.input_value("#pref-alert-dose-value")) - 10) < 0.001 and "Sv" in pn.inner_text("#pref-alert-dose-unit"),
+          pn.input_value("#pref-alert-dose-value"))
+    pn.fill("#pref-alert-dose-value", "0.3")
+    pn.press("#pref-alert-dose-value", "Tab")
+    pn.wait_for_function("(() => { const a = document.getElementById('safety-alert'); return !a.hidden })()", timeout=6000)
+    check("N lowering the limit raises a new alert, which shows the dose in the chosen unit",
+          "Sv/h" in pn.inner_text("#safety-alert") and "Rem" not in pn.inner_text("#safety-alert"), pn.inner_text("#safety-alert"))
+    check("N the beep plays when an alert starts and sound is on", pn.evaluate("window.__beeps") >= 2, str(pn.evaluate("window.__beeps")))
+    saved = pn.evaluate("({ unit: localStorage.getItem('doseUnit'), alerts: JSON.parse(localStorage.getItem('alertSettings')) })")
+    check("N the choices are remembered", saved["unit"] == "uSv" and abs(saved["alerts"]["doseUSvH"] - 0.3) < 1e-9 and saved["alerts"]["sound"] is True
+          and saved["alerts"]["cpsEnabled"] is False, str(saved))
+    pn.click("#btn-alert-reset")
+    check("N Reset restores the defaults", pn.input_value("#pref-dose-unit") == "auto" and pn.is_checked("#pref-alert-dose")
+          and not pn.is_checked("#pref-alert-sound") and abs(float(pn.input_value("#pref-alert-dose-value")) - 2000) < 0.01,
+          pn.input_value("#pref-alert-dose-value"))
+    check("N no JS errors or native dialogs", not errs_n, "; ".join(errs_n[:3]))
+    ctx_n.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

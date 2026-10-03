@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=23">
+    <link rel="stylesheet" href="/static/style.css?v=25">
     <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Chart.js loaded async for performance -->
@@ -20,15 +20,16 @@
 </head>
 
 <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header>
-        <h1><img src="/static/icons/rocket.svg" class="icon icon-xl" style="margin-right:0.5rem;">RadTrace</h1>
+        <h1><img alt="" src="/static/icons/rocket.svg" class="icon icon-xl" style="margin-right:0.5rem;">RadTrace</h1>
         <div class="header-controls">
             <button id="btn-upload-file" title="Upload Spectrum File">
-                <img src="/static/icons/upload.svg" class="icon"> Upload
+                <img alt="" src="/static/icons/upload.svg" class="icon"> Upload
             </button>
-            <button id="btn-history" title="File History"><img src="/static/icons/history.svg" class="icon">
+            <button id="btn-history" title="File History"><img alt="" src="/static/icons/history.svg" class="icon">
                 History</button>
-            <button id="btn-settings" title="Analysis Settings"><img src="/static/icons/settings.svg" class="icon">
+            <button id="btn-settings" title="Analysis Settings"><img alt="" src="/static/icons/settings.svg" class="icon">
                 Settings</button>
             <select id="theme-select" title="Select Theme" style="min-width: 140px;">
                 <optgroup label="Modern">
@@ -64,7 +65,7 @@
 
 
 
-    <main>
+    <main id="main-content" tabindex="-1">
         <div class="data-hub">
             <div class="data-hub-row">
                 <!-- Device Type Selector Tabs (vertical, compact) -->
@@ -106,7 +107,7 @@
                                         <option value="">Select Serial Port...</option>
                                     </select>
                                     <button id="btn-refresh-ports" title="Refresh Ports" aria-label="Refresh serial ports" style="flex-shrink: 0;">
-                                        <img src="/static/icons/refresh.svg" class="icon" style="margin:0;">
+                                        <img alt="" src="/static/icons/refresh.svg" class="icon" style="margin:0;">
                                     </button>
                                 </div>
                                 <button id="btn-connect-device" class="btn-primary"
@@ -134,7 +135,7 @@
                                     <button id="btn-scan-ble" class="btn-secondary"
                                         style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
                                         title="Scan for nearby Radiacode devices">
-                                        <img src="/static/icons/refresh.svg" class="icon"
+                                        <img alt="" src="/static/icons/refresh.svg" class="icon"
                                             style="width: 14px; height: 14px;"> Scan
                                     </button>
                                     <select id="rc-ble-devices" style="min-width: 180px; font-size: 0.85rem;">
@@ -239,7 +240,7 @@
                                         </div>
                                         <button id="btn-sync-time" data-device-feature="timeSync" class="btn-secondary"
                                             style="padding: 0.3rem 0.6rem; font-size: 0.7rem; margin-top: auto; white-space: nowrap;">
-                                            <img src="/static/icons/timer.svg" class="icon"
+                                            <img alt="" src="/static/icons/timer.svg" class="icon"
                                                 style="width: 12px; height: 12px;"> Sync
                                         </button>
                                     </div>
@@ -273,7 +274,7 @@
                                     <details style="margin-top: 0.5rem;" data-device-feature="energyCalibration">
                                         <summary
                                             style="cursor: pointer; font-size: 0.75rem; color: var(--text-secondary);">
-                                            <img src="/static/icons/settings.svg" class="icon"
+                                            <img alt="" src="/static/icons/settings.svg" class="icon"
                                                 style="width: 12px; height: 12px;"> Energy Calibration
                                         </summary>
                                         <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -301,7 +302,7 @@
                                     <button id="btn-power-off" data-device-feature="powerControl" style="margin-top: 0.75rem; width: 100%; padding: 0.4rem; 
                                             background: transparent; border: 1px solid #ef4444; 
                                             color: #ef4444; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-                                        <img src="/static/icons/stop.svg" class="icon"
+                                        <img alt="" src="/static/icons/stop.svg" class="icon"
                                             style="width: 12px; height: 12px; filter: invert(35%) sepia(90%) saturate(2000%) hue-rotate(340deg);">
                                         Power Off Device
                                     </button>
@@ -310,7 +311,7 @@
                                     <details style="margin-top: 0.5rem;" data-device-feature="advancedInfo">
                                         <summary
                                             style="cursor: pointer; font-size: 0.75rem; color: var(--text-secondary);">
-                                            <img src="/static/icons/chart.svg" class="icon"
+                                            <img alt="" src="/static/icons/chart.svg" class="icon"
                                                 style="width: 12px; height: 12px;"> Advanced Diagnostics
                                         </summary>
                                         <div
@@ -337,7 +338,7 @@
                                             </div>
                                             <button id="btn-refresh-diagnostics" class="btn-secondary"
                                                 style="margin-top: 0.4rem; font-size: 0.65rem; padding: 0.2rem 0.5rem; width: 100%;">
-                                                <img src="/static/icons/refresh.svg" class="icon"
+                                                <img alt="" src="/static/icons/refresh.svg" class="icon"
                                                     style="width: 10px; height: 10px;"> Refresh Diagnostics
                                             </button>
                                         </div>
@@ -357,7 +358,7 @@
                                 <!-- Display replica -->
                                 <div class="ah-screen-box">
                                     <div class="ah-bezel">
-                                        <canvas id="ah-screen" class="ah-screen-canvas"
+                                        <canvas id="ah-screen" class="ah-screen-canvas" role="img"
                                             aria-label="Replica of the AlphaHound display"></canvas>
                                     </div>
                                     <div class="ah-buttons" role="group" aria-label="Device buttons">
@@ -459,7 +460,7 @@
                                         <label title="Re-download the cumulative gamma spectrum on a timer while idle">
                                             <input type="checkbox" id="ah-auto-refresh"> Auto-refresh spectrum every
                                         </label>
-                                        <input type="number" id="ah-auto-interval" value="10" min="5" max="600" step="1"
+                                        <input type="number" id="ah-auto-interval" aria-label="Auto-refresh interval in seconds" value="10" min="5" max="600" step="1"
                                             style="width: 56px;"> s
                                     </div>
                                     <details class="ah-probe">
@@ -508,17 +509,17 @@
 
                                 <!-- Acquire/Stop Actions -->
                                 <button id="btn-start-acquire" class="btn-primary" style="padding: 0.4rem 0.8rem;">
-                                    <img src="/static/icons/play.svg" class="icon"> Acquire
+                                    <img alt="" src="/static/icons/play.svg" class="icon"> Acquire
                                 </button>
                                 <button id="btn-stop-acquire" class="btn-stop"
                                     style="display: none; padding: 0.4rem 0.8rem; background: var(--warning-color); color: white;">
-                                    <img src="/static/icons/stop.svg" class="icon"> Stop
+                                    <img alt="" src="/static/icons/stop.svg" class="icon"> Stop
                                 </button>
 
                                 <!-- Get Current Spectrum -->
                                 <button id="btn-get-current" class="btn-secondary" style="padding: 0.4rem 0.8rem;"
                                     title="Download cumulative spectrum">
-                                    <img src="/static/icons/export.svg" class="icon"
+                                    <img alt="" src="/static/icons/export.svg" class="icon"
                                         style="filter: invert(14%) sepia(87%) saturate(1963%) hue-rotate(188deg) brightness(97%) contrast(101%);">
                                     Get Current
                                 </button>
@@ -528,7 +529,7 @@
                                     data-device-feature="accumulatedSpectrum"
                                     style="padding: 0.4rem 0.8rem; display: none;"
                                     title="Long-term accumulated spectrum (since the device's last accumulation reset); you choose whether to identify it">
-                                    <img src="/static/icons/history.svg" class="icon"
+                                    <img alt="" src="/static/icons/history.svg" class="icon"
                                         style="filter: invert(14%) sepia(87%) saturate(1963%) hue-rotate(188deg) brightness(97%) contrast(101%);">
                                     Get Accumulated
                                 </button>
@@ -538,7 +539,7 @@
                                     data-device-feature="clearSpectrum"
                                     style="padding: 0.4rem 0.8rem; border-color: #f59e0b; color: #f59e0b;"
                                     title="Clear device spectrum">
-                                    <img src="/static/icons/refresh.svg" class="icon"
+                                    <img alt="" src="/static/icons/refresh.svg" class="icon"
                                         style="filter: invert(67%) sepia(95%) saturate(356%) hue-rotate(344deg) brightness(101%) contrast(92%);">
                                     Clear
                                 </button>
@@ -599,7 +600,7 @@
                                 </div>
                             </div>
                             <div class="sparkline-container" style="flex: 1; min-height: 30px; max-height: 40px;">
-                                <canvas id="rcDoseRateChart"></canvas>
+                                <canvas id="rcDoseRateChart" role="img" aria-label="Live dose rate over the last minutes"></canvas>
                             </div>
                         </div>
                     </div>
@@ -610,11 +611,11 @@
                 <div class="upload-container" id="drop-zone"
                     style="max-width: 200px; min-height: 100px; padding: 1rem; flex-shrink: 0;">
                     <div class="upload-icon">
-                        <img src="/static/icons/upload.svg" style="width: 32px; height: 32px;">
+                        <img alt="" src="/static/icons/upload.svg" style="width: 32px; height: 32px;">
                     </div>
                     <h2 style="font-size: 0.85rem; margin: 0.25rem 0 0 0;">Drop file</h2>
                     <p style="font-size: 0.7rem; margin: 0.15rem 0 0 0;">or click to browse</p>
-                    <input type="file" id="file-input" accept=".n42,.xml,.csv">
+                    <input type="file" id="file-input" accept=".n42,.xml,.csv" aria-label="Choose a spectrum file">
                 </div>
             </div>
             <!-- End device panels wrapper -->
@@ -660,9 +661,9 @@
                     <span class="control-label">Export</span>
                     <button id="btn-export-json">JSON</button>
                     <button id="btn-export-csv">CSV</button>
-                    <button id="btn-export-pdf" class="btn-accent"><img src="/static/icons/pdf.svg" class="icon">
+                    <button id="btn-export-pdf" class="btn-accent"><img alt="" src="/static/icons/pdf.svg" class="icon">
                         PDF</button>
-                    <button id="btn-export-n42" class="btn-accent"><img src="/static/icons/upload.svg" class="icon">
+                    <button id="btn-export-n42" class="btn-accent"><img alt="" src="/static/icons/upload.svg" class="icon">
                         N42</button>
                 </div>
 
@@ -670,9 +671,9 @@
                 <div class="control-group">
 
                     <span class="control-label">Tools</span>
-                    <button id="btn-edit-n42" class="btn-accent" title="Edit N42 Metadata"><img
+                    <button id="btn-edit-n42" class="btn-accent" title="Edit N42 Metadata"><img alt=""
                             src="/static/icons/settings.svg" class="icon"> Metadata</button>
-                    <button id="btn-analysis" title="Advanced Analysis"><img src="/static/icons/analysis.svg"
+                    <button id="btn-analysis" title="Advanced Analysis"><img alt="" src="/static/icons/analysis.svg"
                             class="icon"> Analysis</button>
                 </div>
             </div>
@@ -692,13 +693,13 @@
                     <div style="display: flex; gap: 8px;">
                         <button id="btn-estimator-tool" class="btn-primary"
                             style="padding: 6px 14px; font-size: 0.85rem; background: var(--bg-secondary); border: 1px solid var(--accent-color); color: var(--accent-color);">
-                            <img src="/static/icons/timer.svg" class="icon"
+                            <img alt="" src="/static/icons/timer.svg" class="icon"
                                 style="width: 14px; height: 14px; margin-right: 0.25rem;"> Estimator</button>
                         <button id="btn-decay-tool" class="btn-primary" style="padding: 6px 14px; font-size: 0.85rem;">
-                            <img src="/static/icons/chart.svg" class="icon" style="margin-right: 0.25rem;"> Decay
+                            <img alt="" src="/static/icons/chart.svg" class="icon" style="margin-right: 0.25rem;"> Decay
                             Tool</button>
                         <button id="btn-ml-identify" class="btn-primary"
-                            style="padding: 6px 14px; font-size: 0.85rem;"><img src="/static/icons/robot.svg"
+                            style="padding: 6px 14px; font-size: 0.85rem;"><img alt="" src="/static/icons/robot.svg"
                                 class="icon" style="margin-right: 0.25rem;">AI Identify</button>
                         <button id="btn-run-fit" class="btn-primary" style="padding: 6px 14px; font-size: 0.85rem;">Run
                             Peak Fitting</button>
@@ -750,13 +751,13 @@
             <div class="chart-container">
                 <div class="chart-header">
                     <div class="chart-title">
-                        <img src="/static/icons/chart.svg" class="icon" style="width: 20px; height: 20px;">
+                        <img alt="" src="/static/icons/chart.svg" class="icon" style="width: 20px; height: 20px;">
                         <span>Gamma Spectrum Analysis</span>
                     </div>
                     <div class="chart-actions">
                         <button id="btn-compare" title="Compare Mode"
                             style="font-size: 0.8rem; padding: 4px 10px; margin-right: 0.5rem; border-color: var(--secondary-color); color: var(--secondary-color);">
-                            <img src="/static/icons/compare.svg" class="icon"
+                            <img alt="" src="/static/icons/compare.svg" class="icon"
                                 style="width: 14px; height: 14px; margin-right: 2px;"> Compare
                         </button>
                         <button id="btn-lin" class="active"
@@ -768,20 +769,20 @@
                     </div>
                 </div>
                 <div style="flex-grow: 1; position: relative; min-height: 0;">
-                    <canvas id="spectrumChart"></canvas>
+                    <canvas id="spectrumChart" role="img" aria-label="Gamma spectrum chart: counts against energy"></canvas>
                 </div>
             </div>
 
             <!-- Scrubby Zoom Slider -->
             <div id="zoom-scrubber" class="zoom-scrubber-container" style="display: none;">
                 <div class="zoom-scrubber-track">
-                    <canvas id="scrubber-preview" class="scrubber-preview"></canvas>
+                    <canvas id="scrubber-preview" class="scrubber-preview" aria-hidden="true"></canvas>
                     <div id="scrubber-selection" class="scrubber-selection"></div>
                 </div>
                 <div class="zoom-scrubber-controls">
-                    <input type="range" id="zoom-min" class="zoom-handle zoom-handle-min" min="0" max="100" value="0"
+                    <input type="range" id="zoom-min" aria-label="Zoom start (energy)" class="zoom-handle zoom-handle-min" min="0" max="100" value="0"
                         step="0.1">
-                    <input type="range" id="zoom-max" class="zoom-handle zoom-handle-max" min="0" max="100" value="100"
+                    <input type="range" id="zoom-max" aria-label="Zoom end (energy)" class="zoom-handle zoom-handle-max" min="0" max="100" value="100"
                         step="0.1">
                 </div>
                 <div class="zoom-scrubber-labels">
@@ -815,13 +816,13 @@
 
             <div id="isotopes-container" style="display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="margin: 0;"><img src="/static/icons/analysis.svg" class="icon"> Isotope
+                    <h3 style="margin: 0;"><img alt="" src="/static/icons/analysis.svg" class="icon"> Isotope
                         Identification
                     </h3>
                     <div style="display: flex; gap: 0.5rem;">
                         <button id="btn-run-ml" class="btn-primary"
                             style="padding: 6px 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
-                            <img src="/static/icons/robot.svg" class="icon" style="margin-right: 0.25rem;">AI
+                            <img alt="" src="/static/icons/robot.svg" class="icon" style="margin-right: 0.25rem;">AI
                             Identify
                         </button>
                     </div>
@@ -835,7 +836,7 @@
                         style="background: var(--card-bg); border-radius: 10px; padding: 1rem; border: 1px solid var(--border-color);">
                         <div
                             style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                            <img src="/static/icons/chart.svg" class="icon" style="margin-right: 0.25rem;">
+                            <img alt="" src="/static/icons/chart.svg" class="icon" style="margin-right: 0.25rem;">
                             <strong style="color: var(--text-primary);">Line Matching</strong>
                             <span
                                 style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">IAEA / NNDC lines</span>
@@ -850,7 +851,7 @@
                         style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(139, 92, 246, 0.1)); border-radius: 10px; padding: 1rem; border: 1px solid var(--accent-color);">
                         <div
                             style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--accent-color);">
-                            <img src="/static/icons/robot.svg" class="icon" style="margin-right: 0.25rem;">
+                            <img alt="" src="/static/icons/robot.svg" class="icon" style="margin-right: 0.25rem;">
                             <strong style="color: var(--accent-color);">AI Identification</strong>
                             <span
                                 class="badge-experimental" title="The neural network is experimental: treat it as a second opinion">Experimental</span>
@@ -874,7 +875,7 @@
             </div>
 
             <div id="decay-chains-container" style="display: none; margin-top: 2rem;">
-                <h3><img src="/static/icons/analysis.svg" class="icon"> Decay Chains Detected</h3>
+                <h3><img alt="" src="/static/icons/analysis.svg" class="icon"> Decay Chains Detected</h3>
                 <div id="decay-chains-list">
                     <!-- Populated by JS -->
                 </div>
@@ -882,7 +883,7 @@
 
             <!-- ROI Analysis Panel (Advanced Mode Only) -->
             <div id="roi-analysis-panel" style="display: none;">
-                <h3><img src="/static/icons/analysis.svg" class="icon"> Region-of-Interest (ROI) Analysis</h3>
+                <h3><img alt="" src="/static/icons/analysis.svg" class="icon"> Region-of-Interest (ROI) Analysis</h3>
 
                 <!-- Configuration Grid -->
                 <!-- Use CSS Grid for layout -->
@@ -1005,7 +1006,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h3>File History</h3>
-                    <button id="close-history" class="close-btn"><img src="/static/icons/close.svg" class="icon"
+                    <button id="close-history" class="close-btn"><img alt="" src="/static/icons/close.svg" class="icon"
                             style="width: 16px; height: 16px;"></button>
                 </div>
                 <div id="history-list"></div>
@@ -1016,10 +1017,44 @@
         <div id="settings-modal" class="modal" style="display: none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3><img src="/static/icons/settings.svg" class="icon"> Analysis Settings</h3>
-                    <button id="close-settings" class="close-btn"><img src="/static/icons/close.svg" class="icon"
+                    <h3><img alt="" src="/static/icons/settings.svg" class="icon"> Analysis Settings</h3>
+                    <button id="close-settings" class="close-btn"><img alt="" src="/static/icons/close.svg" class="icon"
                             style="width: 16px; height: 16px;"></button>
                 </div>
+
+                <fieldset class="settings-group" id="settings-readings">
+                    <legend>Dose readings and alerts <span class="settings-hint">(applied immediately)</span></legend>
+                    <div class="setting-row">
+                        <label for="pref-dose-unit">Dose unit</label>
+                        <select id="pref-dose-unit">
+                            <option value="auto">Each device's own (AlphaHound &micro;Rem/h, Radiacode &micro;Sv/h)</option>
+                            <option value="uSv">&micro;Sv/h</option>
+                            <option value="uRem">&micro;Rem/h</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="pref-alert-dose"> Warn when the dose rate exceeds</label>
+                        <span class="setting-value"><input type="number" id="pref-alert-dose-value" min="0" step="any" aria-label="Dose rate limit"> <span id="pref-alert-dose-unit">&micro;Rem/h</span></span>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="pref-alert-cps"> Warn when the AlphaHound total count rate exceeds</label>
+                        <span class="setting-value"><input type="number" id="pref-alert-cps-value" min="0" step="any" aria-label="Count rate limit"> cps</span>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="pref-alert-sound"> Beep when a warning starts</label>
+                    </div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="pref-alert-notify"> Desktop notification when the page is in the background</label>
+                        <span id="pref-notify-state" class="settings-hint"></span>
+                    </div>
+                    <p class="settings-hint">A warning starts after two readings above the limit and ends below 80 % of it.</p>
+                    <div class="setting-row">
+                        <span>
+                            <button id="btn-alert-test" type="button" class="btn-secondary">Test sound / notification</button>
+                            <button id="btn-alert-reset" type="button" class="btn-secondary">Reset these</button>
+                        </span>
+                    </div>
+                </fieldset>
 
                 <div style="margin: 1.5rem 0;">
                     <h4 style="margin-bottom: 1rem;">UI Complexity Mode</h4>
@@ -1143,7 +1178,7 @@
             <div class="modal-content" style="padding: 1.5rem;">
                 <div class="modal-header">
                     <h3>Energy Calibration</h3>
-                    <button id="close-calibration" class="close-btn"><img src="/static/icons/close.svg" class="icon"
+                    <button id="close-calibration" class="close-btn"><img alt="" src="/static/icons/close.svg" class="icon"
                             style="width: 16px; height: 16px;"></button>
                 </div>
                 <div style="margin: 1rem 0;">
@@ -1176,7 +1211,7 @@
             <div class="modal-content" style="max-width: 650px;">
                 <div class="modal-header">
                     <h3>Custom Isotopes</h3>
-                    <button id="close-isotopes" class="close-btn"><img src="/static/icons/close.svg" class="icon"
+                    <button id="close-isotopes" class="close-btn"><img alt="" src="/static/icons/close.svg" class="icon"
                             style="width: 16px; height: 16px;"></button>
                 </div>
 
@@ -1235,7 +1270,7 @@
             <div class="modal-content" style="max-width: 700px; padding: 1.5rem;">
                 <div class="modal-header" style="margin-bottom: 2rem;">
                     <h3 style="margin: 0; color: var(--primary-color);">Acquisition Estimator & Projection</h3>
-                    <button id="close-estimator" class="close-btn" style="line-height: 1;"><img
+                    <button id="close-estimator" class="close-btn" style="line-height: 1;"><img alt=""
                             src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
 
@@ -1368,7 +1403,7 @@
             <div class="modal-content" style="max-width: 900px; padding: 1.5rem;">
                 <div class="modal-header" style="margin-bottom: 2rem;">
                     <h3 style="margin: 0; color: var(--primary-color);">Radioactive Decay Prediction</h3>
-                    <button id="close-decay" class="close-btn" style="line-height: 1;"><img
+                    <button id="close-decay" class="close-btn" style="line-height: 1;"><img alt=""
                             src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
                 </div>
                 <div
@@ -1406,7 +1441,7 @@
                         style="height: 42px; padding: 0 1.5rem;">Calculate</button>
                 </div>
                 <div style="height: 400px; position: relative;">
-                    <canvas id="decayChart"></canvas>
+                    <canvas id="decayChart" role="img" aria-label="Decay chain activity over time"></canvas>
                 </div>
             </div>
         </div>
