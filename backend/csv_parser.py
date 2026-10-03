@@ -1,3 +1,5 @@
+import csv
+import io
 import os
 import tempfile
 
@@ -50,9 +52,114 @@ def _numeric_list(values, what):
     return out
 
 
+_CALIBRATION_WORDS = ("calibration", "coeffs", "coefficients")
+
+
+def _table_text(tmp_path: str) -> str:
+    """
+    The file's text without calibration lines in its first 25 lines ("Calibration: 2.0 3.1"): they are not part of the
+    table (_try_parse_calibration_header reads them from the file), and as the first line they would be taken for the header.
+    """
+    with open(tmp_path, "r", encoding="utf-8-sig") as f:   # strict UTF-8, as pandas reads it; also drops an Excel BOM
+        lines = f.read().splitlines()
+    kept = [l for i, l in enumerate(lines) if not (i < 25 and any(w in l.lower() for w in _CALIBRATION_WORDS))]
+    return "\n".join(kept) + "\n"
+
+
+def _delimiter(text: str) -> str:
+    """Comma, semicolon, tab or space. Letting pandas guess among all characters splits a one-column file on a letter."""
+    try:
+        return csv.Sniffer().sniff("\n".join(text.splitlines()[:50]), delimiters=",;\t ").delimiter
+    except csv.Error:
+        return ","
+
+
+def _manual_columns(tmp_path: str):
+    """
+    Fallback when Becquerel cannot read the file: find the counts and energy columns with pandas (delimiter inferred,
+    columns identified by name, then by position). Returns (counts, energies); energies may be empty.
+    """
+    import pandas as pd
+    text = _table_text(tmp_path)
+    sep = _delimiter(text)
+    df = pd.read_csv(io.StringIO(text), sep=sep, engine='python')
+
+    # Numeric column names mean a headerless file that was read with its first row as the header
+    try:
+        [float(c) for c in df.columns]
+        df = pd.read_csv(io.StringIO(text), sep=sep, engine='python', header=None)
+        df.columns = [str(c) for c in df.columns]
+    except ValueError:  # pandas ParserError and EmptyDataError subclass ValueError
+        pass
+
+    df.columns = [str(c).lower().strip() for c in df.columns]
+    columns_lower = list(df.columns)
+
+    count_col_idx = next((i for i, c in enumerate(columns_lower) if any(x in c for x in ['count', 'cnt', 'data', 'cps'])), None)
+    energy_col_idx = next((i for i, c in enumerate(columns_lower) if any(x in c for x in ['energy', 'kev', 'mev'])), None)
+    channel_col_idx = next((i for i, c in enumerate(columns_lower) if any(x in c for x in ['channel', 'chan'])), None)
+
+    counts = []
+    energies = []
+
+    if count_col_idx is not None:
+        counts = df.iloc[:, count_col_idx].fillna(0).tolist()
+    elif len(df.columns) >= 2:
+        # Energy in column 1 means counts are column 0; otherwise the usual layout is (energy, counts)
+        if energy_col_idx == 1:
+            counts = df.iloc[:, 0].fillna(0).tolist()
+        else:
+            counts = df.iloc[:, 1].fillna(0).tolist()
+    elif len(df.columns) == 1:
+        counts = df.iloc[:, 0].fillna(0).tolist()
+
+    if energy_col_idx is not None:
+        energies = df.iloc[:, energy_col_idx].fillna(0).tolist()
+    elif channel_col_idx is not None:
+        energies = []   # channel numbers only: the caller falls back to channel indices
+    elif len(df.columns) >= 2:
+        # No energy column by name: the other one of the first two columns is the energy
+        if counts == df.iloc[:, 1].fillna(0).tolist():
+            energies = df.iloc[:, 0].fillna(0).tolist()
+        elif counts == df.iloc[:, 0].fillna(0).tolist():
+            energies = df.iloc[:, 1].fillna(0).tolist()
+
+    if not counts:
+        raise ValueError("Could not identify 'counts' column in CSV")
+    return counts, energies
+
+
+def _resolve_energies(energies: list, counts: list, tmp_path: str, comment_meta: dict):
+    """
+    The energy axis to report and whether it is a real calibration: the file's own energy column, else a calibration
+    written in the header or in '# calib_a0..a2' comment metadata, else channel numbers (uncalibrated).
+    """
+    # Even without an energy column the header may say "Calibration: a0, a1" (or "Energy = 0 + 2*ch")
+    if not energies:
+        header_cal_energies = _try_parse_calibration_header(tmp_path, len(counts))
+        if header_cal_energies:
+            energies = header_cal_energies
+
+    # Calibration coefficients from '# calib_a0..a2' metadata, if no energy column was found
+    if not energies and comment_meta.get("calib_a1"):
+        a0, a1, a2 = (comment_meta.get(k, 0.0) for k in ("calib_a0", "calib_a1", "calib_a2"))
+        energies = [a0 + a1 * ch + a2 * ch * ch for ch in range(len(counts))]
+
+    is_calibrated = True
+    if not energies:
+        energies = list(range(len(counts)))
+        is_calibrated = False   # falling back to channels
+    elif len(energies) > 1:
+        # An "Energy" column that is really channel numbers (0, 1, 2, ...) is not a calibration
+        diffs = [energies[i + 1] - energies[i] for i in range(min(5, len(energies) - 1))]
+        if all(abs(d - 1.0) < 0.01 for d in diffs) and energies[0] == 0:
+            is_calibrated = False
+    return energies, is_calibrated
+
+
 def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     """
-    Parse a CSV spectrum file using Becquerel.
+    Parse a CSV spectrum file using Becquerel, with a pandas fallback.
     Returns a dictionary result with counts, energies, peaks, isotopes, and metadata.
     """
     if not HAS_BECQUEREL:
@@ -62,152 +169,50 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     # so the tabular parser sees only the header + data, but keep what they tell us.
     content, comment_meta = _split_comment_metadata(content)
 
-    # Becquerel usually needs a file path, so we save to temp
+    # Becquerel needs a file path, so the content goes to a temp file, removed whatever happens next
     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+        tmp_path = tmp.name
         try:
             tmp.write(content)
-            tmp_path = tmp.name
-        except Exception as e:
+        except Exception:
             tmp.close()
-            os.remove(tmp.name)
-            raise e
-    
-    # Close it before reading (windows locking safety)
-    tmp.close()
-
+            os.remove(tmp_path)
+            raise
     try:
-        # Attempt to read with Becquerel
+        return _parse_csv_file(tmp_path, filename, comment_meta)
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def _parse_csv_file(tmp_path: str, filename: str, comment_meta: dict) -> dict:
+    try:
         spec = bq.Spectrum.from_file(tmp_path)
-        
-        # Extract data
         counts = spec.counts.tolist() if spec.counts is not None else []
         energies = spec.energies.tolist() if spec.energies is not None else []
-        
-        # Metadata
         live_time = spec.live_time
         real_time = spec.real_time
         source = "CSV File (Becquerel)"
-
     except Exception as bq_error:
         logger.error(f"[WARNING] Becquerel parsing failed: {str(bq_error)}. Attempting manual fallback.")
         try:
-            # Fallback: Manual generic CSV parsing using pandas
-            import pandas as pd
-            # Try to infer delimiter (comma, semicolon, tab)
-            df = pd.read_csv(tmp_path, sep=None, engine='python')
-            
-            # Check if headers are numeric (implying headerless file read as header)
-            try:
-                # Try converting column names to floats
-                [float(c) for c in df.columns]
-                # If valid, reload with header=None
-                df = pd.read_csv(tmp_path, sep=None, engine='python', header=None)
-                # Ensure generic column names for mapping logic below
-                df.columns = [str(c) for c in df.columns]
-            except:
-                pass
-
-            # Normalize column names
-            df.columns = [str(c).lower().strip() for c in df.columns]
-            
-            counts = []
-            energies = []
-            
-            # Identify columns by name first
-            columns_lower = [str(c).lower().strip() for c in df.columns]
-            
-            count_col_idx = next((i for i, c in enumerate(columns_lower) if any(x in c for x in ['count', 'cnt', 'data', 'cps'])), None)
-            energy_col_idx = next((i for i, c in enumerate(columns_lower) if any(x in c for x in ['energy', 'kev', 'mev'])), None)
-            channel_col_idx = next((i for i, c in enumerate(columns_lower) if any(x in c for x in ['channel', 'chan'])), None)
-            
-            # Logic to extract data
-            counts = []
-            energies = []
-            
-            if count_col_idx is not None:
-                counts = df.iloc[:, count_col_idx].fillna(0).tolist()
-            else:
-                # Heuristic fallback for Counts
-                if len(df.columns) >= 2:
-                    # If we identified Energy at col 1, then Counts must be col 0
-                    if energy_col_idx == 1:
-                        counts = df.iloc[:, 0].fillna(0).tolist()
-                    # If we identified Energy at col 0, Counts must be col 1
-                    elif energy_col_idx == 0:
-                        counts = df.iloc[:, 1].fillna(0).tolist()
-                    else:
-                        # Standard default: Energy, Counts -> Counts is col 1
-                        counts = df.iloc[:, 1].fillna(0).tolist()
-                elif len(df.columns) == 1:
-                    counts = df.iloc[:, 0].fillna(0).tolist()
-
-            if energy_col_idx is not None:
-                energies = df.iloc[:, energy_col_idx].fillna(0).tolist()
-            elif channel_col_idx is not None:
-                 # Map channel to roughly linear energy (simple assumption if calib missing)
-                 # Or just return empty energies to fallback to channel indices
-                 energies = [] 
-            else:
-                 # If we have 2 columns and neither identified as energy
-                 if len(df.columns) >= 2:
-                     # If we grabbed col 1 as Counts, try col 0 as Energy
-                     if counts == df.iloc[:, 1].fillna(0).tolist():
-                         energies = df.iloc[:, 0].fillna(0).tolist()
-                     # If we grabbed col 0 as Counts, try col 1 as Energy
-                     elif counts == df.iloc[:, 0].fillna(0).tolist():
-                         energies = df.iloc[:, 1].fillna(0).tolist()
-
-            live_time = None
-            real_time = None
-            source = "CSV File"
-            
-            if not counts:
-                 raise ValueError("Could not identify 'counts' column in CSV")
-
+            counts, energies = _manual_columns(tmp_path)
         except Exception as manual_error:
             raise ValueError(f"Failed to parse CSV with both Becquerel ({str(bq_error)}) and Manual fallback ({str(manual_error)})")
-    
+        live_time = None
+        real_time = None
+        source = "CSV File"
+
     counts = _numeric_list(counts, "counts")
     energies = _numeric_list(energies, "energy") if energies else energies
     if not counts:
         raise ValueError("No spectrum data found in the CSV")
 
-    # === HEADER CALIBRATION PARSING (Fuzzy Match) ===
-    # Even if we didn't find an Energy column, the header might have "Calibration: a0, a1" 
-    # or "Energy = 0 + 2*ch" which we can use to generate energies.
-    
-    if (not energies or len(energies) == 0) and len(counts) > 0:
-        header_cal_energies = _try_parse_calibration_header(tmp_path, len(counts))
-        if header_cal_energies:
-            energies = header_cal_energies
-            # If we successfully parsed calibration from header, clearly it IS calibrated
-            # The 'is_calibrated' logic below will see this list and set True.
-
-    # Calibration coefficients from '# calib_a0..a2' metadata, if no energy column was found
-    if (not energies) and counts and comment_meta.get("calib_a1"):
-        a0, a1, a2 = (comment_meta.get(k, 0.0) for k in ("calib_a0", "calib_a1", "calib_a2"))
-        energies = [a0 + a1 * ch + a2 * ch * ch for ch in range(len(counts))]
+    energies, is_calibrated = _resolve_energies(energies, counts, tmp_path, comment_meta)
     if live_time is None and comment_meta.get("duration_s"):
         live_time = comment_meta["duration_s"]
-
-    # If energies are missing, use channel numbers
-    is_calibrated = True
-    if not energies and len(counts) > 0:
-        energies = list(range(len(counts)))
-        is_calibrated = False # Falling back to channels
-    elif energies and len(energies) > 1:
-        # Check if energies look like simple channel numbers (0, 1, 2...)
-        # Some CSVs might have an "Energy" column that is actually just channels
-        diffs = [energies[i+1] - energies[i] for i in range(min(5, len(energies)-1))]
-        if all(abs(d - 1.0) < 0.01 for d in diffs) and energies[0] == 0:
-             is_calibrated = False
-
-    # Cleanup temp file
-    if os.path.exists(tmp_path):
-        try:
-            os.remove(tmp_path)
-        except:
-            pass
 
     return {
         "counts": counts,
@@ -222,6 +227,7 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
             "source": source
         }
     }
+
 
 def _try_parse_calibration_header(filepath: str, num_channels: int):
     """
@@ -252,7 +258,7 @@ def _try_parse_calibration_header(filepath: str, num_channels: int):
                         try:
                             val = float(t)
                             floats.append(val)
-                        except:
+                        except ValueError:
                             pass
                     
                     if len(floats) >= 2:
