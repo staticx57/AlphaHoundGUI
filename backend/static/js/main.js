@@ -1,4 +1,6 @@
 // Updated: 2024-12-14 17:00 - N42 Export Fixed
+import { debug } from './log.js';
+import { escapeHtml } from './html.js';
 import { api } from './api.js';
 import { ui } from './ui.js?v=3.0';
 import { chartManager, DoseRateChart } from './charts.js?v=4.6';
@@ -14,9 +16,8 @@ import { spectrumSignature } from './summary.js';
 import { formatAlarmLimits, formatDoseRate, formatDoseTotal, resolveUnit, getDosePref, setDosePref, toUSv, fromUSv, unitLabel, UREM_PER_USV, safeStorage } from './units.js';
 import { AlertCenter, loadAlerts, saveAlerts, DEFAULT_ALERTS } from './alerts.js';
 import { initA11y } from './a11y.js';
-import { seriesPalette } from './palette.js';
-import { chartTheme, themeGlowPlugin } from './chart_theme.js';
-import { durationToDays, formatBq, describeDecayResult, forLogAxis, activityAxisRange } from './decay_view.js';
+import { loadDecayEngines, runDecayPrediction, redrawDecayChart } from './decay_tool.js';
+import { showToast } from './toast.js';
 
 initA11y();
 import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
@@ -58,7 +59,7 @@ const colors = ['#38bdf8', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'
 function startRadiacodeDosePolling() {
     if (radiacodeDoseInterval) return;  // Already polling
 
-    console.log('[Radiacode] Starting dose rate polling');
+    debug('[Radiacode] Starting dose rate polling');
     pollRadiacodeDose._pollCount = 0;
 
     // Poll immediately, then every 2 seconds
@@ -68,7 +69,7 @@ function startRadiacodeDosePolling() {
 
 function stopRadiacodeDosePolling() {
     if (radiacodeDoseInterval) {
-        console.log('[Radiacode] Stopping dose rate polling');
+        debug('[Radiacode] Stopping dose rate polling');
         clearInterval(radiacodeDoseInterval);
         radiacodeDoseInterval = null;
     }
@@ -163,7 +164,7 @@ async function pollRadiacodeDose() {
                 checkDeviceMessages();
             } catch (extErr) {
                 // Extended info is optional, don't break on failure
-                console.log('[Radiacode] Extended info unavailable:', extErr.message);
+                debug('[Radiacode] Extended info unavailable:', extErr.message);
             }
         }
         pollRadiacodeDose._notConnectedCount = 0;
@@ -277,7 +278,7 @@ function reapplyIsotopeHighlights() {
     });
 
     chart.update('none');
-    console.log('[Theme] Re-applied isotope highlights for', window._selectedIsotopes.size, 'isotopes');
+    debug('[Theme] Re-applied isotope highlights for', window._selectedIsotopes.size, 'isotopes');
 
     // Also re-apply XRF highlights if active
     if (window._selectedXRFIndex !== undefined && window._selectedXRFIndex !== null && window._xrfData && window.chartManager) {
@@ -345,7 +346,7 @@ const UI_MODE_CONFIG = {
  */
 function applyUIMode(mode = 'simple') {
     const config = UI_MODE_CONFIG[mode] || UI_MODE_CONFIG.simple;
-    console.log(`[UI Mode] Applying "${mode}" mode: ${config.description}`);
+    debug(`[UI Mode] Applying "${mode}" mode: ${config.description}`);
 
     // First, hide elements that should be hidden in this mode
     if (config.hideElements && config.hideElements.length > 0) {
@@ -353,7 +354,7 @@ function applyUIMode(mode = 'simple') {
             const el = document.getElementById(id);
             if (el) {
                 el.style.display = 'none';
-                console.log(`[UI Mode] Hiding: ${id}`);
+                debug(`[UI Mode] Hiding: ${id}`);
             } else {
                 console.warn(`[UI Mode] Element not found: ${id}`);
             }
@@ -366,7 +367,7 @@ function applyUIMode(mode = 'simple') {
             const el = document.getElementById(id);
             if (el) {
                 el.style.display = ''; // Reset to default/CSS
-                console.log(`[UI Mode] Showing: ${id}`);
+                debug(`[UI Mode] Showing: ${id}`);
             } else {
                 console.warn(`[UI Mode] Element not found: ${id}`);
             }
@@ -478,7 +479,7 @@ async function fetchHardwareSerial() {
             hwSerialEl.textContent = result.hw_serial_number;
         }
     } catch (err) {
-        console.log('[Radiacode] HW serial unavailable:', err.message);
+        debug('[Radiacode] HW serial unavailable:', err.message);
     }
 }
 
@@ -769,7 +770,7 @@ function setupEventListeners() {
         radio.addEventListener('change', (e) => {
             const newMode = e.target.value;
             applyUIMode(newMode);
-            console.log(`[Settings] UI Mode changed to: ${newMode}`);
+            debug(`[Settings] UI Mode changed to: ${newMode}`);
         });
     });
 
@@ -839,7 +840,7 @@ function setupEventListeners() {
 
             try {
                 const devices = await api.scanRadiacodeBLE(5.0);
-                console.log('[Radiacode] BLE scan found:', devices);
+                debug('[Radiacode] BLE scan found:', devices);
 
                 // Clear and populate dropdown
                 deviceSelect.innerHTML = '<option value="">Select BLE Device...</option>';
@@ -850,7 +851,7 @@ function setupEventListeners() {
                 } else {
                     devices.forEach(device => {
                         const rssiInfo = device.rssi !== null ? ` (${device.rssi} dBm)` : '';
-                        deviceSelect.innerHTML += `<option value="${device.address}">${device.name}${rssiInfo}</option>`;
+                        deviceSelect.innerHTML += `<option value="${escapeHtml(device.address)}">${escapeHtml(device.name)}${rssiInfo}</option>`;
                     });
                     showToast(`Found ${devices.length} Radiacode device(s)`, 'success');
                 }
@@ -888,7 +889,7 @@ function setupEventListeners() {
 
             try {
                 const result = await api.connectRadiacode(useBluetooth, bluetoothMac);
-                console.log('[Radiacode] Connected:', result);
+                debug('[Radiacode] Connected:', result);
 
                 // Show connected panel
                 const connectedPanel = document.getElementById('radiacode-connected');
@@ -998,7 +999,7 @@ function setupEventListeners() {
 
             try {
                 const data = await api.getRadiacodeSpectrum(true);
-                console.log('[Radiacode] Spectrum received:', data);
+                debug('[Radiacode] Spectrum received:', data);
 
                 currentData = data;
                 ui.renderDashboard(data);
@@ -1383,7 +1384,7 @@ function setupEventListeners() {
 
     // Auto-Scale Toggle
     document.getElementById('btn-auto-scale').addEventListener('click', (e) => {
-        console.log('[Main] Auto-scale button clicked, currentData exists:', !!currentData);
+        debug('[Main] Auto-scale button clicked, currentData exists:', !!currentData);
         const isAutoScale = chartManager.toggleAutoScale();
         e.target.classList.toggle('active', isAutoScale);
         e.target.textContent = isAutoScale ? 'Auto-Scale' : 'Full Spectrum';
@@ -1449,7 +1450,7 @@ function setupEventListeners() {
         rcBrightness.addEventListener('change', async (e) => {
             try {
                 await api.setRadiacodeBrightness(parseInt(e.target.value));
-                console.log(`[Radiacode] Brightness set to ${e.target.value}`);
+                debug(`[Radiacode] Brightness set to ${e.target.value}`);
             } catch (err) {
                 console.error('[Radiacode] Failed to set brightness:', err);
                 showToast(`Failed to set brightness: ${err.message}`, 'error');
@@ -1462,7 +1463,7 @@ function setupEventListeners() {
         rcSound.addEventListener('change', async (e) => {
             try {
                 await api.setRadiacodeSound(e.target.checked);
-                console.log(`[Radiacode] Sound ${e.target.checked ? 'enabled' : 'disabled'}`);
+                debug(`[Radiacode] Sound ${e.target.checked ? 'enabled' : 'disabled'}`);
             } catch (err) {
                 console.error('[Radiacode] Failed to set sound:', err);
                 showToast(`Failed to set sound: ${err.message}`, 'error');
@@ -1476,7 +1477,7 @@ function setupEventListeners() {
         rcVibration.addEventListener('change', async (e) => {
             try {
                 await api.setRadiacodeVibration(e.target.checked);
-                console.log(`[Radiacode] Vibration ${e.target.checked ? 'enabled' : 'disabled'}`);
+                debug(`[Radiacode] Vibration ${e.target.checked ? 'enabled' : 'disabled'}`);
             } catch (err) {
                 console.error('[Radiacode] Failed to set vibration:', err);
                 showToast(`Failed to set vibration: ${err.message}`, 'error');
@@ -1491,7 +1492,7 @@ function setupEventListeners() {
             try {
                 const seconds = parseInt(e.target.value) || 0;
                 await api.setRadiacodeDisplayTimeout(seconds);
-                console.log(`[Radiacode] Display timeout set to ${seconds}s`);
+                debug(`[Radiacode] Display timeout set to ${seconds}s`);
             } catch (err) {
                 console.error('[Radiacode] Failed to set display timeout:', err);
                 showToast(`Failed to set timeout: ${err.message}`, 'error');
@@ -1504,7 +1505,7 @@ function setupEventListeners() {
         rcLanguage.addEventListener('change', async (e) => {
             try {
                 await api.setRadiacodeLanguage(e.target.value);
-                console.log(`[Radiacode] Language set to ${e.target.value}`);
+                debug(`[Radiacode] Language set to ${e.target.value}`);
                 showToast('Language updated on device', 'success');
             } catch (err) {
                 console.error('[Radiacode] Failed to set language:', err);
@@ -1716,7 +1717,7 @@ function setupEventListeners() {
                 resultsContainer.innerHTML = '<p>No peaks fitted successfully.</p>';
             }
         } catch (err) {
-            resultsContainer.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+            resultsContainer.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(err.message)}</p>`;
         }
     });
 
@@ -1792,7 +1793,7 @@ function setupEventListeners() {
             }
         } catch (err) {
             ui.setAiState({ status: 'error', error: err.message, signature });
-            if (table && tableBox) tableBox.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+            if (table && tableBox) tableBox.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(err.message)}</p>`;
         } finally {
             aiRunning = false;
             if (runButton) {
@@ -2148,7 +2149,7 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
         window.lastROIResult = data;
 
     } catch (err) {
-        resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+        resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(err.message)}</p>`;
     }
 });
 
@@ -2199,10 +2200,10 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
                 </div>
                 <div>
                     Ratio: 186 keV peak is <strong>${data.ratio_percent.toFixed(1)}%</strong> of 93 keV peak (≥${data.threshold_natural}%): 
-                    <span style="color: ${categoryColor}; font-weight: 600;">${data.category}</span>
+                    <span style="color: ${categoryColor}; font-weight: 600;">${escapeHtml(data.category)}</span>
                 </div>
                 <div style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">
-                    ${data.description}
+                    ${escapeHtml(data.description)}
                 </div>
                 <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); color: var(--text-secondary);">
                     --- Peak Data ---<br>
@@ -2224,7 +2225,7 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
         }
 
     } catch (err) {
-        resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+        resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(err.message)}</p>`;
     }
 });
 
@@ -2246,174 +2247,6 @@ document.getElementById('btn-clear-highlight')?.addEventListener('click', () => 
 });
 
 
-/**
- * Gets theme-aware colors for toast notifications.
- * NOTE: While CSS variables (--toast-*) exist for major themes, this function provides
- * hardcoded fallbacks for 11 vintage equipment themes that haven't defined toast variables yet.
- * These fallbacks ensure toasts match each theme's aesthetic. Ideally, all themes would
- * define --toast-success/warning/info/error, but that requires adding 44 more color definitions to style.css.
- * @param {'success'|'warning'|'info'} type - The type of toast notification
- * @param {string} theme - The current theme name (dark, light, nuclear, toxic, scifi, cyberpunk)
- * @returns {{bg: string, border: string, shadow: string}} Color configuration object
- */
-function getToastColors(type, theme) {
-    // Define color schemes for each theme
-    const themeColors = {
-        'dark': {
-            success: { bg: '#10b981', border: '#10b981', shadow: 'rgba(16, 185, 129, 0.3)' },
-            warning: { bg: '#f59e0b', border: '#f59e0b', shadow: 'rgba(245, 158, 11, 0.3)' },
-            info: { bg: '#3b82f6', border: '#3b82f6', shadow: 'rgba(59, 130, 246, 0.3)' },
-            error: { bg: '#ef4444', border: '#ef4444', shadow: 'rgba(239, 68, 68, 0.3)' }
-        },
-        'light': {
-            success: { bg: '#10b981', border: '#059669', shadow: 'rgba(16, 185, 129, 0.2)' },
-            warning: { bg: '#f59e0b', border: '#d97706', shadow: 'rgba(245, 158, 11, 0.2)' },
-            info: { bg: '#3b82f6', border: '#2563eb', shadow: 'rgba(59, 130, 246, 0.2)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.2)' }
-        },
-        'nuclear': {
-            success: { bg: '#fbbf24', border: '#f59e0b', shadow: 'rgba(251, 191, 36, 0.4)' },
-            warning: { bg: '#f59e0b', border: '#ea580c', shadow: 'rgba(245, 158, 11, 0.4)' },
-            info: { bg: '#fbbf24', border: '#f59e0b', shadow: 'rgba(251, 191, 36, 0.4)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'toxic': {
-            success: { bg: '#10b981', border: '#059669', shadow: 'rgba(16, 185, 129, 0.4)' },
-            warning: { bg: '#84cc16', border: '#65a30d', shadow: 'rgba(132, 204, 22, 0.4)' },
-            info: { bg: '#22c55e', border: '#16a34a', shadow: 'rgba(34, 197, 94, 0.4)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'scifi': {
-            success: { bg: '#00d9ff', border: '#3b82f6', shadow: 'rgba(0, 217, 255, 0.5)' },
-            warning: { bg: '#a855f7', border: '#9333ea', shadow: 'rgba(168, 85, 247, 0.5)' },
-            info: { bg: '#3b82f6', border: '#00d9ff', shadow: 'rgba(59, 130, 246, 0.5)' },
-            error: { bg: '#ef4444', border: '#f87171', shadow: 'rgba(239, 68, 68, 0.5)' }
-        },
-        'cyberpunk': {
-            success: { bg: '#fcee09', border: '#00f5ff', shadow: '0 0 20px rgba(252, 238, 9, 0.6), 0 0 40px rgba(0, 245, 255, 0.3)' },
-            warning: { bg: '#ff006e', border: '#fcee09', shadow: '0 0 20px rgba(255, 0, 110, 0.6), 0 0 40px rgba(252, 238, 9, 0.3)' },
-            info: { bg: '#00f5ff', border: '#fcee09', shadow: '0 0 20px rgba(0, 245, 255, 0.6), 0 0 40px rgba(252, 238, 9, 0.3)' },
-            error: { bg: '#ff006e', border: '#ef4444', shadow: '0 0 20px rgba(255, 0, 110, 0.6), 0 0 40px rgba(239, 68, 68, 0.3)' }
-        },
-        // Vintage Equipment Themes
-        'eberline': {
-            success: { bg: '#c9a227', border: '#e07b39', shadow: 'rgba(201, 162, 39, 0.4)' },
-            warning: { bg: '#e07b39', border: '#ff6b35', shadow: 'rgba(224, 123, 57, 0.4)' },
-            info: { bg: '#c9a227', border: '#e07b39', shadow: 'rgba(201, 162, 39, 0.4)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'fluke': {
-            success: { bg: '#ffc107', border: '#ff9800', shadow: 'rgba(255, 193, 7, 0.4)' },
-            warning: { bg: '#ff9800', border: '#ff5722', shadow: 'rgba(255, 152, 0, 0.4)' },
-            info: { bg: '#ffc107', border: '#ff9800', shadow: 'rgba(255, 193, 7, 0.4)' },
-            error: { bg: '#ff5722', border: '#f44336', shadow: 'rgba(255, 87, 34, 0.4)' }
-        },
-        'oscilloscope': {
-            success: { bg: '#33ff66', border: '#00cc44', shadow: 'rgba(51, 255, 102, 0.5)' },
-            warning: { bg: '#66cc88', border: '#33ff66', shadow: 'rgba(102, 204, 136, 0.4)' },
-            info: { bg: '#00cc44', border: '#33ff66', shadow: 'rgba(0, 204, 68, 0.5)' },
-            error: { bg: '#ff6666', border: '#ff3333', shadow: 'rgba(255, 102, 102, 0.5)' }
-        },
-        'nixie': {
-            success: { bg: '#ff9500', border: '#ff6a00', shadow: '0 0 15px rgba(255, 149, 0, 0.6)' },
-            warning: { bg: '#ff6a00', border: '#ff4400', shadow: '0 0 15px rgba(255, 106, 0, 0.6)' },
-            info: { bg: '#ff7700', border: '#ff9500', shadow: '0 0 15px rgba(255, 119, 0, 0.6)' },
-            error: { bg: '#ff4400', border: '#cc0000', shadow: '0 0 15px rgba(255, 68, 0, 0.6)' }
-        },
-        'civildefense': {
-            success: { bg: '#ffd000', border: '#ffaa00', shadow: 'rgba(255, 208, 0, 0.5)' },
-            warning: { bg: '#ffaa00', border: '#ff6600', shadow: 'rgba(255, 170, 0, 0.5)' },
-            info: { bg: '#ffd000', border: '#ffaa00', shadow: 'rgba(255, 208, 0, 0.5)' },
-            error: { bg: '#ff4400', border: '#cc0000', shadow: 'rgba(255, 68, 0, 0.5)' }
-        },
-        'tektronix': {
-            success: { bg: '#00a2e8', border: '#66ccff', shadow: 'rgba(0, 162, 232, 0.5)' },
-            warning: { bg: '#66ccff', border: '#00a2e8', shadow: 'rgba(102, 204, 255, 0.4)' },
-            info: { bg: '#00a2e8', border: '#66ccff', shadow: 'rgba(0, 162, 232, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'keithley': {
-            success: { bg: '#4a90d9', border: '#7eb8f0', shadow: 'rgba(74, 144, 217, 0.4)' },
-            warning: { bg: '#7eb8f0', border: '#4a90d9', shadow: 'rgba(126, 184, 240, 0.4)' },
-            info: { bg: '#4a90d9', border: '#7eb8f0', shadow: 'rgba(74, 144, 217, 0.4)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'ludlum': {
-            success: { bg: '#d4915c', border: '#c44536', shadow: 'rgba(212, 145, 92, 0.5)' },
-            warning: { bg: '#c44536', border: '#ff5c47', shadow: 'rgba(196, 69, 54, 0.5)' },
-            info: { bg: '#d4915c', border: '#c44536', shadow: 'rgba(212, 145, 92, 0.5)' },
-            error: { bg: '#ff5c47', border: '#cc0000', shadow: 'rgba(255, 92, 71, 0.5)' }
-        },
-        'hp': {
-            success: { bg: '#d4a574', border: '#e8c49a', shadow: 'rgba(212, 165, 116, 0.5)' },
-            warning: { bg: '#e8c49a', border: '#d4a574', shadow: 'rgba(232, 196, 154, 0.4)' },
-            info: { bg: '#d4a574', border: '#e8c49a', shadow: 'rgba(212, 165, 116, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'victoreen': {
-            success: { bg: '#7cb68a', border: '#9ed4aa', shadow: 'rgba(124, 182, 138, 0.5)' },
-            warning: { bg: '#9ed4aa', border: '#7cb68a', shadow: 'rgba(158, 212, 170, 0.4)' },
-            info: { bg: '#7cb68a', border: '#9ed4aa', shadow: 'rgba(124, 182, 138, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        },
-        'canberra': {
-            success: { bg: '#26a69a', border: '#4dd0c5', shadow: 'rgba(38, 166, 154, 0.5)' },
-            warning: { bg: '#4dd0c5', border: '#26a69a', shadow: 'rgba(77, 208, 197, 0.4)' },
-            info: { bg: '#26a69a', border: '#4dd0c5', shadow: 'rgba(38, 166, 154, 0.5)' },
-            error: { bg: '#ef4444', border: '#dc2626', shadow: 'rgba(239, 68, 68, 0.4)' }
-        }
-    };
-
-    return themeColors[theme]?.[type] || themeColors['dark'][type];
-}
-
-/**
- * Displays a toast notification with theme-aware styling.
- * Toast automatically dismisses after 3 seconds.
- * @param {string} message - The message to display
- * @param {'success'|'warning'|'info'} [type='info'] - The type of toast
- * @returns {void}
- */
-function showToast(message, type = 'info') {
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-    const colors = getToastColors(type, currentTheme);
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-
-    // Special text color handling for cyberpunk theme
-    const textColor = currentTheme === 'cyberpunk' && type === 'success' ? '#0d0208' : 'white';
-
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        background: ${colors.bg};
-        color: ${textColor};
-        border: 2px solid ${colors.border};
-        border-radius: 8px;
-        box-shadow: ${typeof colors.shadow === 'string' && colors.shadow.includes('0 0') ? colors.shadow : `0 4px 12px ${colors.shadow}`};
-        z-index: 10000;
-        animation: slideIn 0.3s ease-out;
-        font-size: 14px;
-        max-width: 350px;
-        font-weight: 500;
-    `;
-
-    document.body.appendChild(toast);
-
-    // Screen readers announce toasts; errors interrupt, the rest wait their turn
-    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-
-    // Auto-remove: 3 s, longer for long messages (they were native notifyAuto() text before) and for errors
-    const lifetime = Math.min(12000, Math.max(type === 'error' ? 5000 : 3000, 1500 + message.length * 45));
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => toast.remove(), 300);
-    }, lifetime);
-}
 setNotifier(showToast);
 
 // Device Lifecycle
@@ -2449,7 +2282,7 @@ async function handleFile(file) {
         if (file.name.toLowerCase().endsWith('.n42') || file.name.toLowerCase().endsWith('.xml')) {
             try {
                 currentData._rawXml = await file.text();
-                console.log(`[Main] Stored raw XML (${currentData._rawXml.length} chars)`);
+                debug(`[Main] Stored raw XML (${currentData._rawXml.length} chars)`);
             } catch (e) {
                 console.warn('[Main] Failed to read raw XML for editing:', e);
             }
@@ -2498,7 +2331,7 @@ function autoPopulateROITime(data) {
         // Convert to minutes and set with 1 decimal place
         const timeMinutes = (timeSeconds / 60).toFixed(1);
         input.value = timeMinutes;
-        console.log(`[ROI] Auto-populated acquisition time: ${timeSeconds}s → ${timeMinutes} min`);
+        debug(`[ROI] Auto-populated acquisition time: ${timeSeconds}s → ${timeMinutes} min`);
     }
 }
 
@@ -2693,7 +2526,7 @@ window.addEventListener('themechange', () => {
     applyScreenColors();
     if (rcDoseChart) rcDoseChart.refreshTheme();
     if (doseChart) doseChart.refreshTheme();
-    if (decayChartInstance && decayResult) renderDecayChart(decayResult);
+    redrawDecayChart();
 });
 
 /** Create the display replica once (the canvas lives in the AlphaHound details panel). */
@@ -3409,184 +3242,6 @@ function applyCalibration(slope, intercept) {
     }
 }
 
-// Decay Tool Logic moved to setupDecayTool() below
-
-
-// Globals for Decay Chart
-let decayChartInstance = null;
-let decayResult = null;   // the last prediction, kept so a theme change can redraw the chart
-
-/**
- * Populate the decay engine selector from the backend, marking engines whose
- * library is not installed. Without this the menu offers engines that silently
- * fall back to the built-in solver.
- */
-async function loadDecayEngines() {
-    const select = document.getElementById('decay-engine-select');
-    if (!select) return;
-
-    try {
-        const response = await fetch('/analyze/decay-engines');
-        if (!response.ok) return;
-        const { engines, default: defaultEngine, isotopes } = await response.json();
-
-        const list = document.getElementById('decay-isotope-list');
-        if (list && Array.isArray(isotopes) && isotopes.length) {
-            list.replaceChildren(...isotopes.map((iso) => {
-                const option = document.createElement('option');
-                option.value = iso.name;
-                option.label = `${iso.name} (${iso.half_life})`;
-                return option;
-            }));
-        }
-
-        select.innerHTML = '';
-        const auto = document.createElement('option');
-        auto.value = 'auto';
-        auto.textContent = `Auto (${defaultEngine})`;
-        select.appendChild(auto);
-
-        for (const engine of engines) {
-            const option = document.createElement('option');
-            option.value = engine.name;
-            option.textContent = engine.available
-                ? engine.description
-                : `${engine.description} — not installed`;
-            option.disabled = !engine.available;
-            select.appendChild(option);
-        }
-        select.value = 'auto';
-    } catch (e) {
-        console.warn('Could not load decay engines, keeping static list:', e);
-    }
-}
-
-
-async function runDecayPrediction() {
-    const isotope = document.getElementById('decay-isotope').value.trim();
-    const activity = parseFloat(document.getElementById('decay-activity').value);
-    const duration = parseFloat(document.getElementById('decay-duration').value);
-    const unit = document.getElementById('decay-duration-unit')?.value || 'years';
-    const engineSelect = document.getElementById('decay-engine-select');
-    const engine = engineSelect ? engineSelect.value : 'auto';
-    const info = document.getElementById('decay-info');
-    if (!isotope) return notifyAuto('Enter an isotope, for example Cs-137.');
-    if (!(activity > 0)) return notifyAuto('The starting activity must be more than zero.');
-    if (!(duration > 0)) return notifyAuto('The duration must be more than zero.');
-
-    try {
-        const response = await fetch('/analyze/decay-prediction', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                isotope: isotope,
-                initial_activity_bq: activity,
-                duration_days: durationToDays(duration, unit),
-                engine: engine
-            })
-        });
-
-        if (!response.ok) {
-            let errorMsg = "Prediction failed";
-            try {
-                const err = await response.json();
-                if (err.detail) errorMsg = typeof err.detail === 'string' ? err.detail : 'Check the values entered.';
-            } catch (ignore) { }
-            throw new Error(errorMsg);
-        }
-
-        const result = await response.json();
-        decayResult = result;
-        renderDecayChart(result);
-
-    } catch (e) {
-        console.error(e);
-        if (info) info.textContent = '';
-        notifyAuto(e.message);
-    }
-}
-
-function renderDecayChart(result) {
-    if (decayChartInstance) {
-        decayChartInstance.destroy();
-    }
-
-    const th = chartTheme();
-    const names = result.isotopes;
-    const colors = seriesPalette(readThemeColors(), names.length);
-    const dashes = [[], [7, 4], [2, 3], [9, 3, 2, 3]];       // colour is never the only cue
-    const labels = result.time_labels;
-    const range = activityAxisRange(result);
-
-    const datasets = names.map((iso, i) => ({
-        label: iso,
-        data: forLogAxis(result.activities[iso]),
-        borderColor: colors[i],
-        backgroundColor: 'transparent',
-        borderDash: dashes[i % dashes.length],
-        borderWidth: th.lineWidth,
-        pointRadius: 0,
-        spanGaps: false,
-        tension: Math.min(0.4, th.tension),
-    }));
-
-    const ctx = document.getElementById('decayChart');
-    if (!ctx) return console.error('Decay chart canvas not found');
-
-    const notes = describeDecayResult(result);
-    const info = document.getElementById('decay-info');
-    if (info) info.textContent = [...notes.warnings, notes.info].join(' \u00b7 ');
-    ctx.setAttribute('aria-label', `Decay of ${result.isotope}: ${names.length} nuclides over ${labels[labels.length - 1]}. ${notes.info}`);
-
-    decayChartInstance = new Chart(ctx.getContext('2d'), {
-        type: 'line',
-        plugins: [themeGlowPlugin],
-        data: { labels, datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                title: {
-                    display: true,
-                    text: `Decay of ${result.isotope} over ${labels[labels.length - 1]}`,
-                    color: th.textSecondary,
-                    font: { family: th.font }
-                },
-                legend: { position: 'right', labels: { color: th.textSecondary, font: { family: th.font }, usePointStyle: false } },
-                themeGlow: { blur: th.glow },
-                tooltip: {
-                    backgroundColor: th.card, titleColor: th.text, bodyColor: th.text, borderColor: th.grid, borderWidth: 1,
-                    titleFont: { family: th.font }, bodyFont: { family: th.font },
-                    callbacks: { label: (item) => `${item.dataset.label}: ${formatBq(item.parsed.y)}` }
-                }
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Time since the start', color: th.textSecondary, font: { family: th.font } },
-                    grid: { color: th.grid, borderDash: th.gridDash },
-                    ticks: { color: th.textSecondary, font: { family: th.font }, maxTicksLimit: 8, maxRotation: 0 }
-                },
-                y: {
-                    type: 'logarithmic',
-                    min: range.min,
-                    max: range.max,
-                    title: { display: true, text: 'Activity (Bq)', color: th.textSecondary, font: { family: th.font } },
-                    grid: { color: th.grid, borderDash: th.gridDash },
-                    ticks: {
-                        color: th.textSecondary,
-                        font: { family: th.font },
-                        callback: function (value) {
-                            // one tick per decade
-                            const log10 = Math.log10(value);
-                            return Math.abs(log10 - Math.round(log10)) < 1e-9 ? formatBq(value) : null;
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
 
 // Initialize Estimator with Callbacks
 document.addEventListener('DOMContentLoaded', () => {

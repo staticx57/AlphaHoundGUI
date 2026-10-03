@@ -1,4 +1,5 @@
 
+import { escapeHtml } from './html.js';
 import { api } from './api.js';
 import { notifyAuto, confirmDialog } from './dialogs.js';
 
@@ -63,12 +64,12 @@ export const isotopeUI = {
 
                 item.innerHTML = `
                     <div>
-                        <strong>${name}</strong>
+                        <strong>${escapeHtml(name)}</strong>
                         <span style="font-size:0.85rem; color:var(--text-secondary); margin-left:8px;">
                             ${energies.join(', ')} keV
                         </span>
                     </div>
-                    <button class="btn-delete-iso" data-name="${name}" style="background:transparent; border:none; color:#ef4444; cursor:pointer;"><img src="/static/icons/close.svg" class="icon" style="width: 14px; height: 14px;"></button>
+                    <button class="btn-delete-iso" data-name="${escapeHtml(name)}" style="background:transparent; border:none; color:#ef4444; cursor:pointer;"><img src="/static/icons/close.svg" class="icon" style="width: 14px; height: 14px;"></button>
                 `;
                 this.list.appendChild(item);
             }
@@ -79,7 +80,7 @@ export const isotopeUI = {
             });
 
         } catch (err) {
-            this.list.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+            this.list.innerHTML = `<p style="color:red">Error: ${escapeHtml(err.message)}</p>`;
         }
     },
 

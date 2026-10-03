@@ -1,3 +1,4 @@
+import { debug } from './log.js';
 import { roundTicks, formatKeV } from './axis.js';
 import { chartTheme, themeGlowPlugin } from './chart_theme.js';
 export class AlphaHoundChart {
@@ -106,7 +107,7 @@ export class AlphaHoundChart {
         }
 
         this.labelOffsets[xValue] = maxOffset;
-        console.log(`[LabelStack] x=${xValue.toFixed(1)}, offset=${maxOffset}`);
+        debug(`[LabelStack] x=${xValue.toFixed(1)}, offset=${maxOffset}`);
         return maxOffset;
     }
 
@@ -278,7 +279,7 @@ export class AlphaHoundChart {
 
                     const actualX = chartData[maxIdx]?.x ?? peak.energy;
                     const actualY = chartData[maxIdx]?.y ?? (peak.counts || peak.count || 0);
-                    console.log(`[Peak ${idx}] peak.energy=${peak.energy.toFixed(1)}, peakX=${actualX.toFixed(1)}, peakY=${actualY.toFixed(0)}`);
+                    debug(`[Peak ${idx}] peak.energy=${peak.energy.toFixed(1)}, peakX=${actualX.toFixed(1)}, peakY=${actualY.toFixed(0)}`);
 
                     this.annotations[`peak${idx}`] = {
                         type: 'point',
@@ -297,7 +298,7 @@ export class AlphaHoundChart {
             const xScale = this.chart.options.scales.x;
             const yScale = this.chart.options.scales.y;
             const modeSwitched = this._lastRenderMode !== this.autoScale;
-            console.log(`[Chart] autoScale=${this.autoScale}, lastRenderMode=${this._lastRenderMode}, modeSwitched=${modeSwitched}, fullMaxEnergy=${fullMaxEnergy}`);
+            debug(`[Chart] autoScale=${this.autoScale}, lastRenderMode=${this._lastRenderMode}, modeSwitched=${modeSwitched}, fullMaxEnergy=${fullMaxEnergy}`);
             this._lastRenderMode = this.autoScale;
 
             // Apply the scale type BEFORE zooming. zoomScale() triggers chart.update(), which
@@ -324,14 +325,14 @@ export class AlphaHoundChart {
                     this.chart.zoomScale('x', { min: this.userZoom.min, max: this.userZoom.max }, 'none');
                     this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: yTop }, 'none');
                 } else if (this.autoScale) {
-                    console.log(`[Chart] AutoScale: setting x=[${minEnergy}, ${maxEnergy}], y=[0, ${maxY}]`);
+                    debug(`[Chart] AutoScale: setting x=[${minEnergy}, ${maxEnergy}], y=[0, ${maxY}]`);
                     // Use zoom plugin's zoomScale for programmatic zoom
                     this.chart.zoomScale('x', { min: minEnergy, max: maxEnergy }, 'none');
                     this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: maxY }, 'none');
                 } else {
                     // Full spectrum mode - reset to full scale
                     const fullYMax = (dataPoints.length > 0 ? Math.max(...dataPoints) : 100) * 1.15;
-                    console.log(`[Chart] FullSpectrum: setting x=[0, ${fullMaxEnergy}], y=[0, ${fullYMax}]`);
+                    debug(`[Chart] FullSpectrum: setting x=[0, ${fullMaxEnergy}], y=[0, ${fullYMax}]`);
                     this.chart.zoomScale('x', { min: 0, max: fullMaxEnergy }, 'none');
                     this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: fullYMax }, 'none');
                 }
@@ -685,7 +686,7 @@ export class AlphaHoundChart {
 
             // Force full chart update (no animation to prevent recursion)
             this.chart.update('none');
-            console.log(`✓ ROI highlighted: ${startEnergy}-${endEnergy} keV`);
+            debug(`✓ ROI highlighted: ${startEnergy}-${endEnergy} keV`);
         } catch (err) {
             console.error('Error highlighting ROI:', err);
         } finally {
@@ -766,7 +767,7 @@ export class AlphaHoundChart {
         const styles = getComputedStyle(document.documentElement);
         const themedColor = color || styles.getPropertyValue('--secondary-color').trim() || 'rgba(129, 140, 248, 0.9)';
 
-        console.log('[XRF Highlight] Called with peaks:', peaks);
+        debug('[XRF Highlight] Called with peaks:', peaks);
 
         if (!this.chart) {
             console.warn('[XRF Highlight] Chart not initialized');
@@ -814,7 +815,7 @@ export class AlphaHoundChart {
 
             this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
             if (!skipUpdate) this.chart.update('none');
-            console.log(`✓ XRF peaks highlighted: ${peaks.length} lines`);
+            debug(`✓ XRF peaks highlighted: ${peaks.length} lines`);
         } finally {
             this.isSyncing = false;
         }
@@ -959,7 +960,7 @@ export class AlphaHoundChart {
 
             this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
             if (!skipUpdate) this.chart.update('none');
-            console.log(`✓ Added isotope highlight: ${isotopeName}`);
+            debug(`✓ Added isotope highlight: ${isotopeName}`);
         } finally {
             this.isSyncing = wasSyncing;
         }
@@ -975,7 +976,7 @@ export class AlphaHoundChart {
             });
             this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
             this.chart.update('none');
-            console.log(`✓ Removed isotope highlight: ${isotopeName}`);
+            debug(`✓ Removed isotope highlight: ${isotopeName}`);
         } finally {
             this.isSyncing = false;
         }
@@ -1011,7 +1012,7 @@ export class AlphaHoundChart {
             this.onScrubberChange();
         });
 
-        console.log('[Scrubber] Initialized');
+        debug('[Scrubber] Initialized');
     }
 
     /**

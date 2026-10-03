@@ -3,6 +3,7 @@
  * Handles file uploads, device communication, and spectrum analysis.
  * @class
  */
+import { debug } from './log.js';
 import { getActiveDevice } from './device_features.js';
 
 export class AlphaHoundAPI {
@@ -773,7 +774,7 @@ export class AlphaHoundAPI {
         this.doseWebSocket = new WebSocket(wsUrl);
 
         this.doseWebSocket.onopen = () => {
-            console.log('[WebSocket] Connected');
+            debug('[WebSocket] Connected');
             this.reconnectAttempts = 0;
             if (this.listeners.onConnectionStatus) this.listeners.onConnectionStatus('connected');
         };
@@ -790,7 +791,7 @@ export class AlphaHoundAPI {
         };
 
         this.doseWebSocket.onclose = () => {
-            console.log('[WebSocket] Closed');
+            debug('[WebSocket] Closed');
             this.doseWebSocket = null;
             if (this.listeners.onConnectionStatus) this.listeners.onConnectionStatus('disconnected');
             this.attemptReconnect();
@@ -799,7 +800,7 @@ export class AlphaHoundAPI {
 
     attemptReconnect() {
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-        console.log(`[WebSocket] Reconnecting in ${delay}ms...`);
+        debug(`[WebSocket] Reconnecting in ${delay}ms...`);
 
         this.reconnectTimer = setTimeout(() => {
             this.reconnectAttempts++;

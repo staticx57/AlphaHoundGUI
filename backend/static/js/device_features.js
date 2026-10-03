@@ -1,3 +1,4 @@
+import { debug } from './log.js';
 /**
  * Device Features Module
  * 
@@ -70,7 +71,7 @@ export function updateDeviceUI(deviceType) {
         return;
     }
 
-    console.log(`[DeviceFeatures] Updating UI for ${deviceType}`);
+    debug(`[DeviceFeatures] Updating UI for ${deviceType}`);
 
     // Enable the unified controls panel (remove disconnected state)
     const controlsPanel = document.getElementById('unified-device-controls');

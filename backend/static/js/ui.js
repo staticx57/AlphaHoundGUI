@@ -1,3 +1,4 @@
+import { escapeHtml } from './html.js';
 import { api } from './api.js';
 import { formatDoseRate, resolveUnit, getDosePref, UREM_PER_USV } from './units.js';
 import { describeMetadata } from './metadata_cards.js';
@@ -66,7 +67,7 @@ export class AlphaHoundUI {
     showLoading(message = 'Processing...') {
         this.elements.dropZone.innerHTML = `
             <div class="upload-icon"><img src="/static/icons/hourglass.svg" class="icon spin" style="width: 48px; height: 48px;"></div>
-            <h2>${message}</h2>
+            <h2>${escapeHtml(message)}</h2>
             <p>Please wait while we parse the spectrum...</p>
         `;
     }
@@ -88,7 +89,7 @@ export class AlphaHoundUI {
         this.elements.dropZone.innerHTML = `
             <div class="upload-icon"><img src="/static/icons/error.svg" style="width: 48px; height: 48px; filter: invert(1);"></div>
             <h2>Error. Try again.</h2>
-            <p style="color: #ef4444; font-size: 0.8rem; margin-top: 0.5rem;">${message}</p>
+            <p style="color: #ef4444; font-size: 0.8rem; margin-top: 0.5rem;">${escapeHtml(message)}</p>
             <input type="file" id="file-input" accept=".n42,.xml,.csv" aria-label="Choose a spectrum file">
         `;
     }
@@ -504,7 +505,7 @@ export class AlphaHoundUI {
             if (state.status === 'running') {
                 list.innerHTML = note('Running AI identification (the first run trains the model, about 10-30 s)\u2026');
             } else if (state.status === 'error') {
-                list.innerHTML = `<p class="ai-note ai-error"><img src="/static/icons/error.svg" class="icon" style="width: 14px; height: 14px;"> ${state.error}</p>`;
+                list.innerHTML = `<p class="ai-note ai-error"><img src="/static/icons/error.svg" class="icon" style="width: 14px; height: 14px;"> ${escapeHtml(state.error)}</p>`;
             } else if (state.status === 'done' && state.predictions?.length) {
                 const quality = { good: 'High confidence', moderate: 'Moderate confidence', low_confidence: 'Low confidence', no_match: 'No match' }[state.quality] || '';
                 list.innerHTML = (stale ? note('The spectrum has grown since this ran. Run it again for an up-to-date answer.') : '')
