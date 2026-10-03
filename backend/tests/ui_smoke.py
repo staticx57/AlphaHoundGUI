@@ -7,7 +7,7 @@ dose WebSocket, so no hardware is required. Screenshots go to tests/ui_smoke_out
 
     python backend/tests/ui_smoke.py
 """
-import json, os, sys
+import json, os, re as _re, sys
 from playwright.sync_api import sync_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -459,6 +459,79 @@ with sync_playwright() as p:
     check("L the port list uses short names",
           all(len(o) < 32 for o in pl.evaluate("[...document.querySelectorAll('#port-select option')].map(o => o.textContent)")))
     ctx_l.close()
+
+    # M. Result summary above the chart, peaks beside identification, one request per AI run, AI answer tied to its spectrum
+    ctx_m = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pm = ctx_m.new_page()
+    errs_m = []
+    ai_calls = {"n": 0}
+    pm.on("pageerror", lambda e: errs_m.append(f"pageerror: {e}"))
+    pm.on("dialog", lambda d: (errs_m.append("native dialog: " + d.message), d.dismiss()))
+
+    def _ai(route, request):
+        ai_calls["n"] += 1
+        route.fulfill(status=200, content_type="application/json", body=_json.dumps(
+            {"predictions": [{"isotope": "Cs-137", "confidence": 88.0, "method": "mlp"}, {"isotope": "Ba-133", "confidence": 6.0, "method": "mlp"}],
+             "quality": "good"}))
+    pm.route("**/analyze/ml-identify", _ai)
+    pm.goto(URL, wait_until="networkidle")
+    pm.set_input_files("#file-input", SPEC)
+    pm.wait_for_selector("#result-summary", state="visible", timeout=20000)
+    pm.wait_for_function("window.Chart && Chart.getChart(document.getElementById('spectrumChart'))", timeout=10000)
+    check("M the headline names the isotope", pm.inner_text("#rs-name").strip() == "Cs-137", pm.inner_text("#rs-name"))
+    check("M the headline shows confidence and the supporting numbers",
+          "95" in pm.inner_text("#rs-conf") and pm.inner_text("#rs-peaks").strip() == "6" and pm.inner_text("#rs-counts").strip() != "--"
+          and "cps" in pm.inner_text("#rs-rate") and "min" in pm.inner_text("#rs-live"),
+          " | ".join(pm.inner_text(i).strip() for i in ("#rs-conf", "#rs-peaks", "#rs-counts", "#rs-rate", "#rs-live")))
+    pos = pm.evaluate("""() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+        return { summaryBottom: r('#result-summary').bottom, chartTop: r('.chart-container').top,
+                 peaksLeft: r('#peaks-container').left, peaksTop: r('#peaks-container').top, peaksRight: r('#peaks-container').right,
+                 isoLeft: r('#isotopes-container').left, isoTop: r('#isotopes-container').top } }""")
+    check("M the headline sits above the chart", pos["summaryBottom"] <= pos["chartTop"], str(pos))
+    check("M peaks and identification sit side by side on a wide screen",
+          abs(pos["peaksTop"] - pos["isoTop"]) < 4 and pos["peaksRight"] <= pos["isoLeft"], str(pos))
+    text = pm.inner_text("body")
+    check("M the labels say what they mean (Experimental, Line Matching; no WIP / Legacy)",
+          "experimental" in text.lower() and "line matching" in text.lower()
+          and not _re.search(r"\bwip\b", text.lower()) and "legacy" not in text.lower())
+    heads = pm.evaluate("[...document.querySelectorAll('#peaks-table thead th')].map(t => t.textContent.trim())")
+    check("M the peaks table has energy, counts, FWHM and matches", len(heads) == 4 and "FWHM" in heads[2] and "Matches" in heads[3], str(heads))
+    matches = pm.evaluate("""() => [...document.querySelectorAll('#peaks-tbody tr')].map(r => r.querySelector('.peak-matches').textContent.trim())""")
+    check("M the 662 keV peak is labelled Cs-137 and unrelated peaks are not", matches.count("Cs-137") == 1 and len(matches) == 6, str(matches))
+    pm.click("#peaks-tbody tr:nth-child(4)")
+    marked = pm.evaluate("""() => ({ roi: !!window.chartManager.annotations.roiHighlight, pressed: document.querySelector('#peaks-tbody tr:nth-child(4)').getAttribute('aria-pressed') })""")
+    check("M clicking a peak row marks that peak on the chart", marked["roi"] and marked["pressed"] == "true", str(marked))
+    pm.click("#peaks-tbody tr:nth-child(4)")
+    check("M clicking it again clears the mark", not pm.evaluate("!!window.chartManager.annotations.roiHighlight"))
+    pm.focus("#peaks-tbody tr:nth-child(2)")
+    pm.keyboard.press("Enter")
+    check("M the rows work from the keyboard", pm.evaluate("!!window.chartManager.annotations.roiHighlight"))
+    pm.keyboard.press("Enter")
+    check("M the AI answer starts as not run", "Not run" in pm.inner_text("#rs-ai-text") and "Not run yet" in pm.inner_text("#ml-isotopes-list"))
+    pm.click("#btn-run-ml")
+    pm.wait_for_function("document.getElementById('rs-ai-text').textContent.includes('Cs-137')", timeout=8000)
+    check("M one click sends one AI request", ai_calls["n"] == 1, str(ai_calls["n"]))
+    check("M the headline shows the AI answer and whether it agrees with line matching",
+          "88" in pm.inner_text("#rs-ai-text") and "agrees" in pm.inner_text("#rs-ai-verdict"),
+          pm.inner_text("#rs-ai-text") + " / " + pm.inner_text("#rs-ai-verdict"))
+    check("M the AI list shows both predictions", pm.locator("#ml-isotopes-list .ai-pred").count() == 2)
+    check("M the analysis panel was left alone by the isotopes-box button", "Run Peak Fitting" in pm.inner_text("#analysis-results") or "Click" in pm.inner_text("#analysis-results"))
+    pm.click("#btn-rs-ai")
+    pm.wait_for_timeout(600)
+    check("M the summary button runs it again", ai_calls["n"] == 2, str(ai_calls["n"]))
+    pm.set_input_files("#file-input", _offset_file)
+    pm.wait_for_function("document.getElementById('rs-ai-text').textContent.includes('Not run')", timeout=10000)
+    check("M loading a different spectrum drops the old AI answer", "Not run yet" in pm.inner_text("#ml-isotopes-list"))
+    pm.set_viewport_size({"width": 800, "height": 900})
+    pm.wait_for_timeout(300)
+    pos = pm.evaluate("""() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+        return { peaksTop: r('#peaks-container').top, isoTop: r('#isotopes-container').top, over: document.documentElement.scrollWidth - innerWidth } }""")
+    check("M below 900 px peaks and identification stack", pos["isoTop"] > pos["peaksTop"], str(pos))
+    pm.set_viewport_size({"width": 390, "height": 844})
+    pm.wait_for_timeout(300)
+    check("M no horizontal overflow with a result on a phone", pm.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    check("M no JS errors or native dialogs", not errs_m, "; ".join(errs_m[:3]))
+    ctx_m.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

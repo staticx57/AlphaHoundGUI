@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=22">
+    <link rel="stylesheet" href="/static/style.css?v=23">
     <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Chart.js loaded async for performance -->
@@ -623,6 +623,32 @@
         </div>
 
         <div id="dashboard" style="display: none;">
+            <section id="result-summary" class="result-summary" aria-label="Result summary" hidden>
+                <div class="rs-main">
+                    <span class="rs-kicker">Most likely</span>
+                    <div class="rs-verdict">
+                        <span id="rs-name" class="rs-name">--</span>
+                        <span id="rs-conf" class="rs-conf" hidden></span>
+                    </div>
+                    <div class="rs-bar confidence-track" hidden><div id="rs-bar-fill" class="rs-bar-fill"></div></div>
+                    <p id="rs-note" class="rs-note"></p>
+                    <span id="rs-flag" class="rs-flag" hidden></span>
+                </div>
+                <dl class="rs-facts">
+                    <div><dt>Peaks</dt><dd id="rs-peaks">--</dd></div>
+                    <div><dt>Counts</dt><dd id="rs-counts">--</dd></div>
+                    <div><dt>Mean rate</dt><dd id="rs-rate">--</dd></div>
+                    <div><dt>Collected over</dt><dd id="rs-live">--</dd></div>
+                </dl>
+                <div class="rs-ai">
+                    <span class="rs-kicker">AI check <span class="badge-experimental" title="The neural network is experimental: treat it as a second opinion">Experimental</span></span>
+                    <span id="rs-ai-text" class="rs-ai-text">Not run</span>
+                    <span id="rs-ai-verdict" class="rs-ai-verdict" hidden></span>
+                    <button id="btn-rs-ai" type="button" class="btn-secondary">Run AI check</button>
+                    <a href="#results-row" class="rs-link">Peaks and details &darr;</a>
+                </div>
+            </section>
+
             <div class="metadata-panel" id="metadata-panel">
                 <!-- Populated by JS -->
             </div>
@@ -765,9 +791,10 @@
                 </div>
             </div>
 
+            <div id="results-row" class="results-row">
             <div id="peaks-container" style="display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <h3 style="margin: 0;">Detected Peaks</h3>
+                    <h3 style="margin: 0;">Detected Peaks <span class="peaks-hint">click a row to mark it on the chart</span></h3>
                     <button id="btn-toggle-peaks" class="btn-secondary"
                         style="font-size: 0.8rem; padding: 2px 8px;">Hide</button>
                 </div>
@@ -775,8 +802,10 @@
                     <table id="peaks-table" class="data-table">
                         <thead>
                             <tr>
-                                <th>Energy (keV)</th>
-                                <th class="text-right">Counts</th>
+                                <th scope="col">Energy (keV)</th>
+                                <th scope="col" class="text-right">Counts</th>
+                                <th scope="col" class="text-right" title="Full width at half maximum of the fitted peak">FWHM (keV)</th>
+                                <th scope="col">Matches</th>
                             </tr>
                         </thead>
                         <tbody id="peaks-tbody"></tbody>
@@ -799,7 +828,7 @@
                 </div>
 
                 <!-- Dual Detection Results -->
-                <div id="identification-results" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                <div id="identification-results" class="identification-results">
 
                     <!-- Legacy Peak-Based Results -->
                     <div class="detection-panel"
@@ -807,9 +836,9 @@
                         <div
                             style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
                             <img src="/static/icons/chart.svg" class="icon" style="margin-right: 0.25rem;">
-                            <strong style="color: var(--text-primary);">Peak Matching</strong>
+                            <strong style="color: var(--text-primary);">Line Matching</strong>
                             <span
-                                style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">Legacy</span>
+                                style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">IAEA / NNDC lines</span>
                         </div>
                         <div id="legacy-isotopes-list">
                             <!-- Populated by JS -->
@@ -824,7 +853,7 @@
                             <img src="/static/icons/robot.svg" class="icon" style="margin-right: 0.25rem;">
                             <strong style="color: var(--accent-color);">AI Identification</strong>
                             <span
-                                style="font-size: 0.65rem; background: orange; color: black; padding: 2px 6px; border-radius: 4px; font-weight: bold;">WIP</span>
+                                class="badge-experimental" title="The neural network is experimental: treat it as a second opinion">Experimental</span>
                             <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: auto;">Neural
                                 net</span>
                         </div>
@@ -836,15 +865,12 @@
                     </div>
                 </div>
 
-                <!-- Info Bar -->
-                <div
-                    style="margin-top: 1rem; padding: 0.75rem; background: rgba(56, 189, 248, 0.1); border-radius: 8px; font-size: 0.8rem; color: var(--text-secondary);">
-                    <strong><img src="/static/icons/lightbulb.svg" class="icon"
-                            style="margin-right: 0.25rem; vertical-align: middle;">Tip:</strong> Peak Matching uses
-                    known gamma energies
-                    from IAEA/NNDC databases. AI
-                    Identification uses a neural network trained on 90+ isotopes for pattern recognition.
-                </div>
+                <p class="id-caption">
+                    <b>Line Matching</b> compares the detected peaks with known gamma lines from the IAEA / NNDC databases.
+                    <b>AI Identification</b> is an experimental neural network trained on 90+ isotopes; when the two disagree,
+                    trust the one whose peaks you can see on the spectrum.
+                </p>
+            </div>
             </div>
 
             <div id="decay-chains-container" style="display: none; margin-top: 2rem;">

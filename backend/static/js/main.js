@@ -10,6 +10,7 @@ import { updateDeviceUI, resetDeviceUI, getActiveDevice } from './device_feature
 import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
 import { notify, notifyAuto, confirmDialog, infoDialog, setNotifier } from './dialogs.js';
 import { ChannelPanel } from './channels.js';
+import { spectrumSignature } from './summary.js';
 import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
 
 // Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
@@ -1688,84 +1689,90 @@ function setupEventListeners() {
         }
     });
 
-    // ML Identification
-    document.getElementById('btn-ml-identify').addEventListener('click', async () => {
-        if (!currentData || !currentData.counts) return notifyAuto('No data loaded');
+    // ML Identification: one request path for every button (analysis panel, isotopes box, summary card)
+    const aiTableHtml = (data) => {
+        const quality = data.quality || 'unknown';
+        const qualityColors = { good: '#10b981', moderate: '#f59e0b', low_confidence: '#ef4444', no_match: '#6b7280' };
+        const qualityLabels = {
+            good: '<img src="/static/icons/check.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> High Confidence',
+            moderate: '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Moderate',
+            low_confidence: '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Low Confidence',
+            no_match: '? No Match'
+        };
+        const badge = quality !== 'unknown' ?
+            `<span style="color: ${qualityColors[quality]}; font-size: 0.8rem; margin-left: 0.5rem;">${qualityLabels[quality]}</span>` : '';
+        return `
+            <h4 style="margin-top: 0;">ML Predictions${badge}</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                        <th style="padding: 4px;">Isotope</th>
+                        <th style="padding: 4px;">Confidence</th>
+                        <th style="padding: 4px;">Method</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.predictions.map(pred => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${pred.suppressed ? 'opacity: 0.5;' : ''}">
+                            <td style="padding: 4px;"><strong>${pred.isotope}</strong>${pred.suppressed ? ' <span style="font-size:0.7rem;color:#ef4444;">(suppressed)</span>' : ''}</td>
+                            <td style="padding: 4px;">${pred.confidence.toFixed(1)}%</td>
+                            <td style="padding: 4px;">${pred.method}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem;">
+                Note: First run trains the model (~10-30s). Subsequent runs are instant.
+            </p>
+        `;
+    };
 
-        const resultsContainer = document.getElementById('analysis-results');
-        resultsContainer.innerHTML = '<p>Running AI identification...</p>';
-
+    let aiRunning = false;
+    /** @param {{table?: boolean}} [opts] table: also write the full predictions table into the analysis panel */
+    async function runAiIdentify({ table = false } = {}) {
+        if (!currentData || !currentData.counts) return notifyAuto('No spectrum data loaded');
+        if (aiRunning) return;
+        aiRunning = true;
+        const signature = spectrumSignature(currentData.counts);
+        const tableBox = document.getElementById('analysis-results');
+        const runButton = document.getElementById('btn-run-ml');
+        const original = runButton ? runButton.innerHTML : '';
+        if (runButton) {
+            runButton.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 16px; height: 16px;"> Running...';
+            runButton.disabled = true;
+        }
+        ui.setAiState({ status: 'running', signature });
+        if (table && tableBox) tableBox.innerHTML = '<p>Running AI identification...</p>';
         try {
             const response = await fetch('/analyze/ml-identify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ counts: currentData.counts, energies: currentData.energies })
             });
-
             if (!response.ok) {
-                const error = await response.json();
+                const error = await response.json().catch(() => ({}));
                 throw new Error(error.detail || 'ML identification failed');
             }
-
             const data = await response.json();
-
-            if (data.predictions && data.predictions.length > 0) {
-                // Quality badge based on top confidence
-                const quality = data.quality || 'unknown';
-                const qualityColors = {
-                    'good': '#10b981',
-                    'moderate': '#f59e0b',
-                    'low_confidence': '#ef4444',
-                    'no_match': '#6b7280'
-                };
-                const qualityLabels = {
-                    'good': '<img src="/static/icons/check.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> High Confidence',
-                    'moderate': '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Moderate',
-                    'low_confidence': '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Low Confidence',
-                    'no_match': '? No Match'
-                };
-                const qualityBadge = quality !== 'unknown' ?
-                    `<span style="color: ${qualityColors[quality]}; font-size: 0.8rem; margin-left: 0.5rem;">${qualityLabels[quality]}</span>` : '';
-
-                resultsContainer.innerHTML = `
-                    <h4 style="margin-top: 0;">ML Predictions${qualityBadge}</h4>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
-                                <th style="padding: 4px;">Isotope</th>
-                                <th style="padding: 4px;">Confidence</th>
-                                <th style="padding: 4px;">Method</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.predictions.map(pred => `
-                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${pred.suppressed ? 'opacity: 0.5;' : ''}">
-                                    <td style="padding: 4px;"><strong>${pred.isotope}</strong>${pred.suppressed ? ' <span style="font-size:0.7rem;color:#ef4444;">(suppressed)</span>' : ''}</td>
-                                    <td style="padding: 4px;">${pred.confidence.toFixed(1)}%</td>
-                                    <td style="padding: 4px;">${pred.method}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                    <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem;">
-                        Note: First run trains the model (~10-30s). Subsequent runs are instant.
-                    </p>
-                `;
-            } else {
-                resultsContainer.innerHTML = '<p>No ML predictions available.</p>';
+            ui.setAiState({ status: 'done', predictions: data.predictions || [], quality: data.quality, signature });
+            if (table && tableBox) {
+                tableBox.innerHTML = data.predictions && data.predictions.length
+                    ? aiTableHtml(data) : '<p>No ML predictions available.</p>';
             }
         } catch (err) {
-            resultsContainer.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+            ui.setAiState({ status: 'error', error: err.message, signature });
+            if (table && tableBox) tableBox.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+        } finally {
+            aiRunning = false;
+            if (runButton) {
+                runButton.innerHTML = original;
+                runButton.disabled = false;
+            }
         }
-    });
-
-    // ML Identification Button in Isotopes Container (new enhanced button)
-    const btnRunML = document.getElementById('btn-run-ml');
-    if (btnRunML) {
-        btnRunML.addEventListener('click', () => {
-            document.getElementById('btn-ml-identify').click();
-        });
     }
+    document.getElementById('btn-ml-identify').addEventListener('click', () => runAiIdentify({ table: true }));
+    document.getElementById('btn-run-ml')?.addEventListener('click', () => runAiIdentify());
+    document.getElementById('btn-rs-ai')?.addEventListener('click', () => runAiIdentify());
 
     // Detected Peaks Toggle
     const btnTogglePeaks = document.getElementById('btn-toggle-peaks');
@@ -1781,73 +1788,6 @@ function setupEventListeners() {
             }
         });
     }
-    btnRunML.addEventListener('click', async () => {
-        if (!currentData || !currentData.counts) return notifyAuto('No spectrum data loaded');
-
-        const mlList = document.getElementById('ml-isotopes-list');
-        const btn = document.getElementById('btn-run-ml');
-        const originalHTML = btn.innerHTML;
-
-        btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 16px; height: 16px;"> Running...';
-        btn.disabled = true;
-        mlList.innerHTML = '<p style="color: var(--text-secondary);">Running AI identification (first run trains model ~10-30s)...</p>';
-
-        try {
-            const response = await fetch('/analyze/ml-identify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ counts: currentData.counts, energies: currentData.energies })
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'ML identification failed');
-            }
-
-            const data = await response.json();
-
-            if (data.predictions && data.predictions.length > 0) {
-                // Get theme-aware confidence colors
-                const styles = getComputedStyle(document.documentElement);
-                const confHigh = styles.getPropertyValue('--confidence-high').trim() || '#10b981';
-                const confMed = styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b';
-                const confLow = styles.getPropertyValue('--confidence-low').trim() || '#8b5cf6';
-
-                mlList.innerHTML = data.predictions.map(pred => {
-                    const confidence = pred.confidence;
-                    const barColor = confidence > 70 ? confHigh :
-                        confidence > 40 ? confMed : confLow;
-                    const confidenceLabel = confidence > 70 ? 'HIGH' :
-                        confidence > 40 ? 'MEDIUM' : 'LOW';
-
-                    return `
-                            <div style="margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(139, 92, 246, 0.1); border-radius: 6px; border-left: 3px solid ${barColor};">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
-                                    <strong style="color: var(--accent-color);">${pred.isotope}</strong>
-                                    <span style="font-size: 0.75rem; color: ${barColor}; font-weight: 600;">${confidenceLabel}</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                                        <div style="width: ${Math.min(confidence, 100)}%; height: 100%; background: linear-gradient(90deg, ${confLow}, ${barColor}); border-radius: 3px; transition: width 0.3s ease;"></div>
-                                    </div>
-                                    <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 50px;">${confidence.toFixed(1)}%</span>
-                                </div>
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                    ${pred.method}
-                                </div>
-                            </div>
-                        `;
-                }).join('');
-            } else {
-                mlList.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No ML predictions available for this spectrum</p>';
-            }
-        } catch (err) {
-            mlList.innerHTML = `<p style="color: #ef4444;"><img src="/static/icons/error.svg" class="icon" style="width: 14px; height: 14px; filter: invert(41%) sepia(93%) saturate(1352%) hue-rotate(336deg);"> Error: ${err.message}</p>`;
-        } finally {
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
-        }
-    });
 }
 
 // Calibration Tool
@@ -2941,7 +2881,7 @@ async function startAcquisition() {
                 // Update spectrum display if data available
                 if (status.spectrum_data) {
                     currentData = status.spectrum_data;
-                    ui.renderDashboard(currentData);
+                    ui.renderDashboard(currentData, { live: true });
                     if (isPageVisible) {
                         chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
                         // Ensure scrubber is visible and updated
@@ -2963,7 +2903,7 @@ async function startAcquisition() {
                     const finalData = await api.getAcquisitionData();
                     if (finalData) {
                         currentData = finalData;
-                        ui.renderDashboard(currentData);
+                        ui.renderDashboard(currentData, { live: true });
                         if (isPageVisible) {
                             chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
                             // Ensure scrubber is visible and updated

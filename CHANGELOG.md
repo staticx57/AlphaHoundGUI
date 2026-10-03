@@ -9,9 +9,17 @@
 - **Replica colours** option: a tint of the active theme (default) or the hardware's own white-blue.
 - `tests/ui_channels_sweep.py` (every theme at desktop and phone width: the chart really uses each theme's tokens, colours are distinct and readable, no overflow or JS errors) and `tests/ah_mock.py` (a mocked AlphaHound for browser tests); `tests/test_theme_js.py` (palette, chart theme and channel logic under Node, plus a check of all 17 theme blocks in `style.css`).
 
+- **Result summary above the chart** (`static/js/summary.js`): the most likely isotope with its confidence, the other candidates, peak count, total counts, mean rate and collection time, plus a data-quality flag and the AI second opinion (agrees / partly agrees / differs from line matching). The answer used to sit about 1,500 px down the page.
+- **Peaks table** now shows FWHM and the isotope each peak was matched to; rows are buttons (mouse or keyboard) that mark the peak on the chart.
+
 ### Changed
+- **Peaks and identification sit side by side** on wide screens and stack below 900 px. "Legacy" is now "IAEA / NNDC lines", "WIP" is "Experimental", and the tip box became a caption.
 - **Short desktop windows** (a laptop at 1280x800 or 1366x768): the page header and top margin shrink and the history chart scales with the window height, so the whole device area fits without scrolling.
 - The AlphaHound dose readout formats follow the device (whole uRem/h, two-decimal uSv); the JS test helpers decode Node's output as UTF-8.
+
+### Fixed
+- **AI Identify sent two requests per click** from the isotopes box (a forwarded click also triggered the analysis-panel handler, which overwrote the peak-fit results). All AI buttons share one request path now.
+- **A stale AI answer stayed on screen after loading another spectrum**; it is cleared for a new spectrum and marked outdated while a live acquisition keeps growing.
 
 ## [Session 2026-10-02 PM] - AlphaHound modernization: CPS channels, display replica, remote control
 

@@ -1,4 +1,8 @@
 import { api } from './api.js';
+import {
+    summarizeIdentification, compareIdentifications, peakMatches, summaryFacts, formatCount, formatDuration,
+    spectrumSignature, spectrumChange, confidenceLabel,
+} from './summary.js';
 
 export class AlphaHoundUI {
     constructor() {
@@ -12,6 +16,8 @@ export class AlphaHoundUI {
             doseDisplay: document.getElementById('rc-dose-display'), // shared live-dose readout in the unified device panel
             acquisitionTimer: document.getElementById('acquisition-timer'),
             isotopesContainer: document.getElementById('isotopes-container'),
+            resultsRow: document.getElementById('results-row'),
+            summary: document.getElementById('result-summary'),
             isotopesTbody: document.getElementById('isotopes-tbody'),
             decayChainsContainer: document.getElementById('decay-chains-container'),
             decayChainsList: document.getElementById('decay-chains-list'),
@@ -25,6 +31,10 @@ export class AlphaHoundUI {
                 row: document.getElementById('alphahound-connection-row')
             }
         };
+        this._sig = null;                           // fingerprint of the spectrum on screen
+        this._lineSummary = null;                   // the headline from line matching
+        this.aiState = { status: 'idle' };          // neural-net identification of the spectrum on screen
+        this._selectedPeak = null;                  // index of the peak highlighted on the chart
     }
 
     /**
@@ -81,16 +91,27 @@ export class AlphaHoundUI {
         `;
     }
 
-    renderDashboard(data) {
+    /** @param {{live?: boolean}} [opts] live: an update of the acquisition in progress (the same spectrum, still growing) */
+    renderDashboard(data, { live = false } = {}) {
         // Detector lower threshold (keV): auto-scale view starts here and ignores the noise below it
         if (window.chartManager) {
             window.chartManager.displayMinKeV = (typeof data?.display_min_keV === 'number') ? data.display_min_keV : null;
         }
         this.elements.dashboard.style.display = 'block';
+        // A different spectrum invalidates the AI answer; a live acquisition growing only makes it outdated.
+        const signature = spectrumSignature(data.counts);
+        if (!live || spectrumChange(this._sig, signature) === 'new') this.aiState = { status: 'idle' };
+        if (this._selectedPeak !== null) {            // peaks are rebuilt: the marked one no longer maps to a row
+            window.chartManager?.clearROIHighlight();
+            this._selectedPeak = null;
+        }
+        this._sig = signature;
         this.renderMetadata(data.metadata);
         this.renderDataQualityWarning(data.data_quality);
-        this.renderPeaks(data.peaks);
+        this.renderPeaks(data.peaks, data.isotopes);
         this.renderIsotopes(data.isotopes);
+        this.renderSummary(data);
+        this.renderAiResults();
         this.renderDecayChains(data.decay_chains);
         if (data.xrf_detections) {
             this.renderXRF(data.xrf_detections);
@@ -291,10 +312,9 @@ export class AlphaHoundUI {
             </div>
         `;
 
-        // Insert before isotopes container
-        if (this.elements.isotopesContainer) {
-            this.elements.isotopesContainer.insertAdjacentHTML('beforebegin', warningHTML);
-        }
+        // Insert above the peaks / identification row
+        const anchor = this.elements.resultsRow || this.elements.isotopesContainer;
+        if (anchor) anchor.insertAdjacentHTML('beforebegin', warningHTML);
     }
 
     renderMetadata(metadata) {
@@ -407,17 +427,179 @@ export class AlphaHoundUI {
         this.elements.metadataPanel.innerHTML = metaHtml;
     }
 
-    renderPeaks(peaks) {
-        if (peaks && peaks.length > 0) {
-            this.elements.peaksContainer.style.display = 'block';
-            this.elements.peaksTbody.innerHTML = peaks.map(peak => `
-                <tr>
+    renderPeaks(peaks, isotopes) {
+        this._peaks = Array.isArray(peaks) ? peaks : [];
+        if (!this._peaks.length) {
+            this.elements.peaksContainer.style.display = 'none';
+            return;
+        }
+        this.elements.peaksContainer.style.display = 'block';
+        const matches = peakMatches(this._peaks, isotopes);
+        const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        this.elements.peaksTbody.innerHTML = this._peaks.map((peak, i) => {
+            const fwhm = Number(peak.fwhm);
+            const fwhmText = Number.isFinite(fwhm) && fwhm > 0 ? fwhm.toFixed(1) : '\u2013';
+            const weak = peak.fit_valid === false;
+            const names = matches[i];
+            const matchHtml = names.length
+                ? names.map((n) => `<span class="peak-match">${esc(n)}</span>`).join('')
+                : '<span class="peak-nomatch" aria-label="no match">\u2013</span>';
+            const selected = this._selectedPeak === i;
+            return `
+                <tr class="peak-row${selected ? ' selected' : ''}" data-peak-index="${i}" tabindex="0" role="button"
+                    aria-pressed="${selected}" aria-label="${peak.energy.toFixed(1)} keV: highlight this peak on the chart">
                     <td>${peak.energy.toFixed(2)}</td>
                     <td class="text-right">${peak.counts.toFixed(0)}</td>
-                </tr>
-            `).join('');
+                    <td class="text-right${weak ? ' peak-weak' : ''}"${weak ? ' title="Peak fit is poor: treat the width as approximate"' : ''}>${fwhmText}</td>
+                    <td class="peak-matches">${matchHtml}</td>
+                </tr>`;
+        }).join('');
+        this.elements.peaksTbody.querySelectorAll('.peak-row').forEach((row) => {
+            const toggle = () => this._togglePeakHighlight(Number(row.dataset.peakIndex));
+            row.addEventListener('click', toggle);
+            row.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+            });
+        });
+    }
+
+    /** Mark a peak on the spectrum (click again to clear); the band is one FWHM either side. */
+    _togglePeakHighlight(index) {
+        const peak = this._peaks?.[index];
+        const chart = window.chartManager;
+        if (!peak || !chart) return;
+        const same = this._selectedPeak === index;
+        this._selectedPeak = same ? null : index;
+        if (same) {
+            chart.clearROIHighlight();
         } else {
-            this.elements.peaksContainer.style.display = 'none';
+            const half = Math.max(Number(peak.fwhm) || 0, 6);
+            chart.highlightROI(peak.energy - half, peak.energy + half, `${peak.energy.toFixed(1)} keV`);
+        }
+        this.elements.peaksTbody.querySelectorAll('.peak-row').forEach((row) => {
+            const on = Number(row.dataset.peakIndex) === this._selectedPeak;
+            row.classList.toggle('selected', on);
+            row.setAttribute('aria-pressed', String(on));
+        });
+    }
+
+    /** The answer, above the chart: most likely isotope, how sure, and the numbers around it. */
+    renderSummary(data) {
+        const el = this.elements.summary;
+        if (!el) return;
+        const set = (id, text) => { const n = document.getElementById(id); if (n) n.textContent = text; };
+        const line = summarizeIdentification({ isotopes: data.isotopes, isCalibrated: data.is_calibrated });
+        this._lineSummary = line;
+        el.hidden = false;
+        el.dataset.state = line.state;
+        const conf = document.getElementById('rs-conf');
+        const bar = document.getElementById('rs-bar-fill');
+        if (line.state === 'found') {
+            set('rs-name', line.name);
+            set('rs-conf', `${line.label} \u00b7 ${line.confidence.toFixed(0)}%`);
+            conf.dataset.level = line.label.toLowerCase();
+            conf.hidden = false;
+            bar.style.width = `${Math.min(100, line.confidence)}%`;
+            bar.parentElement.dataset.level = line.label.toLowerCase();
+            bar.parentElement.hidden = false;
+            set('rs-note', line.also.length
+                ? 'Also possible: ' + line.also.map((a) => `${a.name} (${a.confidence.toFixed(0)}%)`).join(', ')
+                : 'No other isotope matched.');
+        } else {
+            const text = line.state === 'uncalibrated' ? 'No energy calibration' : 'No isotope identified';
+            set('rs-name', text);
+            conf.hidden = true;
+            bar.parentElement.hidden = true;
+            set('rs-note', line.state === 'uncalibrated'
+                ? 'Peaks are shown in channels; calibrate the spectrum to identify isotopes.'
+                : 'No known gamma lines matched the detected peaks. A longer acquisition or a stronger source helps.');
+        }
+        const facts = summaryFacts({ counts: data.counts, metadata: data.metadata, peaks: data.peaks });
+        set('rs-peaks', String(facts.peaks));
+        set('rs-counts', formatCount(facts.total));
+        set('rs-rate', facts.rate === null ? '--' : `${facts.rate >= 100 ? facts.rate.toFixed(0) : facts.rate.toFixed(1)} cps`);
+        set('rs-live', formatDuration(facts.live));
+        const warnings = data.data_quality?.warnings?.length || 0;
+        const flag = document.getElementById('rs-flag');
+        if (flag) {
+            flag.hidden = warnings === 0;
+            flag.textContent = warnings ? `${warnings} data-quality warning${warnings > 1 ? 's' : ''}` : '';
+        }
+    }
+
+    /**
+     * The neural-net answer: status idle | running | done | error, with predictions and the spectrum signature it was
+     * computed on. Ignored if the spectrum was replaced while it ran.
+     */
+    setAiState(state) {
+        if (state.signature && spectrumChange(state.signature, this._sig) === 'new') return;
+        this.aiState = state;
+        this.renderAiResults();
+    }
+
+    renderAiResults() {
+        const list = document.getElementById('ml-isotopes-list');
+        const state = this.aiState || { status: 'idle' };
+        const stale = state.status === 'done' && state.signature && state.signature.total !== this._sig?.total;
+        if (list) {
+            const colors = this.getThemeColors();
+            const note = (text) => `<p class="ai-note">${text}</p>`;
+            if (state.status === 'running') {
+                list.innerHTML = note('Running AI identification (the first run trains the model, about 10-30 s)\u2026');
+            } else if (state.status === 'error') {
+                list.innerHTML = `<p class="ai-note ai-error"><img src="/static/icons/error.svg" class="icon" style="width: 14px; height: 14px;"> ${state.error}</p>`;
+            } else if (state.status === 'done' && state.predictions?.length) {
+                const quality = { good: 'High confidence', moderate: 'Moderate confidence', low_confidence: 'Low confidence', no_match: 'No match' }[state.quality] || '';
+                list.innerHTML = (stale ? note('The spectrum has grown since this ran. Run it again for an up-to-date answer.') : '')
+                    + (quality ? `<div class="ai-quality" data-quality="${state.quality}">${quality}</div>` : '')
+                    + state.predictions.map((pred) => {
+                        const c = pred.confidence;
+                        const color = c > 70 ? colors.confidenceHigh : c > 40 ? colors.confidenceMedium : colors.confidenceLow;
+                        return `
+                            <div class="ai-pred${pred.suppressed ? ' suppressed' : ''}${stale ? ' stale' : ''}" style="--ai-color: ${color};">
+                                <div class="ai-pred-head"><strong>${pred.isotope}</strong>${pred.suppressed ? '<span class="ai-sup">suppressed</span>' : ''}
+                                    <span class="ai-pred-level">${confidenceLabel(c)}</span></div>
+                                <div class="ai-pred-row"><div class="confidence-track"><div class="ai-pred-fill" style="width: ${Math.min(c, 100)}%;"></div></div>
+                                    <span class="ai-pred-pct">${c.toFixed(1)}%</span></div>
+                                <div class="ai-pred-method">${pred.method || ''}</div>
+                            </div>`;
+                    }).join('');
+            } else if (state.status === 'done') {
+                list.innerHTML = note('No AI predictions for this spectrum.');
+            } else {
+                list.innerHTML = note('Not run yet. Click <b>AI Identify</b> for a second opinion from a neural network.');
+            }
+        }
+        this._renderAiSummary(state, stale);
+    }
+
+    _renderAiSummary(state, stale) {
+        const text = document.getElementById('rs-ai-text');
+        const verdict = document.getElementById('rs-ai-verdict');
+        const btn = document.getElementById('btn-rs-ai');
+        if (!text || !verdict) return;
+        verdict.hidden = true;
+        verdict.dataset.state = '';
+        btn.disabled = state.status === 'running';
+        btn.textContent = state.status === 'done' ? 'Run again' : 'Run AI check';
+        if (state.status === 'running') {
+            text.textContent = 'Running\u2026';
+        } else if (state.status === 'error') {
+            text.textContent = 'Failed';
+        } else if (state.status === 'done' && state.predictions?.length) {
+            const top = state.predictions.find((p) => !p.suppressed) || state.predictions[0];
+            text.textContent = `${top.isotope} (${top.confidence.toFixed(0)}%)${stale ? ', earlier spectrum' : ''}`;
+            const cmp = compareIdentifications(this._lineSummary, state.predictions);
+            const words = { agree: 'agrees with line matching', partial: 'partly agrees', differ: 'differs: check the peaks' };
+            if (words[cmp.state] && !stale) {
+                verdict.textContent = words[cmp.state];
+                verdict.dataset.state = cmp.state;
+                verdict.hidden = false;
+            }
+        } else if (state.status === 'done') {
+            text.textContent = 'No answer';
+        } else {
+            text.textContent = 'Not run';
         }
     }
 

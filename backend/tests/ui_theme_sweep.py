@@ -22,7 +22,7 @@ JS_METRICS = r"""
   function bgOf(el){let e=el;while(e){const p=parse(getComputedStyle(e).backgroundColor); if(p&&p.a>0.5) return p.c; e=e.parentElement} return [255,255,255]}
   function ratio(el){const fg=parse(getComputedStyle(el).color); if(!fg) return null; const bg=bgOf(el);
     const L1=lum(fg.c),L2=lum(bg); return (Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05)}
-  const sels=['header h1, .logo, header .app-title','#device-title','.control-label','button.btn-primary','#peaks-table td, .peaks-table td, table td','.metadata-panel *','label','#theme-select','.data-hub-row summary, .card h3, h3','#xrf-container, #xrf-container *'];
+  const sels=['header h1, .logo, header .app-title','#device-title','.control-label','button.btn-primary','#peaks-table td, .peaks-table td, table td','.metadata-panel *','label','#theme-select','.data-hub-row summary, .card h3, h3','#xrf-container, #xrf-container *','.rs-name','.rs-note','.rs-facts dd','.rs-facts dt','.rs-kicker','.peak-match','.id-caption','.ai-note'];
   const low=[];
   for(const s of sels){document.querySelectorAll(s).forEach((el,i)=>{ if(i>12) return; const t=(el.textContent||'').trim(); if(!t||el.offsetParent===null) return; const r=ratio(el); if(r!==null&&r<3) low.push({sel:s,text:t.slice(0,30),ratio:+r.toFixed(2)})})}
   const overflow = document.documentElement.scrollWidth - window.innerWidth;
