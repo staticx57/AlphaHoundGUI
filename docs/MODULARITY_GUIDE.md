@@ -203,9 +203,10 @@ AlphaHoundGUI/
 │           ├── ui.js           # UI rendering helpers
 │           ├── calibration.js  # Calibration UI
 │           └── isotopes_ui.js  # Isotope management UI
-├── THEORY_OF_OPERATION.md      # System architecture docs
-├── ML_GUIDE.md                 # ML identification guide
-├── CALIBRATION_GUIDE.md        # Calibration instructions
+├── docs/
+│   ├── THEORY_OF_OPERATION.md  # System architecture docs
+│   ├── ML_GUIDE.md             # ML identification guide
+│   └── CALIBRATION_GUIDE.md    # Calibration instructions
 └── requirements.txt            # Python dependencies
 ```
 
@@ -767,7 +768,7 @@ npm test
 - [Theory of Operation](THEORY_OF_OPERATION.md) - System architecture
 - [ML Guide](ML_GUIDE.md) - ML identification details
 - [Calibration Guide](CALIBRATION_GUIDE.md) - Energy calibration
-- [README](README.md) - Quick start guide
+- [README](../README.md) - Quick start guide
 
 ---
 

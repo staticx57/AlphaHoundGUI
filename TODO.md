@@ -111,7 +111,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [ ] Add service worker for offline capability
 
 ### Device & Calibration
-- [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `radview_questions.md`)
+- [ ] **RadView Clarification**: Get response on 7.4 keV vs 3.0 keV discrepancy (see `docs/radview_questions.md`)
 - [ ] **Dead Time Logic**: Implement dead-time correction if device doesn't support it internally
 - [ ] **Temperature Compensation**: Temperature captured - consider using for gain stabilization
 - [ ] **CSV/XML Energy Interpolation**: Implement energy-per-channel interpolation for imported CSV and XML files lacking energy data (e.g., legacy formats with only channel numbers). Support presets for known detectors (Radiacode models, AlphaHound profiles), custom detector coefficients, or manual keV/channel entry.

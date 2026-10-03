@@ -457,7 +457,7 @@ for isotope in isotopes:
 - [Theory of Operation](THEORY_OF_OPERATION.md) - System architecture
 - [ML Guide](ML_GUIDE.md) - ML identification details
 - [Modularity Guide](MODULARITY_GUIDE.md) - Extending the application
-- [README](README.md) - Quick start guide
+- [README](../README.md) - Quick start guide
 
 ---
 

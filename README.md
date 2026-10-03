@@ -240,7 +240,7 @@
   - **Uranium Ore**: U-238 + U-235 detection
 - **Source-Specific Analysis**: Tailored calculations for each source type (see `source_analysis.py`)
 - **Diagnostic Feedback**: Explains why results are indeterminate ("Low SNR", "Overlapping peaks")
-- **📖 See [ROI Analysis Documentation](MODULARITY_GUIDE.md#roi-analysis) for extension guide**
+- **📖 See [ROI Analysis Documentation](docs/MODULARITY_GUIDE.md#roi-analysis) for extension guide**
 
 ---
 
@@ -386,12 +386,12 @@ To access the application from other devices on your network:
 
 | Document | Description |
 |----------|-------------|
-| [Theory of Operation](THEORY_OF_OPERATION.md) | System architecture, data flow, algorithms, and technical details |
-| [Modularity Guide](MODULARITY_GUIDE.md) | How to extend: add devices, isotopes, analysis methods, detector profiles |
-| [Calibration Guide](CALIBRATION_GUIDE.md) | Energy calibration, accuracy improvement, reference energy tables |
-| [ML Guide](ML_GUIDE.md) | AI identification: how the model is trained, classes, benchmark, extension |
+| [Theory of Operation](docs/THEORY_OF_OPERATION.md) | System architecture, data flow, algorithms, and technical details |
+| [Modularity Guide](docs/MODULARITY_GUIDE.md) | How to extend: add devices, isotopes, analysis methods, detector profiles |
+| [Calibration Guide](docs/CALIBRATION_GUIDE.md) | Energy calibration, accuracy improvement, reference energy tables |
+| [ML Guide](docs/ML_GUIDE.md) | AI identification: how the model is trained, classes, benchmark, extension |
 | [AlphaHound serial](docs/ALPHAHOUND_SERIAL.md) | Observed device protocol, display replica, `devctl` remote control |
-| [Radiacode Integration](RADIACODE_INTEGRATION_PLAN.md) | Radiacode device support details and implementation notes |
+| [Radiacode Integration](docs/RADIACODE_INTEGRATION_PLAN.md) | Radiacode device support details and implementation notes |
 | [AlphaHound Commands](docs/ALPHAHOUND_SERIAL_COMMANDS.md) | Serial command reference for AlphaHound device communication |
 | [TODO.md](TODO.md) | Roadmap for future features and open tasks |
 | [CHANGELOG.md](CHANGELOG.md) | Detailed version history and feature log |
@@ -457,18 +457,19 @@ AlphaHoundGUI/
 │           └── themes.js                # Theme switching logic
 ├── docs/
 │   ├── ALPHAHOUND_SERIAL_COMMANDS.md    # Device command reference
-│   └── ANALYSIS_CONDITIONS.md           # Analysis mode documentation
+│   ├── ANALYSIS_CONDITIONS.md           # Analysis mode documentation
+│   ├── THEORY_OF_OPERATION.md           # System architecture documentation
+│   ├── MODULARITY_GUIDE.md              # Extension guide for developers
+│   ├── CALIBRATION_GUIDE.md             # Calibration and accuracy guide
+│   ├── ML_GUIDE.md                      # AI identification documentation
+│   ├── RADIACODE_INTEGRATION_PLAN.md    # Radiacode device support
+│   └── radview_questions.md             # Open questions for the device maker
 ├── data/
 │   ├── acquisitions/                    # Auto-saved spectra (N42 format)
 │   ├── isotopes/                        # IAEA gamma data (CSV downloads)
 │   └── test_spectra/                    # Synthetic test spectra (6 N42 files)
 ├── legacy/AlphaHound-main/              # Upstream NuclearGeekETH AlphaHound GUI (MIT), kept for its licence
 ├── TO_BE_DELETED/                       # Dead files awaiting deletion (see its README)
-├── THEORY_OF_OPERATION.md               # System architecture documentation
-├── MODULARITY_GUIDE.md                  # Extension guide for developers
-├── CALIBRATION_GUIDE.md                 # Calibration and accuracy guide
-├── ML_GUIDE.md                          # AI identification documentation
-├── RADIACODE_INTEGRATION_PLAN.md        # Radiacode device support
 ├── CHANGELOG.md                         # Detailed version history
 ├── TODO.md                              # Roadmap and open tasks
 ├── LICENSE                              # Apache License 2.0
