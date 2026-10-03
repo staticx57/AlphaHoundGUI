@@ -1,7 +1,5 @@
 import { api } from './api.js';
 import { notifyAuto } from './dialogs.js';
-import { ui } from './ui.js';
-import { chartManager } from './charts.js';
 
 export class CalibrationUI {
     constructor() {

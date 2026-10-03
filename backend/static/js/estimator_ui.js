@@ -1,5 +1,4 @@
 import { api } from './api.js';
-import { ui } from './ui.js';
 import { notifyAuto } from './dialogs.js';
 
 export class EstimatorUI {
@@ -207,7 +206,7 @@ export class EstimatorUI {
         const cpm = parseFloat(this.elements.estCPM.value) || 0;
 
         if (cpm <= 0) {
-            ui.showError('Please enter a valid CPM > 0');
+            notifyAuto('Please enter a valid CPM > 0');   // a toast: ui.showError would replace the upload drop zone
             return;
         }
 
