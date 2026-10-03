@@ -264,7 +264,7 @@ class RealSpectrumLoader:
         results = []
         
         for ext in extensions:
-            for filepath in directory.glob(f"*{ext}"):
+            for filepath in sorted(directory.glob(f"*{ext}")):   # a fixed order: the filesystem's is not guaranteed
                 if ext in ['.n42', '.xml']:
                     counts, label, meta = self.load_n42_spectrum(filepath)
                 elif ext == '.spe':
@@ -284,17 +284,20 @@ class RealSpectrumLoader:
     
     def prepare_training_data(self, spectra: List[Tuple[np.ndarray, str, Dict]], 
                               target_channels: int = 1024,
-                              augment_count: int = 10) -> Tuple[np.ndarray, List[str]]:
+                              augment_count: int = 10,
+                              seed: int = 12345) -> Tuple[np.ndarray, List[str]]:
         """Prepare loaded spectra for ML training with augmentation.
         
         Args:
             spectra: List of (counts, label, metadata) tuples
             target_channels: Number of channels to normalize to
             augment_count: Number of augmented copies per spectrum
+            seed: Seed of the augmentation noise, so the same files give the same training set
             
         Returns:
             Tuple of (spectra_matrix, labels_list)
         """
+        rng = np.random.default_rng(seed)
         augmented_spectra = []
         augmented_labels = []
         
@@ -312,15 +315,15 @@ class RealSpectrumLoader:
             # Create augmented copies with noise variation
             for _ in range(augment_count):
                 # Add Poisson-like noise variation
-                noise_factor = np.random.uniform(0.95, 1.05)
+                noise_factor = rng.uniform(0.95, 1.05)
                 augmented = counts * noise_factor
                 
                 # Add small random noise
-                noise = np.random.poisson(np.maximum(1, augmented * 0.02))
+                noise = rng.poisson(np.maximum(1, augmented * 0.02))
                 augmented = augmented + noise
                 
                 # Randomly scale intensity (simulates different acquisition times)
-                scale = np.random.uniform(0.5, 2.0)
+                scale = rng.uniform(0.5, 2.0)
                 augmented = augmented * scale
                 
                 augmented_spectra.append(augmented)
@@ -338,20 +341,22 @@ class RealSpectrumLoader:
 # Module-level convenience function
 def load_real_training_data(data_dir: str = None, 
                             target_channels: int = 1024,
-                            augment_count: int = 10) -> Tuple[np.ndarray, List[str]]:
+                            augment_count: int = 10,
+                            seed: int = 12345) -> Tuple[np.ndarray, List[str]]:
     """Load and prepare real spectra for ML training.
     
     Args:
         data_dir: Directory containing spectrum files
         target_channels: Number of channels to normalize to
         augment_count: Augmentation multiplier per spectrum
+        seed: Seed of the augmentation noise (the same files then give the same training set)
         
     Returns:
         Tuple of (spectra_matrix, labels_list)
     """
     loader = RealSpectrumLoader(data_dir)
     spectra = loader.load_all_from_directory()
-    return loader.prepare_training_data(spectra, target_channels, augment_count)
+    return loader.prepare_training_data(spectra, target_channels, augment_count, seed)
 
 
 if __name__ == "__main__":

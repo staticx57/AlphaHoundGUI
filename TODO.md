@@ -74,7 +74,6 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 
 ### Technical Debt
 Structural debt (long functions, overlapping modules, what was cleaned and what is open) is kept in `TECHNICAL_DEBT.md`; the items below are product-facing.
-- [ ] ML real-data augmentation (`ML_USE_REAL_DATA=1`, `ml/ml_data_loader.py`) uses unseeded `np.random`, so that model differs on every training; seed it like the synthesiser
 - [x] Light theme XRF section contrast fixed (CSS vars `--xrf-text/--xrf-accent`; confidence badge now follows theme switches)
 - [x] Isotope confidence bars and decay-chain cards now follow theme switches (`getThemeColors()` returns CSS var references; covered by `ui_smoke.py` section E). Note: only valid for CSS contexts, not canvas/Chart.js
 - [ ] Sweep (`backend/tests/ui_theme_sweep.py`) checks only overflow/contrast/JS errors on 17 themes × 2 viewports; extend to the Radiacode tab, modals and the 35 proposed themes
