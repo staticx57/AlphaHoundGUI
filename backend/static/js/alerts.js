@@ -139,8 +139,6 @@ export class AlertCenter {
         }
     }
 
-    isActive(key) { return this.states[key].active; }
-
     _step(key, value, limit, enabled) {
         this._apply(key, this.states[key].step(value, limit, enabled));
         if (this.states[key].active) this._render();

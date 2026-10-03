@@ -2,7 +2,6 @@
 """
 SandiaSpecUtils Parser Wrapper
 """
-import os
 import logging
 from typing import Dict, Optional
 
@@ -14,17 +13,6 @@ except ImportError:
     HAS_SPECUTILS = False
 
 logger = logging.getLogger(__name__)
-
-def is_supported_format(filename: str) -> bool:
-    """Check if file extension is supported by generic parser."""
-    ext = os.path.splitext(filename)[1].lower()
-    # List of formats SandiaSpecUtils typically supports
-    # N42, CNF, SPC, CHN, DAT, SPE, etc.
-    supported = [
-        '.n42', '.cnf', '.spc', '.chn', '.dat', '.spe', 
-        '.mca', '.pcf', '.tka', '.xml', '.csv'
-    ]
-    return ext in supported
 
 def parse_spectrum_generic(file_path: str) -> Optional[Dict]:
     """

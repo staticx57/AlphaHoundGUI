@@ -111,39 +111,6 @@ export class AlphaHoundChart {
         return maxOffset;
     }
 
-    /**
-     * Decimate large dataset to improve rendering performance.
-     * Uses LTTB (Largest-Triangle-Three-Buckets) inspired downsampling.
-     * @param {Array} data - Array of {x, y} points
-     * @param {number} targetPoints - Target number of points
-     * @returns {Array} Decimated data
-     */
-    decimateData(data, targetPoints = 1024) {
-        if (data.length <= targetPoints) return data;
-
-        const bucketSize = Math.floor(data.length / targetPoints);
-        const result = [data[0]]; // Always include first point
-
-        for (let i = 1; i < targetPoints - 1; i++) {
-            const bucketStart = i * bucketSize;
-            const bucketEnd = Math.min((i + 1) * bucketSize, data.length);
-
-            // Find point with max Y value in bucket (preserve peaks)
-            let maxY = -Infinity;
-            let maxPoint = data[bucketStart];
-            for (let j = bucketStart; j < bucketEnd; j++) {
-                if (data[j].y > maxY) {
-                    maxY = data[j].y;
-                    maxPoint = data[j];
-                }
-            }
-            result.push(maxPoint);
-        }
-
-        result.push(data[data.length - 1]); // Always include last point
-        return result;
-    }
-
     render(labels, dataPoints, peaks, scaleType = 'linear') {
         // Robustness: Try to get context if missing (e.g. if loaded before DOM)
         if (!this.ctx) {
@@ -709,45 +676,6 @@ export class AlphaHoundChart {
     }
 
     /**
-     * Highlight multiple ROI regions (e.g., for uranium ratio analysis).
-     * @param {Array} regions - Array of {start, end, label, color} objects
-     */
-    highlightMultipleROI(regions) {
-        if (!this.chart) return;
-        if (this.isSyncing) return;
-
-        this.isSyncing = true;
-        try {
-            // Remove existing ROI highlights from master
-            Object.keys(this.annotations).filter(k => k.startsWith('roi_')).forEach(k => delete this.annotations[k]);
-
-            // Add new ones to master
-            regions.forEach((region, idx) => {
-                this.annotations[`roi_${idx}`] = {
-                    type: 'box',
-                    xMin: region.start,
-                    xMax: region.end,
-                    backgroundColor: region.color || 'rgba(249, 115, 22, 0.25)',
-                    borderColor: region.borderColor || 'rgba(249, 115, 22, 0.9)',
-                    borderWidth: 2,
-                    label: {
-                        display: !!region.label,
-                        content: region.label || '',
-                        position: 'start',
-                        color: region.labelColor || '#f97316',
-                        font: { size: 10, weight: 'bold' }
-                    }
-                };
-            });
-
-            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
-            this.chart.update('none');
-        } finally {
-            this.isSyncing = false;
-        }
-    }
-
-    /**
      * Highlight XRF peaks on the chart with vertical lines.
      * @param {Array} peaks - Array of {energy, element, shell} objects
      * @param {string} color - Color for the lines (optional, defaults to theme's secondary color)
@@ -829,23 +757,6 @@ export class AlphaHoundChart {
 
     // Removed unused highlightIsotopePeaks (replaced by addIsotopeHighlight)
 
-
-    /**
-     * Clear isotope peak highlighting from the chart.
-     * @param {boolean} skipUpdate - If true, skip chart.update() (for batch operations)
-     */
-    clearIsotopeHighlights(skipUpdate = false) {
-        if (!this.chart || this.isSyncing) return;
-        this.isSyncing = true;
-        try {
-            Object.keys(this.annotations).filter(k => k.startsWith('iso_')).forEach(k => delete this.annotations[k]);
-            this.labelOffsets = {}; // Reset stacking on clear
-            this.chart.options.plugins.annotation.annotations = this._clone(this.annotations);
-            if (!skipUpdate) this.chart.update('none');
-        } finally {
-            this.isSyncing = false;
-        }
-    }
 
     /**
      * Add isotope peak highlighting for a single isotope (for multi-select support).
@@ -1024,15 +935,6 @@ export class AlphaHoundChart {
         this.scrubberContainer.style.display = 'block';
         this.drawMiniPreview();
         this.updateScrubberFromChart();
-    }
-
-    /**
-     * Hide the scrubber.
-     */
-    hideScrubber() {
-        if (this.scrubberContainer) {
-            this.scrubberContainer.style.display = 'none';
-        }
     }
 
     /**

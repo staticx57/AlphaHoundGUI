@@ -3,12 +3,10 @@
 Activity & Dose Rate Calculator
 """
 import math
-from typing import List, Dict, Tuple
+from typing import Dict
 
 # === CONSTANTS ===
 BQ_TO_UCI = 1 / 37000.0  # 1 uCi = 37,000 Bq
-UCI_TO_BQ = 37000.0
-
 def calculate_activity_bq(
     net_counts: float,
     acquisition_time_s: float,
@@ -137,31 +135,3 @@ def calculate_dose_rate(
         result['readable'] = f"{dose_rate_uSv_h*1000:.1f} nSv/h at {distance_m}m"
     
     return result
-
-
-def calculate_dose_rate_sv_h(
-    activity_bq: float,
-    gamma_energies_jev: List[Tuple[float, float]], # (Energy MeV, Yield)
-    distance_m: float = 0.1
-) -> float:
-    """
-    Legacy function - Estimate Gamma Dose Rate using energy-based approximation.
-    Use calculate_dose_rate() for isotope-specific calculations.
-    
-    Simplified formula for when isotope is unknown:
-    D (Sv/h) ≈ (Sum(Energy_MeV * Yield) * 0.5 * Activity) / Distance^2
-    """
-    if activity_bq <= 0 or distance_m <= 0:
-        return 0.0
-    
-    if not gamma_energies_jev:
-        return 0.0
-    
-    # Sum weighted energy contributions
-    # Approximate gamma constant from energies: 0.5 factor for conversion
-    weighted_energy_sum = sum(e * y for e, y in gamma_energies_jev)
-    
-    # Very rough approximation: 5e-18 Sv·m²/Bq·h per MeV
-    dose_rate = 5e-18 * weighted_energy_sum * activity_bq / (distance_m ** 2)
-    
-    return dose_rate

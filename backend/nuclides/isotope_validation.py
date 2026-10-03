@@ -11,7 +11,7 @@ Rules are physics-based and consider:
 4. Known problematic isotopes (special overrides)
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 # =======================================================================================
 # DETECTOR PROFILES - Energy thresholds based on detector type
@@ -219,66 +219,3 @@ def generate_validation_rules(
         rules[iso_name] = rule
     
     return rules
-
-
-def validate_isotope_detection(
-    isotope: str,
-    matches: int,
-    matched_peaks: List[Dict],
-    rules: Dict[str, Dict],
-    any_natural_chain_detected: bool = False
-) -> Tuple[float, str]:
-    """
-    Validate an isotope detection and compute confidence penalty.
-    
-    Args:
-        isotope: Isotope name
-        matches: Number of matched peaks
-        matched_peaks: List of matched peak info
-        rules: Validation rules from generate_validation_rules()
-        any_natural_chain_detected: True if U-238/Th-232 chain detected
-        
-    Returns:
-        Tuple of (confidence_cap, reason)
-    """
-    if isotope not in rules:
-        return (100.0, "no_rule")
-    
-    rule = rules[isotope]
-    required = rule.get("required_peaks", 1)
-    min_conf = rule.get("min_confidence_single", 42.0)
-    is_manmade = rule.get("type") == "manmade"
-    
-    # Check required peaks
-    if matches < required:
-        reason = f"insufficient_peaks_{matches}/{required}"
-        return (min_conf, reason)
-    
-    # Man-made isotopes in presence of natural chains are suspicious
-    if is_manmade and any_natural_chain_detected:
-        # Single match of man-made in natural spectrum is likely coincidental
-        if matches == 1:
-            return (min(min_conf, 15.0), "manmade_in_natural_spectrum")
-    
-    # Low energy penalty
-    if rule.get("low_energy_penalty") and matches == 1:
-        return (min(min_conf * 0.6, 25.0), "low_energy_single_match")
-    
-    return (100.0, "passed")
-
-
-def should_include_as_chain(isotope: str, rules: Dict[str, Dict]) -> bool:
-    """
-    Determine if an isotope should be displayed as a 'decay chain'.
-    Single isotopes like Am-241, Co-60, Cs-137 are NOT chains.
-    
-    Args:
-        isotope: Isotope name
-        rules: Validation rules
-        
-    Returns:
-        True if isotope is a true decay chain (U-238, Th-232, etc.)
-    """
-    if isotope not in rules:
-        return False
-    return rules[isotope].get("is_chain", False)

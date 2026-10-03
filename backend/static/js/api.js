@@ -145,45 +145,6 @@ export class AlphaHoundAPI {
     }
 
     /**
-     * Gets current spectrum from device.
-     * @param {number} countMinutes - Acquisition time in minutes
-     * @param {number} [actualDurationSeconds] - Actual elapsed time in seconds (optional)
-     * @returns {Promise<Object>} Spectrum data with energies, counts, peaks
-     * @throws {Error} If poll fails
-     */
-    async getSpectrum(countMinutes, actualDurationSeconds = null) {
-        const body = { count_minutes: countMinutes };
-        if (actualDurationSeconds !== null) {
-            body.actual_duration_s = actualDurationSeconds;
-        }
-        const response = await fetch('/device/spectrum', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        if (response.ok) {
-            return await response.json();
-        }
-        throw new Error(`Poll failed: ${response.status} ${response.statusText}`);
-    }
-
-    /**
-     * Performs Gaussian peak fitting on spectrum data.
-     * @param {Object} data - Spectrum data with energies, counts, peaks
-     * @returns {Promise<Object>} Fitted peak parameters
-     * @throws {Error} If analysis fails
-     */
-    async fitPeaks(data) {
-        const response = await fetch('/analyze/fit-peaks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!response.ok) throw new Error('Analysis failed');
-        return await response.json();
-    }
-
-    /**
      * Subtracts background spectrum from source spectrum.
      * @param {number[]} sourceCounts - Source spectrum counts
      * @param {number[]} bgCounts - Background spectrum counts
@@ -203,25 +164,6 @@ export class AlphaHoundAPI {
         });
         if (!response.ok) throw new Error('Background subtraction failed');
         return await response.json();
-    }
-
-    /**
-     * Exports analysis report as PDF.
-     * @param {Object} data - Report data including spectrum, peaks, isotopes
-     * @returns {Promise<Response>} PDF file response
-     * @throws {Error} If PDF generation fails
-     */
-    async exportPDF(data) {
-        const response = await fetch('/export/pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!response.ok) {
-            const errJson = await response.json();
-            throw new Error(errJson.detail || 'PDF generation failed');
-        }
-        return response;
     }
 
     /**
@@ -324,15 +266,6 @@ export class AlphaHoundAPI {
     // ============================================================
     // Radiacode Device API
     // ============================================================
-
-    /**
-     * Checks if Radiacode library is available on server.
-     * @returns {Promise<{available: boolean, ble_available: boolean, message: string}>}
-     */
-    async checkRadiacodeAvailable() {
-        const response = await fetch('/radiacode/available');
-        return await response.json();
-    }
 
     /**
      * Scans for nearby Radiacode BLE devices.
@@ -654,34 +587,6 @@ export class AlphaHoundAPI {
     }
 
     /**
-     * Set advanced sound control flags
-     */
-    async setSoundControl(search, detector, clicks) {
-        const response = await fetch(`/radiacode/settings/sound-control?search=${search}&detector=${detector}&clicks=${clicks}`, {
-            method: 'POST'
-        });
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to set sound control');
-        }
-        return await response.json();
-    }
-
-    /**
-     * Set advanced vibration control flags
-     */
-    async setVibrationControl(search, detector) {
-        const response = await fetch(`/radiacode/settings/vibration-control?search=${search}&detector=${detector}`, {
-            method: 'POST'
-        });
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to set vibration control');
-        }
-        return await response.json();
-    }
-
-    /**
      * Power off the Radiacode device
      */
     async powerOffDevice() {
@@ -732,18 +637,6 @@ export class AlphaHoundAPI {
     }
 
     // ==================== Phase 4: System Features ====================
-
-    /**
-     * Get available SFR commands
-     */
-    async getAvailableCommands() {
-        const response = await fetch('/radiacode/capabilities/commands');
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to get commands');
-        }
-        return await response.json();
-    }
 
     /**
      * Get base time reference
@@ -842,25 +735,6 @@ export class AlphaHoundAPI {
             return this.clearDevice();
         } else if (device === 'radiacode') {
             return this.clearRadiacodeSpectrum();
-        }
-        throw new Error(`Unknown device type: ${device}`);
-    }
-
-    /**
-     * Gets spectrum from active device (device-agnostic).
-     * @param {number} countMinutes - Acquisition duration in minutes
-     * @param {number} [actualDurationSeconds] - Actual elapsed time (AlphaHound only)
-     * @returns {Promise<Object>} Spectrum data
-     * @throws {Error} If no device connected or operation fails
-     */
-    async getSpectrumUnified(countMinutes, actualDurationSeconds = null) {
-        const device = getActiveDevice();
-        if (!device) throw new Error('No device connected');
-
-        if (device === 'alphahound') {
-            return this.getSpectrum(countMinutes, actualDurationSeconds);
-        } else if (device === 'radiacode') {
-            return this.getRadiacodeSpectrum();
         }
         throw new Error(`Unknown device type: ${device}`);
     }

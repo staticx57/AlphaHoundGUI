@@ -601,41 +601,6 @@ def get_roi_isotopes():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/analyze/identify-source")
-def identify_source_endpoint(request: UraniumRatioRequest):
-    """
-    Identify the source type based on spectral signatures.
-    
-    Recognizes common radioactive sources:
-    - Uranium Glass (Vaseline Glass)
-    - Thoriated Camera Lenses
-    - Radium Dial Watches/Clocks
-    - Smoke Detectors (Am-241)
-    - Natural Background (K-40)
-    
-    If no match is found, returns the raw isotope detection data.
-    """
-    try:
-        from spectroscopy.source_identification import identify_source_type
-        
-        result = identify_source_type(
-            energies=request.energies,
-            counts=[float(c) for c in request.counts],
-            detector_name=request.detector,
-            acquisition_time_s=request.acquisition_time_s
-        )
-        
-        return result
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"[Source ID] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/analyze/source-types")
 def get_source_types():
     """Get list of known source types for the dropdown selector."""
@@ -920,85 +885,6 @@ def anomaly_detection_endpoint(request: dict):
 # === Phase 1B & 2: Activity Calculator & Decay Predictions ===
 
 
-@router.post("/analyze/multiplet")
-def analyze_multiplet_endpoint(request: dict):
-    """
-    Deconvolve overlapping peaks using multiplet fitting.
-    
-    Fits multiple Gaussian peaks simultaneously on a linear baseline.
-    Useful for resolving overlapping peaks (e.g., U-235 + Ra-226 at 186 keV).
-    
-    Args (JSON body):
-        energies: List of energy values (keV)
-        counts: List of counts
-        centroids: List of peak centroids to fit (keV)
-        roi_width: Optional width of ROI around peaks (default: 50 keV)
-        
-    Returns:
-        Fitted peak parameters for each centroid including:
-        - amplitude, centroid, sigma, fwhm, net_area, uncertainty
-        - r_squared for overall fit quality
-    """
-    try:
-        from spectroscopy.fitting_engine import AdvancedFittingEngine
-        import numpy as np
-        
-        energies = request.get('energies', [])
-        counts = request.get('counts', [])
-        centroids = request.get('centroids', [])
-        roi_width = request.get('roi_width', 50.0)
-        
-        if not energies or not counts or not centroids:
-            raise HTTPException(status_code=400, detail="energies, counts, and centroids are required")
-        
-        if len(centroids) < 2:
-            raise HTTPException(status_code=400, detail="At least 2 centroids required for multiplet fitting")
-        
-        engine = AdvancedFittingEngine()
-        results, r_squared = engine.fit_multiplet(
-            energies=np.array(energies),
-            counts=np.array(counts),
-            centroids=centroids,
-            roi_width_kev=roi_width
-        )
-        
-        if results is None:
-            return {
-                "success": False,
-                "error": "Multiplet fit failed",
-                "peaks": []
-            }
-        
-        # Format results
-        peaks = []
-        for i, result in enumerate(results):
-            peaks.append({
-                "centroid_requested": centroids[i],
-                "centroid_fitted": round(result.centroid, 2),
-                "amplitude": round(result.amplitude, 1),
-                "sigma": round(result.sigma, 2),
-                "fwhm": round(result.fwhm, 2),
-                "resolution_percent": round(result.resolution, 2),
-                "net_area": round(result.net_area, 1),
-                "uncertainty": round(result.uncertainty, 1),
-            })
-        
-        return {
-            "success": True,
-            "r_squared": round(r_squared, 4),
-            "peaks": peaks,
-            "notes": f"Deconvolved {len(peaks)} overlapping peaks"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[Multiplet] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 # === N42 Metadata Editor Endpoints ===
 
 
@@ -1023,5 +909,3 @@ def estimate_acquisition_time_endpoint(request: TimeEstimatorRequest):
 
 
 # === Dose Rate Calculator ===
-
-

@@ -10,9 +10,6 @@ instruments. These helpers keep the conversion in one place.
 
 import numpy as np
 
-SQRT_2PI = float(np.sqrt(2.0 * np.pi))
-
-
 def channel_width_kev(energies) -> float:
     """Typical channel width (keV per channel) of an energy axis; 1.0 if it cannot be determined."""
     x = np.asarray(energies, dtype=float)
@@ -21,8 +18,3 @@ def channel_width_kev(energies) -> float:
     steps = np.diff(x)
     steps = steps[steps > 0]
     return float(np.median(steps)) if steps.size else 1.0
-
-
-def gaussian_area_counts(amplitude: float, sigma_kev: float, width_kev: float) -> float:
-    """Counts in a Gaussian peak of height `amplitude` (counts per channel) and width `sigma_kev`, on channels `width_kev` wide."""
-    return float(amplitude) * float(sigma_kev) * SQRT_2PI / float(width_kev)

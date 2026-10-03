@@ -283,21 +283,6 @@ def update_radiacode_settings(request: RadiacodeSettingsRequest):
     return {"status": "success", "results": results}
 
 
-@router.get("/configuration")
-def get_radiacode_configuration():
-    """Get full device configuration dump (for debugging/advanced users)."""
-    if not radiacode_device.is_connected():
-        raise HTTPException(status_code=400, detail="Radiacode not connected")
-    
-    config = radiacode_device.get_configuration()
-    
-    if config is None:
-        error = radiacode_device.get_last_error() or "Failed to get configuration"
-        raise HTTPException(status_code=500, detail=error)
-    
-    return {"configuration": config}
-
-
 @router.get("/capabilities")
 def get_radiacode_capabilities():
     """

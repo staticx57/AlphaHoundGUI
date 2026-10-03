@@ -12,7 +12,6 @@ Key improvements:
 """
 
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
 from functools import lru_cache
 import logging
 import math
@@ -82,35 +81,6 @@ GAMMA_LINES_FALLBACK = {
     'Am-241': [(59.5, 35.9), (26.3, 2.4)],
     'K-40': [(1460.8, 10.7)],
 }
-
-
-@dataclass
-class ChainMember:
-    """Represents a member of a decay chain."""
-    nuclide: str
-    gamma_energies: List[Tuple[float, float]]  # (energy_keV, intensity_%)
-    half_life_s: Optional[float] = None
-    detected: bool = False
-    detected_energies: List[float] = None
-    
-    def __post_init__(self):
-        if self.detected_energies is None:
-            self.detected_energies = []
-
-
-@dataclass  
-class DetectedChain:
-    """Represents a detected decay chain."""
-    parent: str
-    name: str
-    chain_type: str  # 'natural' or 'manmade'
-    color: str
-    members: List[ChainMember]
-    detected_count: int
-    expected_count: int
-    score: float
-    confidence: str  # 'HIGH', 'MEDIUM', 'LOW'
-    key_indicators: List[str]  # Which key isotopes were detected
 
 
 @lru_cache(maxsize=50)

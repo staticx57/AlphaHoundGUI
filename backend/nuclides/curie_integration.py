@@ -284,27 +284,6 @@ def calculate_attenuation(
         }
 
 
-@_serialized
-def get_isotope_half_life(isotope_name: str) -> Optional[float]:
-    """
-    Get half-life in seconds for an isotope.
-    
-    Args:
-        isotope_name: Isotope name (e.g., "Cs-137")
-        
-    Returns:
-        Half-life in seconds, or None if not found
-    """
-    if not HAS_CURIE:
-        return None
-    
-    try:
-        iso = curie.Isotope(isotope_name)
-        return iso.half_life()  # Returns seconds
-    except Exception:
-        return None
-
-
 def get_all_xrays_for_isotope(isotope_name: str) -> List[Dict]:
     """
     Get all characteristic X-rays that would be emitted when detecting an isotope.

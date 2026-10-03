@@ -6,7 +6,7 @@ with proper error propagation for counting statistics.
 """
 
 import numpy as np
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 
 def add_spectra(spectra: List[List[float]], weights: Optional[List[float]] = None) -> dict:
@@ -179,40 +179,3 @@ def compare_spectra(spec1: List[float], spec2: List[float]) -> dict:
         'correlation': float(correlation) if not np.isnan(correlation) else 0.0,
         'length': min_len
     }
-
-
-def rebin_spectrum(counts: List[float], energies: List[float], 
-                   new_channels: int) -> Tuple[List[float], List[float]]:
-    """
-    Rebin spectrum to different number of channels.
-    Useful for comparing spectra with different resolutions.
-    
-    Args:
-        counts: Original counts
-        energies: Original energy axis
-        new_channels: Target number of channels
-    
-    Returns:
-        Tuple of (new_counts, new_energies)
-    """
-    old_counts = np.array(counts, dtype=float)
-    old_energies = np.array(energies, dtype=float)
-    
-    old_channels = len(old_counts)
-    
-    if new_channels >= old_channels:
-        # No rebinning needed (or upsampling not supported)
-        return counts, energies
-    
-    # Simple binning
-    bin_size = old_channels // new_channels
-    new_counts = []
-    new_energies = []
-    
-    for i in range(new_channels):
-        start = i * bin_size
-        end = (i + 1) * bin_size if i < new_channels - 1 else old_channels
-        new_counts.append(float(old_counts[start:end].sum()))
-        new_energies.append(float(old_energies[start:end].mean()))
-    
-    return new_counts, new_energies
