@@ -150,13 +150,16 @@ def detect_peaks_cwt(
         widths = np.arange(2, 20)
     
     try:
-        # CWT peak detection
-        peak_indices = find_peaks_cwt(
-            masked_counts,
-            widths=widths,
-            min_snr=min_snr,
-            noise_perc=10
-        )
+        # CWT peak detection. On a sparse spectrum the noise percentile of a wavelet row can be exactly 0, and scipy
+        # then divides by it: the ridge counts as infinitely strong (inf passes min_snr) and numpy warns. That is
+        # the result we want, so the warning is silenced rather than the division avoided.
+        with np.errstate(divide='ignore', invalid='ignore'):
+            peak_indices = find_peaks_cwt(
+                masked_counts,
+                widths=widths,
+                min_snr=min_snr,
+                noise_perc=10
+            )
         
         # Convert indices to energies
         peak_energies = [energies[i] for i in peak_indices if mask[i]]

@@ -51,3 +51,21 @@ def test_weak_uranium_glass_spectrum_runs_through_the_pipeline_without_inventing
     assert result["decay_chains"] == []
     assert result["data_quality"]["low_statistics"] is True
     assert all(0 <= iso["confidence"] <= 100 for iso in result["isotopes"])
+
+
+def test_peak_detection_on_a_sparse_spectrum_raises_no_numpy_warning():
+    """scipy divides by a noise estimate that is exactly 0 on a sparse spectrum; that must not surface as a RuntimeWarning.
+
+    Warnings are recorded, not turned into errors: an error raised inside scipy is swallowed by the detector's own handler,
+    which would hide the problem and make the peak list empty."""
+    import warnings
+
+    from peak_detection_enhanced import detect_peaks_enhanced
+
+    result = parse(GLASS)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        peaks = detect_peaks_enhanced(result["energies"], result["counts"], validate_fits=True)
+    numeric = [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert numeric == []
+    assert len(peaks) >= 1
