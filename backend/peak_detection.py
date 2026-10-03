@@ -2,6 +2,9 @@ import numpy as np
 from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
 
+import logging
+logger = logging.getLogger(__name__)
+
 def detect_peaks(energies, counts, prominence_factor=0.01, distance=5):
     """
     Detect peaks in spectrum data, including shoulder peaks.
@@ -103,7 +106,7 @@ def detect_peaks(energies, counts, prominence_factor=0.01, distance=5):
         return peaks_sorted[:40]
         
     except Exception as e:
-        print(f"Peak detection error: {e}")
+        logger.warning(f"Peak detection error: {e}")
         import traceback
         traceback.print_exc()
         return []

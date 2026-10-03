@@ -91,8 +91,8 @@ def parse_chn_file(filepath):
                     'b': cal_b,  # keV/channel
                     'c': cal_c   # quadratic term
                 }
-        except:
-            pass
+        except (struct.error, ValueError, IndexError):
+            logger.debug('CHN/SPE calibration trailer unreadable', exc_info=True)
     
     # Generate energies if calibrated
     energies = list(range(num_channels))

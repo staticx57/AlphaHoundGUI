@@ -4,6 +4,9 @@ from gauss_area import channel_width_kev
 import scipy.optimize
 from scipy.signal import find_peaks
 
+import logging
+logger = logging.getLogger(__name__)
+
 def fit_gaussian(energies, counts, peak_centers, window_width=10):
     """
     Fit Gaussian profiles to peaks in the spectrum.
@@ -79,7 +82,7 @@ def fit_gaussian(energies, counts, peak_centers, window_width=10):
             })
         except Exception as e:
             # Fit failed, skip this peak
-            print(f"Fit failed for peak at {center}: {e}")
+            logger.warning(f"Fit failed for peak at {center}: {e}")
             continue
             
     return fit_results

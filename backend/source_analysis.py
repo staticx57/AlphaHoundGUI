@@ -139,7 +139,7 @@ def analyze_cesium137(activity_bq: float, manufacture_date: Optional[str] = None
                 "value": f"{original_activity:.1f} Bq",
                 "icon": "📅"
             })
-        except:
+        except ValueError:
             pass
     
     return {
@@ -186,7 +186,7 @@ def analyze_cobalt60(activity_bq: float, manufacture_date: Optional[str] = None)
                 "value": f"{years_elapsed:.1f} years",
                 "icon": "📆"
             })
-        except:
+        except ValueError:
             pass
     
     return {

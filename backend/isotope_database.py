@@ -232,7 +232,7 @@ def load_custom_isotopes():
     try:
         with open(CUSTOM_ISOTOPES_FILE, 'r') as f:
             return json.load(f)
-    except:
+    except (OSError, ValueError):
         return {}
 
 def save_custom_isotope(name, energies):
@@ -380,248 +380,220 @@ DECAY_CHAINS = {
     }
 }
 
+# Decay chain membership, used to tell a natural series from a man-made source
+U238_CHAIN = ["U-238", "Th-234", "Pa-234m", "U-234", "Th-230", "Ra-226",
+              "Rn-222", "Po-218", "Pb-214", "Bi-214", "Po-214", "Pb-210", "Bi-210", "Po-210"]
+TH232_CHAIN = ["Th-232", "Ra-228", "Ac-228", "Th-228", "Ra-224",
+               "Rn-220", "Po-216", "Pb-212", "Bi-212", "Tl-208", "Po-212"]
+U235_CHAIN = ["U-235", "Th-231", "Pa-231", "Ac-227", "Th-227", "Ra-223", "Rn-219"]
+
+# Natural abundance weights: rare isotopes are penalised
+ABUNDANCE_WEIGHTS = {
+    "U-238": 1.0,      # 99.3% of natural uranium
+    "U-235": 0.01,     # 0.72% - strongly suppress
+    "Th-231": 0.01,    # U-235 daughter
+    "Ra-223": 0.01,    # U-235 chain
+    "Th-227": 0.01,    # U-235 chain
+}
+
+# A chain counts as detected when one of its members reaches this weighted confidence. Stricter than "any match", so a weak
+# single match (e.g. Pb-214 at 241 keV) does not flag a whole uranium series.
+CHAIN_DETECTION_CONFIDENCE = 40.0
+
+
+def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_rules):
+    """
+    Match one isotope's gamma lines against the detected peaks and score it (intensity weighted, with the single-line,
+    peak-count, intrinsic-validation and abundance adjustments). Returns the match record, or None if no line matched.
+    """
+    matches = 0
+    matched_peaks = []
+    total_intensity = 0.0
+    matched_intensity = 0.0
+
+    for gamma_energy in gamma_energies:
+        # intensity weight (yield) from IAEA data; 1.0 if unavailable (falls back to simple counting)
+        intensity = get_gamma_intensity(isotope, gamma_energy)
+        total_intensity += intensity
+
+        for peak in peaks:
+            energy_diff = abs(peak['energy'] - gamma_energy)
+            if energy_diff <= energy_tolerance:
+                matches += 1
+                matched_intensity += intensity
+                matched_peaks.append({
+                    'expected': gamma_energy,
+                    'observed': peak['energy'],
+                    'diff': energy_diff,
+                    'intensity': intensity
+                })
+                break
+
+    if matches == 0:
+        return None
+
+    # If we have intensity data, the weighted score penalises missing strong lines
+    if total_intensity > 0:
+        base_confidence = (matched_intensity / total_intensity) * 100
+    else:
+        base_confidence = (matches / len(gamma_energies)) * 100
+
+    # Single-line isotopes are capped at 60%: a 1/1 match is often coincidental
+    if len(gamma_energies) == 1 and matches == 1:
+        base_confidence = min(base_confidence, 60.0)
+
+    # Peak count: a single match is penalised, 3 or more earn a bonus
+    if matches == 1:
+        base_confidence *= 0.7
+    elif matches >= 3:
+        base_confidence = min(base_confidence * 1.1, 100.0)
+
+    # Physics-based rules for specific isotopes (required number of peaks, low-energy penalty)
+    rules = validation_rules.get(isotope)
+    if rules:
+        required_peaks = rules.get("required_peaks", 1)
+        min_conf_single = rules.get("min_confidence_single", 30.0)
+        if matches < required_peaks:
+            base_confidence = min(base_confidence, min_conf_single)
+            logger.info(f"[Intrinsic] {isotope}: {matches}/{required_peaks} peaks - capped at {min_conf_single}%")
+        if rules.get("low_energy_penalty") and matches == 1:
+            base_confidence *= 0.6
+            logger.info(f"[Intrinsic] {isotope}: Low energy penalty applied")
+
+    abundance_weight = ABUNDANCE_WEIGHTS.get(isotope, 1.0)
+    return {
+        'isotope': isotope,
+        'confidence': base_confidence * abundance_weight,
+        'raw_confidence': base_confidence,
+        'matches': matches,
+        'total_lines': len(gamma_energies),
+        'matched_peaks': matched_peaks,
+        'expected_peaks': [{'energy': e, 'intensity': get_gamma_intensity(isotope, e)} for e in gamma_energies],
+        'abundance_weight': abundance_weight,
+        'suppressed': False
+    }
+
+
+def _apply_contextual_rules(isotope_matches, chains_detected, peaks):
+    """
+    Adjust the confidences in place using what else is in the spectrum: suppress man-made isotopes that cannot coexist with
+    a natural series (unless their line is among the strongest peaks), boost a man-made source that dominates the spectrum,
+    and demote natural-series matches that are probably Compton continuum when a man-made source dominates.
+    """
+    try:
+        from isotope_validation import INCOMPATIBLE_WITH_NATURAL
+    except ImportError:
+        INCOMPATIBLE_WITH_NATURAL = ["Cs-137", "I-131", "F-18", "Tc-99m", "Co-60", "Sr-90", "Pu-239", "Np-237"]
+    try:
+        from isotope_validation import MANMADE_SIGNATURES
+    except ImportError:
+        MANMADE_SIGNATURES = {'Cs-137': [661.7], 'Co-60': [1173.2, 1332.5], 'Am-241': [59.5]}
+
+    any_chain_detected = chains_detected['u238'] or chains_detected['th232']
+
+    # Top 5 peaks by counts (not only the dominant one: Cs-137 662 keV may be weaker than a Ba X-ray)
+    sorted_peaks = sorted(peaks, key=lambda p: p.get('counts', p.get('area', 0)), reverse=True)
+    top_peak_energies = [p.get('energy', 0) for p in sorted_peaks[:5]]
+
+    # Which man-made sources have a characteristic line (25 keV tolerance) among the top peaks
+    manmade_in_top_peaks = set()
+    for peak_energy in top_peak_energies:
+        for iso, energies in MANMADE_SIGNATURES.items():
+            for e in energies:
+                if abs(peak_energy - e) < 25:
+                    manmade_in_top_peaks.add(iso)
+
+    logger.debug(f"[Suppress] top_peak_energies={top_peak_energies} manmade_in_top_peaks={manmade_in_top_peaks} "
+                 f"chains_detected={chains_detected}")
+
+    if any_chain_detected:
+        for iso in INCOMPATIBLE_WITH_NATURAL:
+            if iso in isotope_matches:
+                if iso in manmade_in_top_peaks:
+                    logger.debug(f"[Suppress] bypassing suppression for {iso}")
+                    continue
+                logger.debug(f"[Suppress] suppressing {iso}")
+                isotope_matches[iso]['confidence'] *= 0.1  # 90% reduction
+                isotope_matches[iso]['suppressed'] = True
+                isotope_matches[iso]['suppression_reason'] = 'incompatible_with_natural_chain'
+
+    # Boost a dominant man-made source to 95% so it ranks above false multi-peak matches (and overrides the single-line
+    # cap). Only when no natural chain is detected: otherwise coincidental energy matches become false positives.
+    if not any_chain_detected:
+        for iso in manmade_in_top_peaks:
+            if iso in isotope_matches:
+                old_conf = isotope_matches[iso]['confidence']
+                isotope_matches[iso]['confidence'] = max(old_conf, 95.0)
+                logger.debug(f"[Boost] {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
+    else:
+        logger.debug(f"[Boost] skipped, natural chain detected: {chains_detected}")
+
+    # A man-made source dominates and no chain is detected: natural-series matches are likely Compton continuum
+    if manmade_in_top_peaks and not any_chain_detected:
+        for iso in isotope_matches:
+            if iso in U238_CHAIN or iso in TH232_CHAIN:
+                old_conf = isotope_matches[iso]['confidence']
+                isotope_matches[iso]['confidence'] = min(old_conf, 40.0)
+                isotope_matches[iso]['suppressed'] = True
+                isotope_matches[iso]['suppression_reason'] = 'manmade_source_detected'
+                logger.debug(f"[Demote] {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
+
+    # With the U-238 series detected, U-235 series members are suppressed too
+    if chains_detected['u238']:
+        for iso in U235_CHAIN:
+            if iso in isotope_matches and iso != "U-235":  # U-235 itself is handled by its abundance weight
+                isotope_matches[iso]['confidence'] *= 0.2
+                isotope_matches[iso]['suppressed'] = True
+                isotope_matches[iso]['suppression_reason'] = 'u238_chain_dominant'
+
+
 def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     """
     Identify possible isotopes based on detected peaks.
     Returns ALL matches - filtering should be done at application layer.
-    
+
     Args:
         peaks: List of detected peak dictionaries with 'energy' key
         energy_tolerance: Maximum energy difference for a match (keV)
         mode: 'simple' or 'advanced' - determines which database to use
-    
+
     Returns:
         List of identified isotopes with confidence scores (unfiltered)
     """
     if not peaks:
         return []
-    
-    # ========== DECAY CHAIN DEFINITIONS ==========
-    # Define which isotopes belong to which chains
-    U238_CHAIN = ["U-238", "Th-234", "Pa-234m", "U-234", "Th-230", "Ra-226", 
-                  "Rn-222", "Po-218", "Pb-214", "Bi-214", "Po-214", "Pb-210", "Bi-210", "Po-210"]
-    TH232_CHAIN = ["Th-232", "Ra-228", "Ac-228", "Th-228", "Ra-224", 
-                   "Rn-220", "Po-216", "Pb-212", "Bi-212", "Tl-208", "Po-212"]
-    U235_CHAIN = ["U-235", "Th-231", "Pa-231", "Ac-227", "Th-227", "Ra-223", "Rn-219"]
-    
-    # Isotopes that should NOT appear together with natural uranium samples
-    # IMPORTED from centralized isotope_validation.py (SINGLE SOURCE OF TRUTH)
-    try:
-        from isotope_validation import INCOMPATIBLE_WITH_NATURAL
-    except ImportError:
-        INCOMPATIBLE_WITH_NATURAL = ["Cs-137", "I-131", "F-18", "Tc-99m", "Co-60", "Sr-90", "Pu-239", "Np-237"]
-    
-    # Natural abundance weights - penalize rare isotopes
-    ABUNDANCE_WEIGHTS = {
-        "U-238": 1.0,      # 99.3% of natural uranium
-        "U-235": 0.01,     # 0.72% - strongly suppress
-        "Th-231": 0.01,    # U-235 daughter
-        "Ra-223": 0.01,    # U-235 chain
-        "Th-227": 0.01,    # U-235 chain
-    }
-    
-    # Get appropriate database for mode
+
     database = get_isotope_database(mode)
-    
-    # ========== INTRINSIC VALIDATION RULES ==========
-    # Import from centralized validation module (SINGLE SOURCE OF TRUTH)
+
+    # Physics-based validation rules (single source of truth: isotope_validation.py)
     try:
-        from isotope_validation import generate_validation_rules, validate_isotope_detection
-        INTRINSIC_VALIDATION = generate_validation_rules(database)
+        from isotope_validation import generate_validation_rules
+        validation_rules = generate_validation_rules(database)
     except ImportError:
-        # Fallback: no validation (backwards compatibility)
-        INTRINSIC_VALIDATION = {}
-    
+        validation_rules = {}
+
     isotope_matches = {}
-    
-    # Track which chains are detected
-    chains_detected = {
-        'u238': False,
-        'th232': False,
-        'u235': False
-    }
-    
-    # First pass: identify all matches
+    chains_detected = {'u238': False, 'th232': False, 'u235': False}
+
     for isotope, gamma_energies in database.items():
         if not gamma_energies:
             continue
-            
-        matches = 0
-        matched_peaks = []
-        total_intensity = 0.0
-        matched_intensity = 0.0
-        
-        for gamma_energy in gamma_energies:
-            # Get intensity weight (yield) from IAEA data
-            # Returns 1.0 if data unavailable (fallback to simple counting)
-            intensity = get_gamma_intensity(isotope, gamma_energy)
-            total_intensity += intensity
-
-            is_match = False
-            for peak in peaks:
-                energy_diff = abs(peak['energy'] - gamma_energy)
-                if energy_diff <= energy_tolerance:
-                    matches += 1
-                    matched_intensity += intensity
-                    matched_peaks.append({
-                        'expected': gamma_energy,
-                        'observed': peak['energy'],
-                        'diff': energy_diff,
-                        'intensity': intensity
-                    })
-                    is_match = True
-                    break
-        
-        if matches > 0:
-            # ========== CONFIDENCE CALCULATION (Intensity Weighted) ==========
-            # If we have intensity data, weighted score penalizes missing strong peaks
-            if total_intensity > 0:
-                base_confidence = (matched_intensity / total_intensity) * 100
-            else:
-                base_confidence = (matches / len(gamma_energies)) * 100
-            
-            # PENALTY 1: Single-line isotopes capped at 60%
-            # Rationale: 1/1 match is often coincidental
-            if len(gamma_energies) == 1 and matches == 1:
-                base_confidence = min(base_confidence, 60.0)
-            
-            # PENALTY 2: Peak count bonus/penalty
-            # Need 2+ matches for full confidence
-            if matches == 1:
-                base_confidence *= 0.7  # 30% penalty for single match
-            elif matches >= 3:
-                base_confidence = min(base_confidence * 1.1, 100.0)  # 10% bonus for 3+
-            
-            # ========== INTRINSIC VALIDATION ==========
-            # Apply physics-based validation rules for specific isotopes
-            validation_failed = False
-            if isotope in INTRINSIC_VALIDATION:
-                rules = INTRINSIC_VALIDATION[isotope]
-                required_peaks = rules.get("required_peaks", 1)
-                min_conf_single = rules.get("min_confidence_single", 30.0)
-                
-                # Check if we have required number of peaks
-                if matches < required_peaks:
-                    # Cap confidence at min_confidence_single
-                    base_confidence = min(base_confidence, min_conf_single)
-                    validation_failed = True
-                    logger.info(f"[Intrinsic] {isotope}: {matches}/{required_peaks} peaks - capped at {min_conf_single}%")
-                
-                # Low energy penalty for threshold-sensitive isotopes  
-                if rules.get("low_energy_penalty") and matches == 1:
-                    base_confidence *= 0.6  # Additional 40% penalty
-                    logger.info(f"[Intrinsic] {isotope}: Low energy penalty applied")
-            
-            # Apply abundance weighting
-            abundance_weight = ABUNDANCE_WEIGHTS.get(isotope, 1.0)
-            weighted_confidence = base_confidence * abundance_weight
-            
-            # Track chain detection (STRICTER: require >40% confidence to trigger chain)
-            # This prevents weak single matches (e.g. Pb-214 at 241 keV) from flagging entire Uranium series
-            if isotope in U238_CHAIN and weighted_confidence > 40.0:
+        match = _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_rules)
+        if match is None:
+            continue
+        isotope_matches[isotope] = match
+        if match['confidence'] > CHAIN_DETECTION_CONFIDENCE:
+            if isotope in U238_CHAIN:
                 chains_detected['u238'] = True
-            if isotope in TH232_CHAIN and weighted_confidence > 40.0:
+            if isotope in TH232_CHAIN:
                 chains_detected['th232'] = True
-            if isotope in U235_CHAIN and weighted_confidence > 40.0:
+            if isotope in U235_CHAIN:
                 chains_detected['u235'] = True
-            
-            isotope_matches[isotope] = {
-                'isotope': isotope,
-                'confidence': weighted_confidence,
-                'raw_confidence': base_confidence,
-                'matches': matches,
-                'total_lines': len(gamma_energies),
-                'matched_peaks': matched_peaks,
-                'expected_peaks': [{'energy': e, 'intensity': get_gamma_intensity(isotope, e)} for e in gamma_energies],
-                'abundance_weight': abundance_weight,
-                'suppressed': False
-            }
-    
-    # ========== CONTEXTUAL SUPPRESSION ==========
-    # If any natural decay chain is detected, suppress incompatible isotopes
-    # EXCEPTION: Don't suppress if the isotope matches one of the TOP peaks
-    any_chain_detected = chains_detected['u238'] or chains_detected['th232']
-    
-    # Get top 5 peaks by counts (not just dominant - e.g., Cs-137 662 keV may be weaker than Ba X-ray)
-    sorted_peaks = sorted(peaks, key=lambda p: p.get('counts', p.get('area', 0)), reverse=True)
-    top_peaks = sorted_peaks[:5]
-    top_peak_energies = [p.get('energy', 0) for p in top_peaks]
-    
-    # Define characteristic energies for man-made sources
-    # IMPORTED from centralized isotope_validation.py (SINGLE SOURCE OF TRUTH)
-    try:
-        from isotope_validation import MANMADE_SIGNATURES
-    except ImportError:
-        MANMADE_SIGNATURES = {'Cs-137': [661.7], 'Co-60': [1173.2, 1332.5], 'Am-241': [59.5]}
-    
-    # Check if ANY top peak matches a man-made source
-    manmade_in_top_peaks = set()
-    for peak_energy in top_peak_energies:
-        for iso, energies in MANMADE_SIGNATURES.items():
-            for e in energies:
-                if abs(peak_energy - e) < 25:  # 25 keV tolerance
-                    manmade_in_top_peaks.add(iso)
-    
-    # DEBUG: Log suppression bypass
-    logger.info(f"[DEBUG Suppress] top_peak_energies={top_peak_energies}")
-    logger.info(f"[DEBUG Suppress] manmade_in_top_peaks={manmade_in_top_peaks}")
-    logger.info(f"[DEBUG Suppress] chains_detected={chains_detected}")
-    logger.info(f"[DEBUG Suppress] Cs-137 in isotope_matches: {'Cs-137' in isotope_matches}")
-    
-    if any_chain_detected:
-        for iso in INCOMPATIBLE_WITH_NATURAL:
-            if iso in isotope_matches:
-                # DON'T suppress if this isotope is in the top peaks
-                if iso in manmade_in_top_peaks:
-                    logger.info(f"[DEBUG Suppress] BYPASSING suppression for {iso}")
-                    continue
-                logger.info(f"[DEBUG Suppress] SUPPRESSING {iso}")
-                isotope_matches[iso]['confidence'] *= 0.1  # 90% reduction
-                isotope_matches[iso]['suppressed'] = True
-                isotope_matches[iso]['suppression_reason'] = 'incompatible_with_natural_chain'
-    
-    # ========== DOMINANT PEAK BOOST FOR MAN-MADE SOURCES ==========
-    # If a man-made isotope's peak is in the top peaks, boost its confidence
-    # This overrides the single-line 60% cap penalty
-    # IMPORTANT: Only apply boost if NO natural chain is detected
-    # Otherwise natural spectra with coincidental energy matches get false positives
-    if not any_chain_detected:
-        for iso in manmade_in_top_peaks:
-            if iso in isotope_matches:
-                # Boost to 95% to rank above false positive multi-peak matches
-                old_conf = isotope_matches[iso]['confidence']
-                isotope_matches[iso]['confidence'] = max(old_conf, 95.0)
-                logger.info(f"[DEBUG Boost] Boosted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
-    else:
-        logger.info(f"[DEBUG Boost] Skipping boost - natural chain detected: {chains_detected}")
-    
-    # ========== DEMOTE NATURAL CHAIN ISOTOPES WHEN MAN-MADE DETECTED ==========
-    # If we detected man-made sources in top peaks AND no natural chain, demote natural chain matches
-    # But ONLY if no chain is detected - otherwise we risk demoting legitimate natural sources
-    if manmade_in_top_peaks and not any_chain_detected:
-        for iso in isotope_matches:
-            if iso in U238_CHAIN or iso in TH232_CHAIN:
-                # Demote to 40% - these are likely Compton continuum false matches
-                old_conf = isotope_matches[iso]['confidence']
-                isotope_matches[iso]['confidence'] = min(old_conf, 40.0)
-                isotope_matches[iso]['suppressed'] = True
-                isotope_matches[iso]['suppression_reason'] = 'manmade_source_detected'
-                logger.info(f"[DEBUG Demote] Demoted {iso} from {old_conf:.1f}% to {isotope_matches[iso]['confidence']:.1f}%")
-    
-    # If U-238 chain detected, also suppress U-235 chain isotopes
-    if chains_detected['u238']:
-        for iso in U235_CHAIN:
-            if iso in isotope_matches and iso not in ["U-235"]:  # Already handled by abundance
-                isotope_matches[iso]['confidence'] *= 0.2
-                isotope_matches[iso]['suppressed'] = True
-                isotope_matches[iso]['suppression_reason'] = 'u238_chain_dominant'
-    
-    # Sort by weighted confidence, then by matches
-    identified = sorted(isotope_matches.values(), 
-                       key=lambda x: (x['confidence'], x['matches']), 
-                       reverse=True)
-    
-    return identified
+
+    _apply_contextual_rules(isotope_matches, chains_detected, peaks)
+
+    # Sort by weighted confidence, then by number of matched lines
+    return sorted(isotope_matches.values(), key=lambda x: (x['confidence'], x['matches']), reverse=True)
 
 
 def identify_decay_chains(peaks, identified_isotopes=None, energy_tolerance=20.0):

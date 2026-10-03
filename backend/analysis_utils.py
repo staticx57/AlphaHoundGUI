@@ -42,6 +42,115 @@ def sanitize_for_json(obj):
         return sanitize_for_json(obj.tolist())
     return obj
 
+def _detect_peaks(result: dict, energies, counts, use_enhanced: bool) -> list:
+    """
+    Detect the peaks, with fallbacks: enhanced detection, then the standard detector, then whatever the parser
+    already found. Records which one answered in result["analysis_mode"] and stores the peaks in result["peaks"].
+    """
+    # Preserve any peaks already detected by the parser
+    parser_peaks = result.get("peaks", [])
+    
+    # Use enhanced peak detection if available
+    if use_enhanced and HAS_ENHANCED_ANALYSIS:
+        try:
+            try:
+                from source_templates import resolve_detector, _resolution
+                r662 = _resolution(resolve_detector(result.get("metadata")))
+            except Exception:
+                r662 = None
+            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True, resolution_662=r662)
+            result["analysis_mode"] = "enhanced"
+            
+            # If enhanced returns 0 but parser found peaks, fall back to basic
+            if not peaks and parser_peaks:
+                peaks = detect_peaks(energies, counts)
+                result["analysis_mode"] = "standard_fallback"
+        except Exception as e:
+            logger.warning(f"[Analysis] Enhanced detection failed, falling back: {e}")
+            peaks = detect_peaks(energies, counts)
+            result["analysis_mode"] = "standard"
+    else:
+        peaks = detect_peaks(energies, counts)
+        result["analysis_mode"] = "standard"
+    
+    # Final fallback: if still no peaks but parser had some, use parser peaks
+    if not peaks and parser_peaks:
+        peaks = parser_peaks
+        result["analysis_mode"] = "parser_preserved"
+    
+    result["peaks"] = peaks
+    return peaks
+
+
+def _reconcile_with_template_fit(result: dict, energies, counts, peaks, decay_chains, isotopes, current_settings: dict):
+    """
+    Fit the whole spectrum with source templates: it decides whether the U-238 / Th-232 series are really present,
+    and can report a clearly-off energy calibration. Returns the (decay_chains, isotopes) to report.
+    """
+    try:
+        from source_templates import fit_source_templates, reconcile_with_fit
+        fit = fit_source_templates(energies, counts, result.get("metadata"))
+        if fit:
+            result["source_fit"] = fit
+            # If identified sources anchor the fit, report a clearly-off energy calibration
+            if any(src["present"] for src in fit["sources"].values()):
+                shift = fit["gain"] + fit["offset_keV"] / 662.0 - 1.0
+                if abs(shift) > 0.025:
+                    result["warnings"] = result.get("warnings", []) + [
+                        f"Energy calibration looks about {abs(shift) * 100:.1f}% {'low' if shift < 0 else 'high'} "
+                        "(identified lines sit at shifted energies). Recalibrate for accurate peak energies."
+                    ]
+            decay_chains, isotopes = reconcile_with_fit(
+                fit, decay_chains, isotopes, current_settings.get("isotope_min_confidence", 30.0), peaks)
+    except Exception as e:
+        logger.warning(f"[Analysis] Source template fit failed: {e}")
+    return decay_chains, isotopes
+
+
+def _assess_data_quality(peaks, energies, counts, live_time: float) -> dict:
+    """Statistics and acquisition-time warnings, plus the Cs-137 minimum detectable activity when the time is known."""
+    # Assess data quality
+    max_peak_counts = max((p.get('counts', 0) for p in peaks), default=0)
+    time_is_known = live_time > 1.0
+    
+    data_quality = {
+        "low_statistics": max_peak_counts < 500,
+        "short_acquisition": time_is_known and live_time < 60.0,
+        "max_peak_counts": int(max_peak_counts),
+        "warnings": []
+    }
+    
+    if data_quality["low_statistics"]:
+        data_quality["warnings"].append(f"Low statistics: max peak has only {int(max_peak_counts)} counts.")
+    if data_quality["short_acquisition"]:
+        data_quality["warnings"].append(f"Short acquisition time ({live_time:.0f}s).")
+    
+    # Calculate MDA for key isotopes (Cs-137 as reference)
+    try:
+        from detector_efficiency import calculate_mda
+        background_counts = 0
+        for i, e in enumerate(energies):
+            if 650 <= e <= 680 and i < len(counts):
+                background_counts += counts[i]
+        
+        if live_time > 1.0 and background_counts >= 0:
+            cs137_mda = calculate_mda(
+                background_counts=background_counts,
+                energy_keV=662,
+                branching_ratio=0.851,
+                live_time_s=live_time
+            )
+            if cs137_mda.get('valid'):
+                data_quality["mda_cs137"] = {
+                    "value_bq": cs137_mda['mda_bq'],
+                    "readable": cs137_mda['mda_readable'],
+                    "detection_limit_counts": cs137_mda['detection_limit_counts']
+                }
+    except Exception:
+        logger.debug('MDA estimate skipped', exc_info=True)
+    return data_quality
+
+
 def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0, use_enhanced: bool = True) -> dict:
     """
     Common analysis pipeline for all spectrum sources.
@@ -76,40 +185,9 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
             from source_templates import detector_min_energy
             result["display_min_keV"] = detector_min_energy(result.get("metadata"))
         except Exception:
-            pass
+            logger.debug('display_min_keV not set', exc_info=True)
     
-    # Preserve any peaks already detected by the parser
-    parser_peaks = result.get("peaks", [])
-    
-    # Use enhanced peak detection if available
-    if use_enhanced and HAS_ENHANCED_ANALYSIS:
-        try:
-            try:
-                from source_templates import resolve_detector, _resolution
-                r662 = _resolution(resolve_detector(result.get("metadata")))
-            except Exception:
-                r662 = None
-            peaks = detect_peaks_enhanced(energies, counts, validate_fits=True, resolution_662=r662)
-            result["analysis_mode"] = "enhanced"
-            
-            # If enhanced returns 0 but parser found peaks, fall back to basic
-            if not peaks and parser_peaks:
-                peaks = detect_peaks(energies, counts)
-                result["analysis_mode"] = "standard_fallback"
-        except Exception as e:
-            logger.warning(f"[Analysis] Enhanced detection failed, falling back: {e}")
-            peaks = detect_peaks(energies, counts)
-            result["analysis_mode"] = "standard"
-    else:
-        peaks = detect_peaks(energies, counts)
-        result["analysis_mode"] = "standard"
-    
-    # Final fallback: if still no peaks but parser had some, use parser peaks
-    if not peaks and parser_peaks:
-        peaks = parser_peaks
-        result["analysis_mode"] = "parser_preserved"
-    
-    result["peaks"] = peaks
+    peaks = _detect_peaks(result, energies, counts, use_enhanced)
 
     # Without an energy calibration the "energies" are channel numbers, so matching them
     # against gamma-line keV values only produces spurious isotopes/chains. Keep the peaks
@@ -170,25 +248,8 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     isotopes, decay_chains = apply_confidence_filtering(
         all_isotopes, weighted_chains, {**current_settings, "max_isotopes": 10**6})
 
-    # Full-spectrum template fit decides whether the U-238 / Th-232 series are really present
-    # (line matching alone cannot separate them at scintillator resolution).
-    try:
-        from source_templates import fit_source_templates, reconcile_with_fit
-        fit = fit_source_templates(energies, counts, result.get("metadata"))
-        if fit:
-            result["source_fit"] = fit
-            # If identified sources anchor the fit, report a clearly-off energy calibration
-            if any(src["present"] for src in fit["sources"].values()):
-                shift = fit["gain"] + fit["offset_keV"] / 662.0 - 1.0
-                if abs(shift) > 0.025:
-                    result["warnings"] = result.get("warnings", []) + [
-                        f"Energy calibration looks about {abs(shift) * 100:.1f}% {'low' if shift < 0 else 'high'} "
-                        "(identified lines sit at shifted energies). Recalibrate for accurate peak energies."
-                    ]
-            decay_chains, isotopes = reconcile_with_fit(
-                fit, decay_chains, isotopes, current_settings.get("isotope_min_confidence", 30.0), peaks)
-    except Exception as e:
-        logger.warning(f"[Analysis] Source template fit failed: {e}")
+    decay_chains, isotopes = _reconcile_with_template_fit(
+        result, energies, counts, peaks, decay_chains, isotopes, current_settings)
 
     # Secular equilibrium of each reported series, measured on the spectrum with the ROI engine (the peak list is too coarse)
     try:
@@ -223,48 +284,8 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
             xrf_results = detect_xrf_peaks(peak_energies)
             if xrf_results:
                 result["xrf_detections"] = xrf_results
-    except Exception as e:
-        pass
-    
-    # Assess data quality
-    max_peak_counts = max((p.get('counts', 0) for p in peaks), default=0)
-    time_is_known = live_time > 1.0
-    
-    data_quality = {
-        "low_statistics": max_peak_counts < 500,
-        "short_acquisition": time_is_known and live_time < 60.0,
-        "max_peak_counts": int(max_peak_counts),
-        "warnings": []
-    }
-    
-    if data_quality["low_statistics"]:
-        data_quality["warnings"].append(f"Low statistics: max peak has only {int(max_peak_counts)} counts.")
-    if data_quality["short_acquisition"]:
-        data_quality["warnings"].append(f"Short acquisition time ({live_time:.0f}s).")
-    
-    # Calculate MDA for key isotopes (Cs-137 as reference)
-    try:
-        from detector_efficiency import calculate_mda
-        background_counts = 0
-        for i, e in enumerate(energies):
-            if 650 <= e <= 680 and i < len(counts):
-                background_counts += counts[i]
-        
-        if live_time > 1.0 and background_counts >= 0:
-            cs137_mda = calculate_mda(
-                background_counts=background_counts,
-                energy_keV=662,
-                branching_ratio=0.851,
-                live_time_s=live_time
-            )
-            if cs137_mda.get('valid'):
-                data_quality["mda_cs137"] = {
-                    "value_bq": cs137_mda['mda_bq'],
-                    "readable": cs137_mda['mda_readable'],
-                    "detection_limit_counts": cs137_mda['detection_limit_counts']
-                }
     except Exception:
-        pass
+        logger.debug('XRF detection skipped', exc_info=True)
     
-    result["data_quality"] = data_quality
+    result["data_quality"] = _assess_data_quality(peaks, energies, counts, live_time)
     return sanitize_for_json(result)

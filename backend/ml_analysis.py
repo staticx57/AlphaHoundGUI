@@ -156,6 +156,92 @@ DETECTOR_PROFILES = {
 }
 
 
+# Abundance-weighted sample generation: more samples for common isotopes, fewer for rare ones (default weight 1.0)
+SAMPLE_WEIGHTS = {
+    # U-238 chain - MOST COMMON in natural uranium (99.3%)
+    "U-238": 5.0, "Bi-214": 5.0, "Pb-214": 5.0, "Ra-226": 5.0,
+    "Pa-234m": 3.0, "Th-234": 3.0,
+    # U-235 chain - RARE (0.72%) - heavily suppress
+    "U-235": 0.2, "Th-231": 0.2, "Ra-223": 0.2, "Th-227": 0.2,
+    # Th-232 chain - common in mantles
+    "Th-232": 3.0, "Tl-208": 3.0, "Ac-228": 3.0, "Pb-212": 3.0,
+    # Common isotopes
+    "K-40": 3.0, "Cs-137": 2.0, "Co-60": 2.0,
+    # Many-line artificial isotopes soak up noisy natural spectra: keep their prior low
+    "Eu-152": 0.4, "Se-75": 0.4, "Ir-192": 0.4, "Ba-133": 0.6,
+    "Tl-201": 0.4, "Tc-99m": 0.5, "Co-57": 0.5, "F-18": 0.5, "I-131": 0.5,
+    # Default weight = 1.0
+}
+
+
+# Realistic multi-isotope mixtures (common real-world sources). Natural uranium mixtures must NOT include U-235
+# prominently. "label" names the class a variant trains; "weight" scales its number of samples (25 per unit).
+TRAINING_MIXTURES = {
+    'U-238 series': {  # Uranium glass / Fiestaware: U-238 series, Bi-214 dominant
+        'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'Th-234'],
+        'ratios': [10.0, 2.0, 1.0, 0.5, 0.4],  # Bi-214@609keV dominates
+        'weight': 3.0  # More training samples for this common source
+    },
+    'U-238 series (weak)': {  # Weaker uranium glass sample
+        'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Th-234'],
+        'ratios': [5.0, 1.5, 0.7, 0.3],
+        'label': 'U-238 series',
+        'weight': 2.0
+    },
+    'U-238 series (ore)': {  # Pitchblende, autunite - U-238 chain
+        'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'U-238'],
+        'ratios': [8.0, 2.0, 1.5, 0.8, 0.3],
+        'label': 'U-238 series',
+        'weight': 1.5
+    },
+    'Ra-226 series': {  # Ra-226 (watch dials, radium sources), radon daughters present
+        'isotopes': ['Ra-226', 'Bi-214', 'Pb-214'],
+        'ratios': [1.0, 5.0, 1.5],
+        'weight': 1.5
+    },
+    'Th-232 series': {  # Th-232 series in secular equilibrium (mantles, thoriated lenses/glass/rods)
+        'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228', 'Th-232'],
+        'ratios': [1.0, 1.0, 1.0, 0.36, 1.0, 1.0, 0.05],  # Tl-208 only 36% of Bi-212 decays
+        'weight': 3.0
+    },
+    'ThoriumSeriesAged': {  # Ra-228 / Ac-228 depleted (older purified thorium): Th-228 end dominates
+        'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
+        'ratios': [0.3, 1.0, 1.0, 0.36, 1.0, 1.0],
+        'label': 'Th-232 series', 'weight': 2.0
+    },
+    'ThoriumSeriesFresh': {  # Ac-228 enriched (fresh Ra-228 ingrowth)
+        'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
+        'ratios': [1.0, 0.6, 0.6, 0.22, 0.6, 0.6],
+        'label': 'Th-232 series', 'weight': 1.5
+    },
+    'Ra-226 series (equilibrium)': {  # Ra-226 with radon retained: Pb-214 / Bi-214 at full strength
+        'isotopes': ['Ra-226', 'Pb-214', 'Bi-214'],
+        'ratios': [0.3, 1.0, 1.0],
+        'label': 'Ra-226 series', 'weight': 3.0
+    },
+    'Tc-99m + I-131 + Mo-99': {  # Hospital nuclear medicine waste
+        'isotopes': ['Tc-99m', 'I-131', 'Mo-99'],
+        'ratios': [1.0, 0.5, 0.3],
+        'weight': 1.0
+    },
+    'Cs-137 + Co-60': {  # Level/density gauges
+        'isotopes': ['Cs-137', 'Co-60'],
+        'ratios': [1.0, 0.8],
+        'weight': 1.5
+    },
+    'Am-241 + Ba-133 + Cs-137 + Co-60': {  # Multi-isotope check source
+        'isotopes': ['Am-241', 'Ba-133', 'Cs-137', 'Co-60'],
+        'ratios': [0.7, 1.0, 0.9, 0.8],
+        'weight': 1.0
+    },
+    'Natural background (K-40, Ra/Th daughters)': {  # Typical background radiation
+        'isotopes': ['K-40', 'Bi-214', 'Tl-208', 'Pb-214'],
+        'ratios': [1.0, 0.3, 0.1, 0.2],
+        'weight': 2.0
+    }
+}
+
+
 class MLIdentifier:
     """ML-based isotope identifier (scikit-learn MLP).
     
@@ -329,159 +415,15 @@ class MLIdentifier:
             
         model_config = ML_MODEL_TYPES[self.model_type]
         logger.info(f"[ML] Training classifier on synthetic data ({model_config['name']})...")
-        
-        # Build isotope list from authoritative database
-        # Filter to isotopes with gamma emissions (non-empty energy lists)
-        isotope_data = {}
-        
-        # Get allowed isotopes for this model type
-        allowed_isotopes = model_config['isotopes']  # None = all isotopes
-        
-        if HAS_ISOTOPE_DB and ISOTOPE_DATABASE_ADVANCED:
-            for isotope, energies in ISOTOPE_DATABASE_ADVANCED.items():
-                if energies and len(energies) > 0:  # Has gamma emissions
-                    # Filter by model type if specified
-                    if allowed_isotopes is None or isotope in allowed_isotopes:
-                        isotope_data[isotope] = energies
-        
-        # Add Background if not present
-        if 'Background' not in isotope_data:
-            isotope_data['Background'] = []
-            
+
+        isotope_data = self._training_isotopes(model_config)
         isotopes = list(isotope_data.keys())
-        base_samples = model_config['samples_per_isotope']  # Use model-specific sample count
+        base_samples = model_config['samples_per_isotope']  # model-specific sample count
         logger.info(f"[ML] Training on {len(isotopes)} isotopes with {base_samples} samples each")
-        
-        # =========================================================
-        # ABUNDANCE-WEIGHTED SAMPLE GENERATION
-        # Generate more samples for common isotopes, fewer for rare
-        # =========================================================
-        SAMPLE_WEIGHTS = {
-            # U-238 chain - MOST COMMON in natural uranium (99.3%)
-            "U-238": 5.0, "Bi-214": 5.0, "Pb-214": 5.0, "Ra-226": 5.0,
-            "Pa-234m": 3.0, "Th-234": 3.0,
-            # U-235 chain - RARE (0.72%) - heavily suppress
-            "U-235": 0.2, "Th-231": 0.2, "Ra-223": 0.2, "Th-227": 0.2,
-            # Th-232 chain - common in mantles
-            "Th-232": 3.0, "Tl-208": 3.0, "Ac-228": 3.0, "Pb-212": 3.0,
-            # Common isotopes
-            "K-40": 3.0, "Cs-137": 2.0, "Co-60": 2.0,
-            # Many-line artificial isotopes soak up noisy natural spectra: keep their prior low
-            "Eu-152": 0.4, "Se-75": 0.4, "Ir-192": 0.4, "Ba-133": 0.6,
-            "Tl-201": 0.4, "Tc-99m": 0.5, "Co-57": 0.5, "F-18": 0.5, "I-131": 0.5,
-            # Default weight = 1.0
-        }
-        
-        # Define realistic multi-isotope mixtures (common real-world sources)
-        # CRITICAL: Natural uranium mixtures should NOT include U-235 prominently
-        mixtures = {
-            'U-238 series': {  # Uranium glass / Fiestaware: U-238 series, Bi-214 dominant
-                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'Th-234'],
-                'ratios': [10.0, 2.0, 1.0, 0.5, 0.4],  # Bi-214@609keV dominates
-                'weight': 3.0  # More training samples for this common source
-            },
-            'U-238 series (weak)': {  # Weaker uranium glass sample
-                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Th-234'],
-                'ratios': [5.0, 1.5, 0.7, 0.3],
-                'label': 'U-238 series',
-                'weight': 2.0
-            },
-            'U-238 series (ore)': {  # Pitchblende, autunite - U-238 chain
-                'isotopes': ['Bi-214', 'Pb-214', 'Ra-226', 'Pa-234m', 'U-238'],
-                'ratios': [8.0, 2.0, 1.5, 0.8, 0.3],
-                'label': 'U-238 series',
-                'weight': 1.5
-            },
-            'Ra-226 series': {  # Ra-226 (watch dials, radium sources), radon daughters present
-                'isotopes': ['Ra-226', 'Bi-214', 'Pb-214'],
-                'ratios': [1.0, 5.0, 1.5],
-                'weight': 1.5
-            },
-            'Th-232 series': {  # Th-232 series in secular equilibrium (mantles, thoriated lenses/glass/rods)
-                'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228', 'Th-232'],
-                'ratios': [1.0, 1.0, 1.0, 0.36, 1.0, 1.0, 0.05],  # Tl-208 only 36% of Bi-212 decays
-                'weight': 3.0
-            },
-            'ThoriumSeriesAged': {  # Ra-228 / Ac-228 depleted (older purified thorium): Th-228 end dominates
-                'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
-                'ratios': [0.3, 1.0, 1.0, 0.36, 1.0, 1.0],
-                'label': 'Th-232 series', 'weight': 2.0
-            },
-            'ThoriumSeriesFresh': {  # Ac-228 enriched (fresh Ra-228 ingrowth)
-                'isotopes': ['Ac-228', 'Pb-212', 'Bi-212', 'Tl-208', 'Ra-224', 'Th-228'],
-                'ratios': [1.0, 0.6, 0.6, 0.22, 0.6, 0.6],
-                'label': 'Th-232 series', 'weight': 1.5
-            },
-            'Ra-226 series (equilibrium)': {  # Ra-226 with radon retained: Pb-214 / Bi-214 at full strength
-                'isotopes': ['Ra-226', 'Pb-214', 'Bi-214'],
-                'ratios': [0.3, 1.0, 1.0],
-                'label': 'Ra-226 series', 'weight': 3.0
-            },
-            'Tc-99m + I-131 + Mo-99': {  # Hospital nuclear medicine waste
-                'isotopes': ['Tc-99m', 'I-131', 'Mo-99'],
-                'ratios': [1.0, 0.5, 0.3],
-                'weight': 1.0
-            },
-            'Cs-137 + Co-60': {  # Level/density gauges
-                'isotopes': ['Cs-137', 'Co-60'],
-                'ratios': [1.0, 0.8],
-                'weight': 1.5
-            },
-            'Am-241 + Ba-133 + Cs-137 + Co-60': {  # Multi-isotope check source
-                'isotopes': ['Am-241', 'Ba-133', 'Cs-137', 'Co-60'],
-                'ratios': [0.7, 1.0, 0.9, 0.8],
-                'weight': 1.0
-            },
-            'Natural background (K-40, Ra/Th daughters)': {  # Typical background radiation
-                'isotopes': ['K-40', 'Bi-214', 'Tl-208', 'Pb-214'],
-                'ratios': [1.0, 0.3, 0.1, 0.2],
-                'weight': 2.0
-            }
-        }
-        
-        rng = np.random.default_rng(12345)
-        lines_for = {iso: self._lines(iso, isotope_data.get(iso, [])) for iso in isotopes}
 
-        spectra, labels = [], []
-        # Natural-series daughters never occur alone: they are only trained as part of the series
-        # mixtures below (a thorium lens must not be explained as "just Pb-214").
-        from source_templates import SERIES_MEMBERS
-        series_daughters = {m for parent, members in SERIES_MEMBERS.items() for m in members if m != parent}
-        for isotope in isotopes:
-            if isotope in series_daughters:
-                continue
-            for _ in range(int(base_samples * SAMPLE_WEIGHTS.get(isotope, 1.0))):
-                spectra.append(self.synthesize(lines_for[isotope] if isotope != 'Background' else [], rng,
-                                               is_background=(isotope == 'Background')))
-                labels.append(isotope)
-        for name, mix in mixtures.items():
-            def lines_by_nuclide(rng, mix=mix):
-                out = []
-                for iso, ratio in zip(mix['isotopes'], mix['ratios']):
-                    energies = isotope_data.get(iso) or ISOTOPE_DATABASE_ADVANCED.get(iso) or []
-                    k = ratio * float(np.exp(rng.normal(0, 0.35)))      # per-nuclide strength
-                    out += [(e, w * k) for e, w in self._lines(iso, energies)]
-                return out
-            for _ in range(int(25 * mix.get('weight', 1.0))):
-                # each constituent's strength varies per sample (disequilibrium, radon loss, ...)
-                jittered = lines_by_nuclide(rng)
-                spectra.append(self.synthesize(jittered, rng))
-                labels.append(mix.get('label', name))
-        spectra_matrix = np.array(spectra)
+        spectra_matrix, labels = self._synthesise_training_set(isotope_data, isotopes, base_samples)
         logger.info(f"[ML] Synthesised {len(labels)} training spectra")
-
-        # Labelled real spectra are opt-in: the loader labels by filename and resamples without
-        # regard to calibration, so it can teach the model wrong things (and leaks benchmark files).
-        if os.environ.get("ML_USE_REAL_DATA") == "1" and HAS_REAL_DATA_LOADER and load_real_training_data:
-            try:
-                real_x, real_labels = load_real_training_data(data_dir=None, target_channels=self.n_channels,
-                                                              augment_count=10)
-                if len(real_labels) > 0:
-                    spectra_matrix = np.vstack([spectra_matrix, real_x])
-                    labels.extend(real_labels)
-                    logger.info(f"[ML] Added {len(real_labels)} augmented real spectra")
-            except Exception as e:
-                logger.warning(f"[ML] Real spectra loading failed (non-critical): {e}")
+        spectra_matrix = self._with_real_spectra(spectra_matrix, labels)
 
         unique_isotopes = sorted(set(labels))
         try:
@@ -497,6 +439,68 @@ class MLIdentifier:
             logger.warning(f"[ML] Training failed: {e}")
             self.is_trained = False
             raise
+
+    def _training_isotopes(self, model_config: dict) -> dict:
+        """Isotope name -> gamma energies for this model type, from the authoritative database (gamma emitters only), plus Background."""
+        isotope_data = {}
+        allowed_isotopes = model_config['isotopes']  # None = all isotopes
+        if HAS_ISOTOPE_DB and ISOTOPE_DATABASE_ADVANCED:
+            for isotope, energies in ISOTOPE_DATABASE_ADVANCED.items():
+                if energies and len(energies) > 0:  # has gamma emissions
+                    if allowed_isotopes is None or isotope in allowed_isotopes:
+                        isotope_data[isotope] = energies
+        if 'Background' not in isotope_data:
+            isotope_data['Background'] = []
+        return isotope_data
+
+    def _synthesise_training_set(self, isotope_data: dict, isotopes: list, base_samples: int):
+        """Synthetic training spectra and their labels: single isotopes (abundance weighted) and the series mixtures."""
+        rng = np.random.default_rng(12345)
+        lines_for = {iso: self._lines(iso, isotope_data.get(iso, [])) for iso in isotopes}
+
+        spectra, labels = [], []
+        # Natural-series daughters never occur alone: they are only trained as part of the series
+        # mixtures below (a thorium lens must not be explained as "just Pb-214").
+        from source_templates import SERIES_MEMBERS
+        series_daughters = {m for parent, members in SERIES_MEMBERS.items() for m in members if m != parent}
+        for isotope in isotopes:
+            if isotope in series_daughters:
+                continue
+            for _ in range(int(base_samples * SAMPLE_WEIGHTS.get(isotope, 1.0))):
+                spectra.append(self.synthesize(lines_for[isotope] if isotope != 'Background' else [], rng,
+                                               is_background=(isotope == 'Background')))
+                labels.append(isotope)
+        for name, mix in TRAINING_MIXTURES.items():
+            def lines_by_nuclide(rng, mix=mix):
+                out = []
+                for iso, ratio in zip(mix['isotopes'], mix['ratios']):
+                    energies = isotope_data.get(iso) or ISOTOPE_DATABASE_ADVANCED.get(iso) or []
+                    k = ratio * float(np.exp(rng.normal(0, 0.35)))      # per-nuclide strength
+                    out += [(e, w * k) for e, w in self._lines(iso, energies)]
+                return out
+            for _ in range(int(25 * mix.get('weight', 1.0))):
+                # each constituent's strength varies per sample (disequilibrium, radon loss, ...)
+                jittered = lines_by_nuclide(rng)
+                spectra.append(self.synthesize(jittered, rng))
+                labels.append(mix.get('label', name))
+        spectra_matrix = np.array(spectra)
+        return spectra_matrix, labels
+
+    def _with_real_spectra(self, spectra_matrix, labels: list):
+        """Append the augmented real spectra when ML_USE_REAL_DATA=1 (labels extended in place); otherwise unchanged."""
+        # Labelled real spectra are opt-in: the loader labels by filename and resamples without
+        # regard to calibration, so it can teach the model wrong things (and leaks benchmark files).
+        if os.environ.get("ML_USE_REAL_DATA") == "1" and HAS_REAL_DATA_LOADER and load_real_training_data:
+            try:
+                real_x, real_labels = load_real_training_data(data_dir=None, target_channels=self.n_channels,
+                                                              augment_count=10)
+                if len(real_labels) > 0:
+                    spectra_matrix = np.vstack([spectra_matrix, real_x])
+                    labels.extend(real_labels)
+                    logger.info(f"[ML] Added {len(real_labels)} augmented real spectra")
+            except Exception as e:
+                logger.warning(f"[ML] Real spectra loading failed (non-critical): {e}")
+        return spectra_matrix
 
     @staticmethod
     def _lines(isotope: str, energies) -> List[tuple]:

@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from gauss_area import channel_width_kev
 from typing import Tuple, List, Optional, Dict
 
+import logging
+logger = logging.getLogger(__name__)
+
 @dataclass
 class FitResult:
     amplitude: float
@@ -261,7 +264,7 @@ class AdvancedFittingEngine:
             return (result1, result2)
             
         except Exception as e:
-            print(f"[fit_doublet] Error: {e}")
+            logger.warning(f"[fit_doublet] Error: {e}")
             return None
 
     def fit_single_peak(self, 
@@ -481,5 +484,5 @@ class AdvancedFittingEngine:
             return results, r2
 
         except Exception as e:
-            print(f"DEBUG: Multiplet fit failed: {e}")
+            logger.debug(f"Multiplet fit failed: {e}")
             return None, 0.0

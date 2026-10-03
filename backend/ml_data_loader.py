@@ -77,7 +77,7 @@ class RealSpectrumLoader:
                         if 'Confidence' in child.tag or 'NuclideIDConfidence' in child.tag:
                             try:
                                 confidence = float(child.text)
-                            except:
+                            except (ValueError, TypeError):
                                 confidence = 50
                     
                     if isotope_name:
@@ -105,7 +105,7 @@ class RealSpectrumLoader:
                             metadata['live_time'] = float(time_text[2:-1])
                         else:
                             metadata['live_time'] = float(time_text)
-                    except:
+                    except (ValueError, TypeError):
                         pass
             
             return counts, primary_isotope, metadata
@@ -184,7 +184,7 @@ class RealSpectrumLoader:
                     if len(parts) >= 2:
                         try:
                             counts_list.append(float(parts[1]))
-                        except:
+                        except ValueError:
                             continue
             
             if not counts_list:

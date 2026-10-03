@@ -163,8 +163,8 @@ class AlphaHoundDevice:
         if self.serial_conn:
             try:
                 self.serial_conn.close()
-            except:
-                pass
+            except (OSError, serial.SerialException):
+                logger.debug('serial close failed', exc_info=True)
         self.serial_conn = None
         self.current_dose = 0.0 # Reset dose to indicate disconnect
         self.cps = None

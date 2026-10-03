@@ -18,6 +18,9 @@ from scipy.integrate import quad
 from dataclasses import dataclass
 import warnings
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class MultipletFitResult:
@@ -217,7 +220,7 @@ def fit_multiplet(
             try:
                 amp_var = pcov[base_idx, base_idx]
                 area_uncertainty = np.sqrt(amp_var) * sigma * np.sqrt(2 * np.pi) / width_kev
-            except:
+            except (ValueError, TypeError, IndexError, FloatingPointError):
                 area_uncertainty = np.sqrt(area)  # Poisson fallback
             
             peaks.append({
@@ -241,7 +244,7 @@ def fit_multiplet(
         )
         
     except Exception as e:
-        print(f"[Multiplet Fit] Failed: {e}")
+        logger.warning(f"[Multiplet Fit] Failed: {e}")
         return None
 
 

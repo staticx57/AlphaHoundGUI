@@ -864,8 +864,8 @@ def anomaly_detection_endpoint(request: dict):
                         'message': 'ML model returned no predictions',
                         'severity': 'info'
                     })
-            except:
-                pass
+            except Exception:
+                logger.debug('ML anomaly cross-check skipped', exc_info=True)
         
         # Check 2: Total counts
         arr = np.array(counts, dtype=float)

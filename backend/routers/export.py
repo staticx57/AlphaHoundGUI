@@ -252,7 +252,7 @@ def update_n42_metadata(request: N42UpdateRequest):
             try:
                 ts = datetime.fromisoformat(request.start_time.replace('Z', '+00:00'))
                 editor.set_timestamp(ts)
-            except:
+            except (ValueError, AttributeError):
                 editor.set_timestamp(datetime.now())
         
         if request.live_time_s:

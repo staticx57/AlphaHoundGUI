@@ -398,6 +398,127 @@ class ROIResult:
 
 
 
+def _validated_spectrum(energies, counts) -> Tuple[np.ndarray, np.ndarray]:
+    """The spectrum as sorted float arrays; ValueError (a 400 for the API) when it cannot be analysed."""
+    e_arr = np.asarray(energies, dtype=float)
+    c_arr = np.asarray(counts, dtype=float)
+    if e_arr.shape != c_arr.shape or e_arr.ndim != 1:
+        raise ValueError(f"energies and counts must be lists of the same length ({e_arr.size} vs {c_arr.size}).")
+    if e_arr.size < 10:
+        raise ValueError("A spectrum needs at least 10 channels for ROI analysis.")
+    if not (np.all(np.isfinite(e_arr)) and np.all(np.isfinite(c_arr))):
+        raise ValueError("The spectrum contains values that are not numbers.")
+    if np.any(np.diff(e_arr) <= 0):
+        order = np.argsort(e_arr)
+        e_arr, c_arr = e_arr[order], c_arr[order]
+        if np.any(np.diff(e_arr) <= 0):
+            raise ValueError("The energy axis has repeated values.")
+    return e_arr, c_arr
+
+
+def _source_validation(isotope_name: str, source_type: str) -> Tuple[Optional[str], Optional[str]]:
+    """(note, warning): whether the isotope fits the selected source type's profile; both None for 'auto' or unknown types."""
+    try:
+        from source_identification import get_source_signature
+        signature = get_source_signature(source_type) if source_type and source_type not in ["auto", "unknown"] else None
+    except ImportError:
+        signature = None
+
+    if signature:
+        if isotope_name in signature.excluding_isotopes:
+            return None, f"Isotope {isotope_name} is NOT expected in {signature.name}. Detection may be background or interference."
+        if isotope_name in signature.required_isotopes or isotope_name in signature.supporting_isotopes:
+            return f"Consistent with {signature.name} profile.", None
+    return None, None
+
+
+def _detection_status(analysis_valid: bool, detected: bool, snr: float, raw_net_counts: float) -> str:
+    if not analysis_valid:
+        return "Not analysable (ROI outside the spectrum)"
+    if detected:
+        if snr >= 10:
+            return "Strong Detection"
+        if snr >= 5:
+            return "Good Detection"
+        if snr >= 3:
+            return "Weak Detection"
+        return "Marginal Detection"
+    if raw_net_counts < 0:
+        return "Not Detected (over-subtracted)"
+    return "Not Detected (below limit)"
+
+
+def _detection_confidence(detected: bool, net_counts: float, detection_limit_counts: float, snr: float,
+                          uncertainty: float, acquisition_time_s: float) -> float:
+    """Confidence score (0.0 - 1.0): signal against the detection limit, SNR, and statistical precision."""
+    confidence = 0.0
+    if detected:
+        excess_ratio = net_counts / detection_limit_counts if detection_limit_counts > 0 else 0
+        confidence += min(0.4, 0.1 * excess_ratio)
+        confidence += min(0.4, 0.04 * snr)
+        if net_counts > 0:
+            relative_error = uncertainty / net_counts
+            confidence += max(0, 0.2 * (1 - min(1, relative_error)))
+    confidence = min(1.0, max(0.0, confidence))
+    if acquisition_time_s < 60:
+        confidence *= 0.8   # a very short acquisition: higher risk of transient noise
+    return min(1.0, max(0.0, confidence))
+
+
+def _limits_and_recommendations(*, analysis_valid: bool, detected: bool, confidence: float, snr: float, net_counts: float,
+                                uncertainty: float, detection_limit_counts: float, acquisition_time_s: float,
+                                efficiency_percent: float, peak_energy: float, source_type: str,
+                                source_validation_warning: Optional[str], source_validation_note: Optional[str]
+                                ) -> Tuple[List[str], List[str], float]:
+    """What limits the result and what to do about it: (limiting_factors, recommendations, adjusted confidence)."""
+    limiting_factors: List[str] = []
+    recommendations: List[str] = []
+
+    if source_validation_warning:
+        limiting_factors.append(source_validation_warning)
+        confidence *= 0.3
+        recommendations.append(f"Verify source type selection (selected: {source_type})")
+    if source_validation_note:
+        confidence = min(1.0, confidence + 0.1)
+
+    if not analysis_valid:
+        limiting_factors.append("The region of interest is outside the energy range of this spectrum.")
+        recommendations.append("Choose an isotope whose peak lies inside the spectrum, or check that the spectrum is energy-calibrated.")
+    elif not detected:
+        limiting_factors.append(f"Signal below detection limit ({net_counts:.0f} < {detection_limit_counts:.0f} counts)")
+        if net_counts > 0 and detection_limit_counts > 0:
+            recommended_time = acquisition_time_s * (detection_limit_counts / net_counts) ** 2
+            if recommended_time < 86400:
+                recommendations.append(f"Increase acquisition to ~{recommended_time / 60:.0f} min for detection")
+            else:
+                recommendations.append("Source may be too weak for this detector")
+        else:
+            recommendations.append("Longer acquisition time needed")
+    elif confidence < 0.5:
+        if snr < 5:
+            limiting_factors.append(f"Low signal-to-noise ratio (SNR: {snr:.1f})")
+            time_needed = acquisition_time_s * (5 / max(snr, 0.1)) ** 2
+            recommendations.append(f"Increase acquisition to ~{time_needed / 60:.0f} min for better SNR")
+        if uncertainty / max(net_counts, 1) > 0.3:
+            limiting_factors.append(f"High statistical uncertainty (±{uncertainty / max(net_counts, 1) * 100:.0f}%)")
+            recommendations.append("More counts needed for precise measurement")
+        if net_counts < 100:
+            limiting_factors.append(f"Low signal strength ({net_counts:.0f} counts)")
+    elif confidence < 0.8 and snr < 10:
+        limiting_factors.append(f"Moderate signal-to-noise ratio (SNR: {snr:.1f})")
+
+    if efficiency_percent < 5:
+        limiting_factors.append(f"Low detector efficiency at {peak_energy:.0f} keV ({efficiency_percent:.1f}%)")
+        recommendations.append("Energy region may be outside detector's optimal range")
+    if acquisition_time_s < 300 and not detected and analysis_valid:
+        recommendations.append("Consider minimum 5-10 minute acquisition for weak sources")
+    if acquisition_time_s < 60:
+        limiting_factors.append(f"Short acquisition time ({acquisition_time_s:.0f}s < 60s) limits reliability")
+        recommendations.append("Acquire for > 1 minute to improve confidence")
+
+    return limiting_factors, recommendations, confidence
+
+
 class ROIAnalyzer:
     """
     Performs Region-of-Interest analysis on gamma spectra.
@@ -432,19 +553,7 @@ class ROIAnalyzer:
         if not isotope:
             raise ValueError(f"Unknown isotope: {isotope_name}")
 
-        e_arr = np.asarray(energies, dtype=float)
-        c_arr = np.asarray(counts, dtype=float)
-        if e_arr.shape != c_arr.shape or e_arr.ndim != 1:
-            raise ValueError(f"energies and counts must be lists of the same length ({e_arr.size} vs {c_arr.size}).")
-        if e_arr.size < 10:
-            raise ValueError("A spectrum needs at least 10 channels for ROI analysis.")
-        if not (np.all(np.isfinite(e_arr)) and np.all(np.isfinite(c_arr))):
-            raise ValueError("The spectrum contains values that are not numbers.")
-        if np.any(np.diff(e_arr) <= 0):
-            order = np.argsort(e_arr)
-            e_arr, c_arr = e_arr[order], c_arr[order]
-            if np.any(np.diff(e_arr) <= 0):
-                raise ValueError("The energy axis has repeated values.")
+        e_arr, c_arr = _validated_spectrum(energies, counts)
 
         peak_energy = isotope["energy_keV"]
         expected_fwhm = expected_fwhm_keV(self.detector, peak_energy)
@@ -504,20 +613,8 @@ class ROIAnalyzer:
         # Net counts (negative is kept as raw for the status message, but cannot be an activity)
         net_counts = max(0.0, raw_net_counts)
 
-        # === SOURCE TYPE VALIDATION ===
-        try:
-            from source_identification import get_source_signature
-            signature = get_source_signature(source_type) if source_type and source_type not in ["auto", "unknown"] else None
-        except ImportError:
-            signature = None
-
-        source_validation_note = None
-        source_validation_warning = None
-        if signature:
-            if isotope_name in signature.excluding_isotopes:
-                source_validation_warning = f"Isotope {isotope_name} is NOT expected in {signature.name}. Detection may be background or interference."
-            elif isotope_name in signature.required_isotopes or isotope_name in signature.supporting_isotopes:
-                source_validation_note = f"Consistent with {signature.name} profile."
+        # Does the isotope fit the selected source type?
+        source_validation_note, source_validation_warning = _source_validation(isotope_name, source_type)
 
         # === DETECTION QUALITY METRICS ===
         # Currie's detection limit for a background estimated from bands: with no peak the net counts have variance B + var(B),
@@ -529,35 +626,9 @@ class ROIAnalyzer:
         # SNR >= 2 is a practical threshold that matches peak detection sensitivity
         detected = analysis_valid and snr >= 2.0 and net_counts > 20
 
-        if not analysis_valid:
-            detection_status = "Not analysable (ROI outside the spectrum)"
-        elif detected:
-            if snr >= 10:
-                detection_status = "Strong Detection"
-            elif snr >= 5:
-                detection_status = "Good Detection"
-            elif snr >= 3:
-                detection_status = "Weak Detection"
-            else:
-                detection_status = "Marginal Detection"
-        elif raw_net_counts < 0:
-            detection_status = "Not Detected (over-subtracted)"
-        else:
-            detection_status = "Not Detected (below limit)"
+        detection_status = _detection_status(analysis_valid, detected, snr, raw_net_counts)
 
-        # Confidence score (0.0 - 1.0): signal against the detection limit, SNR, and statistical precision
-        confidence = 0.0
-        if detected:
-            excess_ratio = net_counts / detection_limit_counts if detection_limit_counts > 0 else 0
-            confidence += min(0.4, 0.1 * excess_ratio)
-            confidence += min(0.4, 0.04 * snr)
-            if net_counts > 0:
-                relative_error = uncertainty / net_counts
-                confidence += max(0, 0.2 * (1 - min(1, relative_error)))
-        confidence = min(1.0, max(0.0, confidence))
-        if acquisition_time_s < 60:
-            confidence *= 0.8   # a very short acquisition: higher risk of transient noise
-        confidence = min(1.0, max(0.0, confidence))
+        confidence = _detection_confidence(detected, net_counts, detection_limit_counts, snr, uncertainty, acquisition_time_s)
 
         # Efficiency at the peak energy
         efficiency = interpolate_efficiency(self.detector_name, peak_energy)
@@ -581,51 +652,11 @@ class ROIAnalyzer:
         warnings.append("Efficiencies are generic estimates for this detector, not a calibration of your geometry: "
                         "treat Bq values as indicative and calibrate with a known source for accurate ones.")
 
-        # === LIMITING FACTORS AND RECOMMENDATIONS ===
-        limiting_factors: List[str] = []
-        recommendations: List[str] = []
-
-        if source_validation_warning:
-            limiting_factors.append(source_validation_warning)
-            confidence *= 0.3
-            recommendations.append(f"Verify source type selection (selected: {source_type})")
-        if source_validation_note:
-            confidence = min(1.0, confidence + 0.1)
-
-        if not analysis_valid:
-            limiting_factors.append("The region of interest is outside the energy range of this spectrum.")
-            recommendations.append("Choose an isotope whose peak lies inside the spectrum, or check that the spectrum is energy-calibrated.")
-        elif not detected:
-            limiting_factors.append(f"Signal below detection limit ({net_counts:.0f} < {detection_limit_counts:.0f} counts)")
-            if net_counts > 0 and detection_limit_counts > 0:
-                recommended_time = acquisition_time_s * (detection_limit_counts / net_counts) ** 2
-                if recommended_time < 86400:
-                    recommendations.append(f"Increase acquisition to ~{recommended_time / 60:.0f} min for detection")
-                else:
-                    recommendations.append("Source may be too weak for this detector")
-            else:
-                recommendations.append("Longer acquisition time needed")
-        elif confidence < 0.5:
-            if snr < 5:
-                limiting_factors.append(f"Low signal-to-noise ratio (SNR: {snr:.1f})")
-                time_needed = acquisition_time_s * (5 / max(snr, 0.1)) ** 2
-                recommendations.append(f"Increase acquisition to ~{time_needed / 60:.0f} min for better SNR")
-            if uncertainty / max(net_counts, 1) > 0.3:
-                limiting_factors.append(f"High statistical uncertainty (\u00b1{uncertainty / max(net_counts, 1) * 100:.0f}%)")
-                recommendations.append("More counts needed for precise measurement")
-            if net_counts < 100:
-                limiting_factors.append(f"Low signal strength ({net_counts:.0f} counts)")
-        elif confidence < 0.8 and snr < 10:
-            limiting_factors.append(f"Moderate signal-to-noise ratio (SNR: {snr:.1f})")
-
-        if efficiency_percent < 5:
-            limiting_factors.append(f"Low detector efficiency at {peak_energy:.0f} keV ({efficiency_percent:.1f}%)")
-            recommendations.append("Energy region may be outside detector's optimal range")
-        if acquisition_time_s < 300 and not detected and analysis_valid:
-            recommendations.append("Consider minimum 5-10 minute acquisition for weak sources")
-        if acquisition_time_s < 60:
-            limiting_factors.append(f"Short acquisition time ({acquisition_time_s:.0f}s < 60s) limits reliability")
-            recommendations.append("Acquire for > 1 minute to improve confidence")
+        limiting_factors, recommendations, confidence = _limits_and_recommendations(
+            analysis_valid=analysis_valid, detected=detected, confidence=confidence, snr=snr, net_counts=net_counts,
+            uncertainty=uncertainty, detection_limit_counts=detection_limit_counts, acquisition_time_s=acquisition_time_s,
+            efficiency_percent=efficiency_percent, peak_energy=peak_energy, source_type=source_type,
+            source_validation_warning=source_validation_warning, source_validation_note=source_validation_note)
 
         return ROIResult(
             isotope_name=isotope_name,
@@ -793,8 +824,8 @@ class ROIAnalyzer:
                         f"Strong Thorium signature (Ac-228) confirmed. "
                         f"Uranium detection may be due to mixed source composition or Compton scattering."
                     )
-            except:
-                pass
+            except Exception:
+                logger.debug('Th-232 signature cross-check skipped', exc_info=True)
         
         # Special handling for Takumar lens (ThO2 + trace natural U)
         if source_type == "takumar_lens":
@@ -810,45 +841,13 @@ class ROIAnalyzer:
             
             # === NEW: Try to subtract Ra-226 if we have good data ===
             # Requested by user to "do our best" for Uranium Glass
-            ra226_corrected = False
             
             if (source_type in ["uranium_glass", "takumar_lens"] and bi214_result is not None and u235_result is not None
                     and bi214_result.net_counts > 0):
-                try:
-                    # Ra-226 (186.2 keV) Yield: 3.64%
-                    # Bi-214 (609.3 keV) Yield: 45.49%
-                    YIELD_RA226_186 = 3.64
-                    YIELD_BI214_609 = 45.49
-                    
-                    # Get efficiencies
-                    eff_186 = interpolate_efficiency(self.detector_name, 186.2)
-                    eff_609 = interpolate_efficiency(self.detector_name, 609.3)
-                    
-                    if eff_186 > 0 and eff_609 > 0:
-                        # Calculate theoretical Ra-226 counts at 186 keV based on Bi-214
-                        # Ratio = (Yield_186 / Yield_609) * (Eff_186 / Eff_609)
-                        ra226_ratio = (YIELD_RA226_186 / YIELD_BI214_609) * (eff_186 / eff_609)
-                        estimated_ra226_counts = bi214_result.net_counts * ra226_ratio
-                        
-                        # Apply correction: the ratio below is computed from the corrected counts. The estimate carries the
-                        # Bi-214 counting error and a 25 % allowance for the line-yield / efficiency model (equilibrium, generic efficiency)
-                        estimated_sigma = estimated_ra226_counts * math.sqrt(
-                            (bi214_result.uncertainty_sigma / bi214_result.net_counts) ** 2 + 0.25 ** 2)
-                        u235_net = max(0.0, u235_result.net_counts - estimated_ra226_counts)
-                        u235_sigma = math.sqrt(u235_result.uncertainty_sigma ** 2 + estimated_sigma ** 2)
-                        
-                        # Update flag to allow analysis to proceed
-                        ra226_interference = False 
-                        ra226_corrected = True
-                        
-                        warnings.append(
-                            f"Ra-226 interference subtracted (estimated {estimated_ra226_counts:.0f} counts from Bi-214 proxy). "
-                            f"Enrichment result is an ESTIMATE."
-                        )
-                        if bi214_result.snr < 2.0:
-                             warnings.append("Warning: Correction based on weak Bi-214 signal. Result allows approx.")
-                except Exception as e:
-                    logger.error(f"Error correcting Ra-226: {e}")
+                corrected = self._ra226_correction(u235_result, bi214_result, warnings)
+                if corrected:
+                    u235_net, u235_sigma = corrected
+                    ra226_interference = False   # corrected, so the ratio below may be used (as an estimate)
             
             if ra226_interference:
                 # Only warn if we didn't correct it
@@ -884,88 +883,12 @@ class ROIAnalyzer:
                         (th234_result.uncertainty_sigma / th234_result.net_counts) ** 2
                     )
         
-        # === STEP 5: Calculate Confidence Score ===
-        confidence = 0.0
-        confidence_factors = []
+        confidence, confidence_factors = self._enrichment_confidence(
+            th234_result, has_th234, markers=sum([has_th234, has_bi214, has_pa234m]),
+            ra226_interference=ra226_interference, ratio=ratio, ratio_uncertainty=ratio_uncertainty)
         
-        # Factor 1: Signal strength (0-0.3)
-        if has_th234 and th234_result.net_counts > 100:
-            signal_factor = min(0.3, 0.3 * (th234_result.net_counts / 500))
-            confidence += signal_factor
-            confidence_factors.append(f"Signal strength: +{signal_factor:.2f}")
-        
-        # Factor 2: Multiple uranium markers present (0-0.3)
-        markers_present = sum([has_th234, has_bi214, has_pa234m])
-        marker_factor = 0.1 * markers_present
-        confidence += marker_factor
-        confidence_factors.append(f"Uranium markers ({markers_present}/3): +{marker_factor:.2f}")
-        
-        # Factor 3: Ra-226 interference penalty (-0.2 to 0)
-        if ra226_interference:
-            interference_penalty = -0.2
-            confidence += interference_penalty
-            confidence_factors.append(f"Ra-226 interference: {interference_penalty:.2f}")
-        else:
-            confidence += 0.2
-            confidence_factors.append(f"No Ra-226 interference: +0.20")
-        
-        # Factor 4: Statistical precision (0-0.2)
-        if ratio > 0 and ratio_uncertainty > 0:
-            precision = 1 - min(1, ratio_uncertainty / ratio)
-            precision_factor = 0.2 * precision
-            confidence += precision_factor
-            confidence_factors.append(f"Statistical precision: +{precision_factor:.2f}")
-        
-        confidence = max(0.0, min(1.0, confidence))
-        
-        # === STEP 6: Determine Category ===
-        # CRITICAL: If Ra-226 interference is detected, the ratio is UNRELIABLE
-        # Ra-226 (186.2 keV) overlaps with U-235 (185.7 keV) 
-        # A CsI/NaI/BGO detector CANNOT distinguish them (need HPGe)
-        if ra226_interference:
-            # Don't assume the category - just report that enrichment cannot be determined
-            category = "Indeterminate (Ra-226 Interference)"
-            description = (
-                "The 186 keV region contains overlapping peaks from U-235 (185.7 keV) and Ra-226 (186.2 keV). "
-                "This detector cannot resolve them, making enrichment analysis unreliable. "
-                "An HPGe detector (resolution <1 keV) is required for accurate U-235/U-238 ratio measurement."
-            )
-            # Severely penalize confidence - we genuinely don't know
-            confidence = min(confidence, 0.2)
-            confidence_factors.append("Ra-226 interference: enrichment ratio indeterminate")
-            warnings.append(
-                f"Calculated ratio ({ratio:.0f}%) is unreliable due to Ra-226 interference. "
-                f"The true enrichment could be natural (~0.7%), depleted (<0.3%), or enriched (>0.7%). "
-                f"Sample age, equilibrium state, and detector resolution prevent accurate determination."
-            )
-        elif ratio >= 150:
-            # SANITY CHECK: Ratios above 150% are physically impossible
-            # This indicates the user selected the wrong source type
-            # (e.g., analyzing a thoriated lens as uranium glass)
-            category = "Source Type Mismatch"
-            description = (
-                f"Ratio of {ratio:.0f}% is physically impossible for uranium. "
-                "This likely indicates a thoriated source (Th-232) being analyzed with uranium assumptions. "
-                "Try selecting 'Takumar Lens' or 'Thoriated Lens' as source type instead."
-            )
-            confidence = 0.1  # Very low confidence
-            confidence_factors.append("Implausible ratio detected - likely source mismatch")
-            warnings.append(
-                "SANITY CHECK FAILED: U-235/Th-234 ratio exceeds 150%, which is physically impossible. "
-                "This source is likely thoriated (Th-232) rather than uranium-based."
-            )
-        elif ratio >= 100:
-            category = "Enriched Uranium"
-            description = f"U-235 enriched above natural (>{0.72}% U-235)"
-        elif ratio >= 30:
-            category = "Natural Uranium"
-            description = f"Natural isotopic composition (~0.72% U-235)"
-        elif ratio > 0:
-            category = "Depleted Uranium"
-            description = f"U-235 depleted below natural (<0.3% U-235)"
-        else:
-            category = "Unable to Determine"
-            description = "Insufficient data for enrichment determination"
+        category, description, confidence = self._classify_enrichment(
+            ratio, ra226_interference, confidence, confidence_factors, warnings)
         
         return {
             "can_analyze": True,
@@ -988,6 +911,127 @@ class ROIAnalyzer:
         }
 
     
+    def _ra226_correction(self, u235_result, bi214_result, warnings: List[str]):
+        """
+        Subtract the Ra-226 share of the 186 keV peak, estimated from the Bi-214 609 keV peak (secular equilibrium).
+
+        Returns (u235_net, u235_sigma) after the correction, or None when it cannot be made (no efficiency data, or an
+        error). The explanatory warnings are appended here.
+        """
+        try:
+            # Ra-226 (186.2 keV) yield 3.64 %, Bi-214 (609.3 keV) yield 45.49 %
+            YIELD_RA226_186 = 3.64
+            YIELD_BI214_609 = 45.49
+            eff_186 = interpolate_efficiency(self.detector_name, 186.2)
+            eff_609 = interpolate_efficiency(self.detector_name, 609.3)
+            if eff_186 > 0 and eff_609 > 0:
+                # theoretical Ra-226 counts at 186 keV from the Bi-214 counts: (yield_186 / yield_609) * (eff_186 / eff_609)
+                ra226_ratio = (YIELD_RA226_186 / YIELD_BI214_609) * (eff_186 / eff_609)
+                estimated_ra226_counts = bi214_result.net_counts * ra226_ratio
+                # The estimate carries the Bi-214 counting error and a 25 % allowance for the line-yield / efficiency
+                # model (equilibrium, generic efficiency)
+                estimated_sigma = estimated_ra226_counts * math.sqrt(
+                    (bi214_result.uncertainty_sigma / bi214_result.net_counts) ** 2 + 0.25 ** 2)
+                u235_net = max(0.0, u235_result.net_counts - estimated_ra226_counts)
+                u235_sigma = math.sqrt(u235_result.uncertainty_sigma ** 2 + estimated_sigma ** 2)
+                warnings.append(
+                    f"Ra-226 interference subtracted (estimated {estimated_ra226_counts:.0f} counts from Bi-214 proxy). "
+                    f"Enrichment result is an ESTIMATE."
+                )
+                if bi214_result.snr < 2.0:
+                    warnings.append("Warning: Correction based on weak Bi-214 signal. Result allows approx.")
+                return u235_net, u235_sigma
+        except Exception as e:
+            logger.error(f"Error correcting Ra-226: {e}")
+        return None
+
+    @staticmethod
+    def _enrichment_confidence(th234_result, has_th234: bool, markers: int, ra226_interference: bool,
+                               ratio: float, ratio_uncertainty: float):
+        """Confidence (0-1) in an enrichment ratio, and the list of factors that made it up."""
+        confidence = 0.0
+        confidence_factors = []
+
+        # Factor 1: signal strength (0-0.3)
+        if has_th234 and th234_result.net_counts > 100:
+            signal_factor = min(0.3, 0.3 * (th234_result.net_counts / 500))
+            confidence += signal_factor
+            confidence_factors.append(f"Signal strength: +{signal_factor:.2f}")
+
+        # Factor 2: several uranium markers present (0-0.3)
+        marker_factor = 0.1 * markers
+        confidence += marker_factor
+        confidence_factors.append(f"Uranium markers ({markers}/3): +{marker_factor:.2f}")
+
+        # Factor 3: Ra-226 interference penalty (-0.2 to +0.2)
+        if ra226_interference:
+            interference_penalty = -0.2
+            confidence += interference_penalty
+            confidence_factors.append(f"Ra-226 interference: {interference_penalty:.2f}")
+        else:
+            confidence += 0.2
+            confidence_factors.append(f"No Ra-226 interference: +0.20")
+
+        # Factor 4: statistical precision (0-0.2)
+        if ratio > 0 and ratio_uncertainty > 0:
+            precision = 1 - min(1, ratio_uncertainty / ratio)
+            precision_factor = 0.2 * precision
+            confidence += precision_factor
+            confidence_factors.append(f"Statistical precision: +{precision_factor:.2f}")
+
+        return max(0.0, min(1.0, confidence)), confidence_factors
+
+    @staticmethod
+    def _classify_enrichment(ratio: float, ra226_interference: bool, confidence: float,
+                             confidence_factors: List[str], warnings: List[str]):
+        """
+        The category and description for a U-235/Th-234 ratio (percent), and the confidence adjusted for it.
+        Appends to confidence_factors and warnings in place.
+        """
+        # If Ra-226 interferes, the ratio is unreliable: Ra-226 (186.2 keV) overlaps U-235 (185.7 keV), and a
+        # CsI/NaI/BGO detector cannot separate them (that needs HPGe).
+        if ra226_interference:
+            category = "Indeterminate (Ra-226 Interference)"
+            description = (
+                "The 186 keV region contains overlapping peaks from U-235 (185.7 keV) and Ra-226 (186.2 keV). "
+                "This detector cannot resolve them, making enrichment analysis unreliable. "
+                "An HPGe detector (resolution <1 keV) is required for accurate U-235/U-238 ratio measurement."
+            )
+            confidence = min(confidence, 0.2)   # we genuinely do not know
+            confidence_factors.append("Ra-226 interference: enrichment ratio indeterminate")
+            warnings.append(
+                f"Calculated ratio ({ratio:.0f}%) is unreliable due to Ra-226 interference. "
+                f"The true enrichment could be natural (~0.7%), depleted (<0.3%), or enriched (>0.7%). "
+                f"Sample age, equilibrium state, and detector resolution prevent accurate determination."
+            )
+        elif ratio >= 150:
+            # Above 150 % is physically impossible: the wrong source type was chosen (e.g. a thoriated lens as uranium glass)
+            category = "Source Type Mismatch"
+            description = (
+                f"Ratio of {ratio:.0f}% is physically impossible for uranium. "
+                "This likely indicates a thoriated source (Th-232) being analyzed with uranium assumptions. "
+                "Try selecting 'Takumar Lens' or 'Thoriated Lens' as source type instead."
+            )
+            confidence = 0.1
+            confidence_factors.append("Implausible ratio detected - likely source mismatch")
+            warnings.append(
+                "SANITY CHECK FAILED: U-235/Th-234 ratio exceeds 150%, which is physically impossible. "
+                "This source is likely thoriated (Th-232) rather than uranium-based."
+            )
+        elif ratio >= 100:
+            category = "Enriched Uranium"
+            description = f"U-235 enriched above natural (>{0.72}% U-235)"
+        elif ratio >= 30:
+            category = "Natural Uranium"
+            description = f"Natural isotopic composition (~0.72% U-235)"
+        elif ratio > 0:
+            category = "Depleted Uranium"
+            description = f"U-235 depleted below natural (<0.3% U-235)"
+        else:
+            category = "Unable to Determine"
+            description = "Insufficient data for enrichment determination"
+        return category, description, confidence
+
     def _sum_counts_in_region(
         self,
         energies: List[float],

@@ -15,6 +15,9 @@ from scipy.signal import find_peaks, find_peaks_cwt, savgol_filter
 from scipy.optimize import curve_fit
 import math
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def gaussian_with_baseline(x, amplitude, center, sigma, bg_slope, bg_intercept):
     """Gaussian peak on a linear baseline."""
@@ -160,7 +163,7 @@ def detect_peaks_cwt(
         return sorted(peak_energies)
         
     except Exception as e:
-        print(f"[CWT] Detection failed: {e}")
+        logger.warning(f"[CWT] Detection failed: {e}")
         return []
 
 
@@ -321,10 +324,10 @@ def detect_peaks_enhanced(
             from spectral_analysis import snip_background
             background = snip_background(counts, iterations=snip_iterations)
             net_counts = np.maximum(counts - background, 0)
-            print(f"[DEBUG Peak] Applied SNIP: max counts {np.max(counts):.0f} -> net {np.max(net_counts):.0f}")
+            logger.debug(f"[Peak] Applied SNIP: max counts {np.max(counts):.0f} -> net {np.max(net_counts):.0f}")
             counts_for_detection = net_counts
         except Exception as e:
-            print(f"[DEBUG Peak] SNIP failed, using raw counts: {e}")
+            logger.debug(f"[Peak] SNIP failed, using raw counts: {e}")
             counts_for_detection = counts
     else:
         counts_for_detection = counts
@@ -348,7 +351,7 @@ def detect_peaks_enhanced(
                                                   min_energy, max_energy)
             candidates = merge_candidates(list(candidates), extra, resolution_662)
         except Exception as e:
-            print(f"[DEBUG Peak] Resolution-aware search failed: {e}")
+            logger.debug(f"[Peak] Resolution-aware search failed: {e}")
     
     if not validate_fits:
         # Return simple peak list without validation
@@ -358,7 +361,7 @@ def detect_peaks_enhanced(
     validated_peaks = []
     
     # Debug: show candidates before fitting
-    print(f"[DEBUG Peak] Candidates BEFORE fitting: {[f'{e:.1f}' for e in candidates[:15]]}")
+    logger.debug(f"[Peak] Candidates BEFORE fitting: {[f'{e:.1f}' for e in candidates[:15]]}")
     
     for candidate_energy in candidates:
         # Use SNIP-processed counts for fitting if SNIP was applied
