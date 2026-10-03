@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=20">
+    <link rel="stylesheet" href="/static/style.css?v=22">
     <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Chart.js loaded async for performance -->
@@ -377,9 +377,9 @@
                                             <option value="uRem">&micro;Rem/h</option>
                                             <option value="uSv">&micro;Sv/h</option>
                                         </select>
-                                        <select id="ah-screen-rate-unit" title="Count-rate unit shown on the screen (the device's Units setting)">
-                                            <option value="CPS">CPS</option>
-                                            <option value="CPM">CPM</option>
+                                        <select id="ah-screen-colors" title="Screen colours: tinted by the theme, or the hardware's own white-blue">
+                                            <option value="theme">Theme colours</option>
+                                            <option value="device">Device colours</option>
                                         </select>
                                     </div>
                                     <details class="ah-note">
@@ -403,18 +403,54 @@
                                         <dt>Dose (5 s avg)</dt><dd id="ah-dose-avg" title="Mean of the last 5 s of readings: single readings are noisy">--</dd>
                                         <dt>Dose log</dt><dd id="ah-log-count">--</dd>
                                     </dl>
-                                    <div class="ah-cps-charts" aria-label="Count rate history">
-                                        <div class="ah-cps-chart">
-                                            <div class="ah-cps-head"><span style="color: #38bdf8;">&gamma; gamma</span><b id="ah-cps-gamma">--</b></div>
-                                            <div class="ah-cps-chart-box"><canvas id="ah-chart-gamma"></canvas></div></div>
-                                        <div class="ah-cps-chart">
-                                            <div class="ah-cps-head"><span style="color: #f59e0b;">&beta; beta</span><b id="ah-cps-beta">--</b></div>
-                                            <div class="ah-cps-chart-box"><canvas id="ah-chart-beta"></canvas></div></div>
-                                        <div class="ah-cps-chart">
-                                            <div class="ah-cps-head"><span style="color: #ef4444;">&alpha; alpha</span><b id="ah-cps-alpha">--</b></div>
-                                            <div class="ah-cps-chart-box"><canvas id="ah-chart-alpha"></canvas></div></div>
-                                    </div>
-                                    <div class="ah-total-row">Total <b id="ah-cps-total">--</b></div>
+                                    <section class="ch-panel" aria-label="Radiation channels">
+                                        <div class="ch-head">
+                                            <h4 class="ch-title">Radiation channels</h4>
+                                            <div class="ch-toolbar">
+                                                <div class="ch-seg" role="group" aria-label="Rate unit">
+                                                    <button type="button" data-ch-unit-btn="CPS" aria-pressed="true">CPS</button>
+                                                    <button type="button" data-ch-unit-btn="CPM" aria-pressed="false">CPM</button>
+                                                </div>
+                                                <div class="ch-seg" role="group" aria-label="History window">
+                                                    <button type="button" data-ch-window="60" aria-pressed="false">1 min</button>
+                                                    <button type="button" data-ch-window="300" aria-pressed="true">5 min</button>
+                                                    <button type="button" data-ch-window="1800" aria-pressed="false">30 min</button>
+                                                </div>
+                                                <div class="ch-seg" role="group" aria-label="Scale">
+                                                    <button type="button" data-ch-scale="linear" aria-pressed="true">Lin</button>
+                                                    <button type="button" data-ch-scale="log" aria-pressed="false">Log</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="ch-cards">
+                                            <article class="ch-card" data-channel="gamma">
+                                                <div class="ch-card-head"><span class="ch-sym" aria-hidden="true">&gamma;</span><span class="ch-name">Gamma</span><span class="ch-pattern" aria-hidden="true"></span></div>
+                                                <div class="ch-reading"><b id="ah-cps-gamma">--</b><small data-ch-unit>cps</small></div>
+                                                <div class="ch-meter" role="meter" aria-label="Gamma rate, log scale 1 to 10,000 per second" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0"><span class="ch-meter-fill"></span><span class="ch-meter-peak"></span></div>
+                                                <div class="ch-stats"><span>1 min avg <b data-ch="avg">--</b></span><span>peak <b data-ch="peak">--</b></span></div>
+                                            </article>
+                                            <article class="ch-card" data-channel="beta">
+                                                <div class="ch-card-head"><span class="ch-sym" aria-hidden="true">&beta;</span><span class="ch-name">Beta</span><span class="ch-pattern" aria-hidden="true"></span></div>
+                                                <div class="ch-reading"><b id="ah-cps-beta">--</b><small data-ch-unit>cps</small></div>
+                                                <div class="ch-meter" role="meter" aria-label="Beta rate, log scale 1 to 10,000 per second" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0"><span class="ch-meter-fill"></span><span class="ch-meter-peak"></span></div>
+                                                <div class="ch-stats"><span>1 min avg <b data-ch="avg">--</b></span><span>peak <b data-ch="peak">--</b></span></div>
+                                            </article>
+                                            <article class="ch-card" data-channel="alpha">
+                                                <div class="ch-card-head"><span class="ch-sym" aria-hidden="true">&alpha;</span><span class="ch-name">Alpha</span><span class="ch-pattern" aria-hidden="true"></span></div>
+                                                <div class="ch-reading"><b id="ah-cps-alpha">--</b><small data-ch-unit>cps</small></div>
+                                                <div class="ch-meter" role="meter" aria-label="Alpha rate, log scale 1 to 10,000 per second" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0"><span class="ch-meter-fill"></span><span class="ch-meter-peak"></span></div>
+                                                <div class="ch-stats"><span>1 min avg <b data-ch="avg">--</b></span><span>peak <b data-ch="peak">--</b></span></div>
+                                            </article>
+                                        </div>
+                                        <div class="ch-mix" role="img" aria-label="Share of the counts by channel">
+                                            <div class="ch-mix-bar"><span data-mix="gamma"></span><span data-mix="beta"></span><span data-mix="alpha"></span></div>
+                                            <div class="ch-mix-legend">
+                                                <span data-mix-label="gamma">&gamma; --</span><span data-mix-label="beta">&beta; --</span><span data-mix-label="alpha">&alpha; --</span>
+                                                <span class="ch-total">Total <b id="ah-cps-total">--</b> <small data-ch-unit>cps</small></span>
+                                            </div>
+                                        </div>
+                                        <div class="ch-chart-box"><canvas id="ch-chart" role="img" aria-label="Count-rate history for gamma, beta and alpha"></canvas></div>
+                                    </section>
                                     <div class="ah-actions">
                                         <button id="btn-dose-csv" class="btn-secondary" style="padding: 0.3rem 0.7rem;"
                                             title="Download the dose-rate history (with gamma/beta/alpha CPS) as CSV">Dose CSV</button>

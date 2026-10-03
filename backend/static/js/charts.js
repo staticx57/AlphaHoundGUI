@@ -1,4 +1,5 @@
 import { roundTicks, formatKeV } from './axis.js';
+import { chartTheme, themeGlowPlugin } from './chart_theme.js';
 export class AlphaHoundChart {
     constructor() {
         this.ctx = document.getElementById('spectrumChart')?.getContext('2d');
@@ -30,10 +31,32 @@ export class AlphaHoundChart {
     updateThemeColors() {
         this.primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#38bdf8';
 
-        // Update existing chart dataset color if chart exists
+        // Update the existing chart: colours, and the theme's character (line weight, glow, grid style, font)
         if (this.chart && this.chart.data.datasets[0]) {
-            this.chart.data.datasets[0].borderColor = this.primaryColor;
-            this.chart.data.datasets[0].backgroundColor = this.hexToRgba(this.primaryColor, 0.1);
+            const th = chartTheme();
+            const ds = this.chart.data.datasets[0];
+            const single = this.chart.data.datasets.length === 1;   // the comparison view keeps its own per-spectrum colours
+            if (single) {
+                ds.borderColor = this.primaryColor;
+                ds.backgroundColor = this.hexToRgba(this.primaryColor, 0.1);
+                ds.borderWidth = Math.max(1, th.lineWidth - 0.25);
+                ds.stepped = th.stepped ? 'middle' : false;
+            }
+            const opts = this.chart.options;
+            for (const axis of Object.values(opts.scales || {})) {
+                if (axis.title) axis.title.color = th.textSecondary;
+                if (axis.grid) { axis.grid.color = th.grid; axis.grid.borderDash = th.gridDash; }
+                if (axis.ticks) { axis.ticks.color = th.textSecondary; axis.ticks.font = { family: th.font }; }
+            }
+            const pl = opts.plugins || {};
+            if (pl.themeGlow) pl.themeGlow.blur = th.glow;
+            if (pl.legend && pl.legend.labels) { pl.legend.labels.color = th.textSecondary; pl.legend.labels.font = { family: th.font }; }
+            if (pl.tooltip) {
+                Object.assign(pl.tooltip, {
+                    backgroundColor: th.card, titleColor: th.text, bodyColor: th.text,
+                    titleFont: { family: th.font }, bodyFont: { family: th.font }, borderColor: th.grid,
+                });
+            }
             this.chart.update('none'); // Update without animation
         }
 
@@ -340,8 +363,10 @@ export class AlphaHoundChart {
                 });
             }
 
+            const th = chartTheme();
             this.chart = new Chart(this.ctx, {
                 type: 'line',
+                plugins: [themeGlowPlugin],
                 data: {
                     datasets: [
                         {
@@ -349,9 +374,10 @@ export class AlphaHoundChart {
                             data: chartData,
                             borderColor: this.primaryColor,
                             backgroundColor: this.hexToRgba(this.primaryColor, 0.1),
-                            borderWidth: 1.5,
+                            borderWidth: Math.max(1, th.lineWidth - 0.25),
                             pointRadius: 0,
                             fill: true,
+                            stepped: th.stepped ? 'middle' : false,   // a blocky histogram in themes that draw that way
                             tension: 0 // Straight lines through data points (no bezier)
                         }
                     ]
@@ -370,10 +396,10 @@ export class AlphaHoundChart {
                             min: minEnergy,
                             max: maxEnergy,
                             bounds: 'data',
-                            title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            title: { display: true, text: 'Energy (keV)', color: th.textSecondary },
+                            grid: { color: th.grid, borderDash: th.gridDash },
                             ticks: {
-                                color: '#94a3b8', includeBounds: false,
+                                color: th.textSecondary, font: { family: th.font }, includeBounds: false,
                                 // The auto-scale margin can start the axis just below 0 keV; don't label it
                                 callback: (value) => (value < 0 ? '' : Number(value).toLocaleString())
                             },
@@ -387,18 +413,21 @@ export class AlphaHoundChart {
                             min: scaleType === 'logarithmic' ? 1 : 0,
                             max: maxY,
                             beginAtZero: scaleType === 'linear',
-                            title: { display: true, text: 'Counts', color: '#94a3b8' },
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#94a3b8' }
+                            title: { display: true, text: 'Counts', color: th.textSecondary },
+                            grid: { color: th.grid, borderDash: th.gridDash },
+                            ticks: { color: th.textSecondary, font: { family: th.font } }
                         }
                     },
                     plugins: {
                         legend: { display: false },
+                        themeGlow: { blur: th.glow },
                         tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            titleColor: '#fff',
-                            bodyColor: '#fff',
-                            borderColor: 'rgba(148, 163, 184, 0.2)',
+                            backgroundColor: th.card,
+                            titleColor: th.text,
+                            bodyColor: th.text,
+                            titleFont: { family: th.font },
+                            bodyFont: { family: th.font },
+                            borderColor: th.grid,
                             borderWidth: 1
                         },
                         zoom: {
@@ -454,7 +483,9 @@ export class AlphaHoundChart {
 
         const labels = overlaySpectra.length > 0 ? overlaySpectra[0].energies : [];
 
+        const th = chartTheme();
         this.chart = new Chart(this.ctx, {
+            plugins: [themeGlowPlugin],
             type: 'line',
             data: { labels: labels, datasets: datasets },
             options: {
@@ -463,26 +494,29 @@ export class AlphaHoundChart {
                 interaction: { intersect: false, mode: 'index' },
                 scales: {
                     x: {
-                        title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
+                        title: { display: true, text: 'Energy (keV)', color: th.textSecondary },
+                        grid: { color: th.grid, borderDash: th.gridDash },
+                        ticks: { color: th.textSecondary, font: { family: th.font } }
                     },
                     y: {
                         type: scaleType,
                         min: scaleType === 'logarithmic' ? 1 : 0,
                         beginAtZero: scaleType === 'linear',
-                        title: { display: true, text: 'Counts', color: '#94a3b8' },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
+                        title: { display: true, text: 'Counts', color: th.textSecondary },
+                        grid: { color: th.grid, borderDash: th.gridDash },
+                        ticks: { color: th.textSecondary, font: { family: th.font } }
                     }
                 },
                 plugins: {
-                    legend: { display: true, labels: { color: '#94a3b8' } },
+                    legend: { display: true, labels: { color: th.textSecondary, font: { family: th.font } } },
+                    themeGlow: { blur: th.glow },
                     tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        borderColor: 'rgba(148, 163, 184, 0.2)',
+                        backgroundColor: th.card,
+                        titleColor: th.text,
+                        bodyColor: th.text,
+                        titleFont: { family: th.font },
+                        bodyFont: { family: th.font },
+                        borderColor: th.grid,
                         borderWidth: 1
                     },
                     annotation: { annotations: {} },
@@ -1104,6 +1138,13 @@ export class AlphaHoundChart {
     }
 }
 
+/** A translucent version of a line colour for the area under it. */
+function dimFill(lineColor) {
+    return lineColor.startsWith('#') ? lineColor + '20' :
+        lineColor.startsWith('rgba') ? lineColor.replace(/[\d.]+\)$/, '0.2)') :
+            lineColor.replace(/\)$/, ', 0.2)').replace(/^rgb/, 'rgba');
+}
+
 export class DoseRateChart {
     /**
      * Create a DoseRateChart instance.
@@ -1147,20 +1188,21 @@ export class DoseRateChart {
             lineColor = this.options.color || styles.getPropertyValue('--accent-color').trim() || '#10b981';
         }
 
+        const th = chartTheme();
         this.chart = new Chart(this.ctx, {
             type: 'line',
+            plugins: [themeGlowPlugin],
             data: {
                 labels: this.labels,
                 datasets: [{
                     data: this.data,
                     borderColor: lineColor,
-                    borderWidth: this.options.lineWidth || 2,
-                    backgroundColor: lineColor.startsWith('#') ? lineColor + '20' :
-                        lineColor.startsWith('rgba') ? lineColor.replace(/[\d.]+\)$/, '0.2)') :
-                            lineColor.replace(/\)$/, ', 0.2)').replace(/^rgb/, 'rgba'),
+                    borderWidth: this.options.lineWidth || th.lineWidth,
+                    backgroundColor: dimFill(lineColor),
                     fill: 'start',
                     pointRadius: 0,
-                    tension: 0.4,
+                    tension: Math.min(0.4, th.tension),
+                    stepped: th.stepped ? 'before' : false,
                     spanGaps: true
                 }]
             },
@@ -1171,7 +1213,8 @@ export class DoseRateChart {
                 plugins: {
                     legend: { display: false },
                     tooltip: { enabled: false },
-                    annotation: { display: false }
+                    annotation: { display: false },
+                    themeGlow: { blur: th.glow }
                 },
                 scales: {
                     x: { display: false }, // Tiny chart, no X axis
@@ -1180,7 +1223,7 @@ export class DoseRateChart {
                         position: 'right',
                         ticks: {
                             color: styles.getPropertyValue('--text-secondary').trim() || '#64748b',
-                            font: { size: 10 },
+                            font: { size: 10, family: th.font },
                             maxTicksLimit: 3
                         },
                         grid: { display: false },
@@ -1190,6 +1233,26 @@ export class DoseRateChart {
                 }
             }
         });
+    }
+
+    /** Re-read the theme (colour, line character, glow, font) after a theme switch. */
+    refreshTheme() {
+        if (!this.chart) return;
+        const styles = getComputedStyle(document.documentElement);
+        const th = chartTheme();
+        let lineColor = this.options.colorVar ? styles.getPropertyValue(this.options.colorVar).trim() : '';
+        if (!lineColor) lineColor = this.options.color || styles.getPropertyValue('--accent-color').trim() || '#10b981';
+        const d = this.chart.data.datasets[0];
+        d.borderColor = lineColor;
+        d.backgroundColor = dimFill(lineColor);
+        d.borderWidth = this.options.lineWidth || th.lineWidth;
+        d.tension = Math.min(0.4, th.tension);
+        d.stepped = th.stepped ? 'before' : false;
+        this.chart.options.plugins.themeGlow.blur = th.glow;
+        const y = this.chart.options.scales.y;
+        y.ticks.color = styles.getPropertyValue('--text-secondary').trim() || '#64748b';
+        y.ticks.font = { size: 10, family: th.font };
+        this.chart.update('none');
     }
 
     /**

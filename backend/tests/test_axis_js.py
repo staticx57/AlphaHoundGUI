@@ -15,7 +15,7 @@ def run_js(tmp_path, body):
     script = tmp_path / "t.mjs"
     script.write_text(f"import * as m from '{MODULE.as_uri()}';\nconst out = {{}};\n{body}\nconsole.log(JSON.stringify(out));\n",
                       encoding="utf-8")
-    done = subprocess.run([NODE, str(script)], capture_output=True, text=True, timeout=30)
+    done = subprocess.run([NODE, str(script)], capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout.strip().splitlines()[-1])
 

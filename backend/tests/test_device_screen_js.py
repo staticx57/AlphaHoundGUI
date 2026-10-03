@@ -18,7 +18,7 @@ def run_js(tmp_path, body):
     script.write_text(
         f"import * as m from '{MODULE.as_uri()}';\n"
         "const out = {};\n" + body + "\nconsole.log(JSON.stringify(out));\n", encoding="utf-8")
-    done = subprocess.run([NODE, str(script)], capture_output=True, text=True, timeout=30)
+    done = subprocess.run([NODE, str(script)], capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout.strip().splitlines()[-1])
 
@@ -92,13 +92,21 @@ def test_sleep_dose_digits(tmp_path):
 def test_dose_and_rate_formatting(tmp_path):
     out = run_js(tmp_path, """
         out.d1 = m.formatDose(1.4, 'uRem'); out.d2 = m.formatDose(63.04, 'uRem'); out.d3 = m.formatDose(258, 'uRem');
-        out.d4 = m.formatDose(140, 'uSv'); out.d5 = m.formatDose(null, 'uSv');
+        out.d4 = m.formatDose(140, 'uSv'); out.d5 = m.formatDose(null, 'uSv'); out.d6 = m.formatDose(null, 'uRem');
+        out.d7 = m.formatDose(20000, 'uSv'); out.d8 = m.formatDose(-2, 'uRem');
         out.r1 = m.formatRate(86.289); out.r2 = m.formatRate(2220.4); out.r3 = m.formatRate(null);
+        out.f1 = m.formatRateFor(86.289, 'CPM'); out.f2 = m.formatRateFor(2.5, 'CPS'); out.f3 = m.formatRateFor(NaN, 'CPM');
+        out.a1 = m.formatAverage(7.683, 'CPS'); out.a2 = m.formatAverage(155.125, 'CPM'); out.a3 = m.formatAverage(461, 'CPS');
+        out.a4 = m.formatAverage(null, 'CPS');
     """)
-    assert out["d1"] == {"value": "1.40", "unit": "uRem/h"} and out["d2"] == {"value": "63.0", "unit": "uRem/h"}
-    assert out["d3"] == {"value": "258", "unit": "uRem/h"} and out["d4"] == {"value": "1.40", "unit": "uSv"}
-    assert out["d5"] == {"value": "--", "unit": "uSv"}
+    # the device prints uRem/h as a whole number and uSv with two decimals
+    assert out["d1"] == {"value": "1", "unit": "µRem/h"} and out["d2"] == {"value": "63", "unit": "µRem/h"}
+    assert out["d3"] == {"value": "258", "unit": "µRem/h"} and out["d4"] == {"value": "1.40", "unit": "uSv"}
+    assert out["d5"] == {"value": "--", "unit": "uSv"} and out["d6"] == {"value": "--", "unit": "µRem/h"}
+    assert out["d7"]["value"] == "200" and out["d8"]["value"] == "0"
     assert out["r1"] == "86.29" and out["r2"] == "2220" and out["r3"] == "--"
+    assert out["f1"] == "5177" and out["f2"] == "2.50" and out["f3"] == "--"
+    assert out["a1"] == "7.68" and out["a2"] == "9307.50" and out["a3"] == "461" and out["a4"] == "--"
 
 
 def test_sparkle_density_window_average_and_binning(tmp_path):

@@ -273,7 +273,7 @@ with sync_playwright() as p:
     pi.select_option("#port-select", "COM8")
     pi.click("#btn-connect-device")
     pi.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
-    pi.wait_for_function("document.getElementById('ah-cps-gamma').textContent.includes('cps')", timeout=8000)
+    pi.wait_for_function("/^[0-9]/.test(document.getElementById('ah-cps-gamma').textContent)", timeout=8000)
     check("I a Disconnect button is visible once connected", pi.is_visible("#btn-disconnect-alphahound"))
     check("I the empty connection box is hidden while connected", not pi.is_visible("#device-connection-box"))
     check("I the title row carries the port chip", "COM8" in pi.inner_text("#ah-title-chip") and pi.is_visible("#ah-title-chip"),
@@ -301,7 +301,8 @@ with sync_playwright() as p:
           "COM8" in pi.inner_text("#ah-port") and "42" in pi.inner_text("#ah-log-count"), pi.inner_text("#ah-port"))
     cps_vals = pi.evaluate("""() => ['gamma', 'beta', 'alpha', 'total'].map(k => parseFloat(document.getElementById('ah-cps-' + k).textContent))""")
     check("I gamma/beta/alpha/total CPS are shown",
-          cps_vals[0] >= 270 and abs(cps_vals[1] - 150.5) < 0.01 and abs(cps_vals[2] - 6.25) < 0.01 and abs(cps_vals[3] - 426.75) < 0.01,
+          cps_vals[0] >= 270 and abs(cps_vals[1] - 150.5) < 0.01 and abs(cps_vals[2] - 6.25) < 0.01
+          and abs(cps_vals[3] - (cps_vals[0] + cps_vals[1] + cps_vals[2])) < 0.02,   # the gamma channel moves in the mock; the total is the sum
           str(cps_vals))
     check("I real-time dose is shown", "\u00b5Rem" in pi.inner_text("#rc-dose-display") and pi.inner_text("#rc-dose-display")[:2].strip().isdigit(),
           pi.inner_text("#rc-dose-display"))
@@ -310,10 +311,32 @@ with sync_playwright() as p:
     pi.wait_for_function(f"({spark_js})() >= 3", timeout=6000)
     spark_points = pi.evaluate(spark_js)
     check("I the live dose sparkline is drawing for the AlphaHound", spark_points >= 2, str(spark_points))
-    chart_js = """() => ['gamma', 'beta', 'alpha'].map(k => { const ch = window.Chart && Chart.getChart(document.getElementById('ah-chart-' + k));
-                          return ch ? ch.data.datasets[0].data.filter(v => v !== null).length : -1 })"""
-    pi.wait_for_function(f"({chart_js})().every(n => n >= 3)", timeout=6000)
-    check("I gamma / beta / alpha count-rate charts are drawing", all(n >= 3 for n in pi.evaluate(chart_js)), str(pi.evaluate(chart_js)))
+    chart_js = """() => { const ch = window.Chart && Chart.getChart(document.getElementById('ch-chart'));
+                          return ch ? ch.data.datasets.map(d => d.data.filter(p => p && p.y !== null).length) : [-1] }"""
+    pi.wait_for_function(f"({chart_js})().length === 3 && ({chart_js})().every(n => n >= 3)", timeout=8000)
+    check("I the channel history chart has gamma / beta / alpha lines", pi.evaluate(chart_js)[:3] and all(n >= 3 for n in pi.evaluate(chart_js)),
+          str(pi.evaluate(chart_js)))
+    look = pi.evaluate("""() => { const ch = Chart.getChart(document.getElementById('ch-chart'));
+          return { colors: ch.data.datasets.map(d => d.borderColor), dashes: ch.data.datasets.map(d => (d.borderDash || []).join(',')) } }""")
+    check("I the three channels differ by colour and by line pattern (not colour alone)",
+          len(set(look["colors"])) == 3 and len(set(look["dashes"])) == 3, str(look))
+    cards = pi.evaluate("""() => [...document.querySelectorAll('.ch-card')].map(c => ({
+          ch: c.dataset.channel, fill: c.querySelector('.ch-meter-fill').style.width,
+          avg: c.querySelector('[data-ch=avg]').textContent, peak: c.querySelector('[data-ch=peak]').textContent }))""")
+    check("I each channel card shows a meter, a 1-minute average and a peak",
+          len(cards) == 3 and all(c["fill"] not in ("", "0%") and c["avg"] != "--" and c["peak"] != "--" for c in cards), str(cards))
+    share = pi.evaluate("""() => ['gamma', 'beta', 'alpha'].map(k => parseFloat(document.querySelector('[data-mix=' + k + ']').style.flexGrow))""")
+    check("I the share-of-counts bar adds up to the whole", abs(sum(share) - 1) < 0.01, str(share))
+    pi.click("[data-ch-unit-btn=CPM]")
+    check("I the CPM switch converts the readings (x60)", abs(float(pi.inner_text("#ah-cps-beta").replace(",", "")) - 9030) < 1, pi.inner_text("#ah-cps-beta"))
+    check("I the unit choice is a pressed toggle", pi.get_attribute("[data-ch-unit-btn=CPM]", "aria-pressed") == "true")
+    pi.click("[data-ch-unit-btn=CPS]")
+    pi.click("[data-ch-scale=log]")
+    check("I the history chart can switch to a log axis", pi.evaluate("Chart.getChart(document.getElementById('ch-chart')).options.scales.y.type") == "logarithmic")
+    pi.click("[data-ch-scale=linear]")
+    pi.click("[data-ch-window='60']")
+    check("I the history window can be shortened", pi.evaluate("Chart.getChart(document.getElementById('ch-chart')).options.scales.x.min") == -60)
+    pi.click("[data-ch-window='300']")
     check("I the smoothed dose is shown", "64.50" in pi.inner_text("#ah-dose-avg"), pi.inner_text("#ah-dose-avg"))
     check("I the display replica offers every mode and four slots",
           pi.evaluate("document.getElementById('ah-screen-mode').options.length") == 12
@@ -365,7 +388,8 @@ with sync_playwright() as p:
     check("I Disconnect calls the server and restores the connect controls",
           ah["disconnect_calls"] == 1 and pi.is_visible("#btn-connect-device") and not pi.is_visible("#btn-disconnect-alphahound"))
     check("I the details panel is hidden again", not pi.is_visible("#alphahound-details-panel"))
-    check("I the count-rate charts are released on disconnect", pi.evaluate("typeof Chart !== 'undefined' && !Chart.getChart(document.getElementById('ah-chart-gamma'))"))
+    check("I the channel panel is cleared on disconnect", pi.evaluate("""() => { const ch = Chart.getChart(document.getElementById('ch-chart'));
+          return document.getElementById('ah-cps-gamma').textContent === '--' && (!ch || ch.data.datasets.every(d => d.data.length === 0)) }"""))
     check("I the replica shows NO DEVICE when disconnected", pi.evaluate("""() => { const c = document.getElementById('ah-screen');
           const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0;
           for (let i = 0; i < d.length; i += 4) if (d[i] > 100) n++; return n / (d.length / 4) < 0.06 }"""))

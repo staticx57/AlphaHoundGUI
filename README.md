@@ -137,7 +137,7 @@
   - **6 Vintage Radiological**: Canberra Packard, Bicron, TASC, Nuclear Data, Radiation Alert, Radon Scout
   - **6 Vacuum Tube Display**: Magic Eye, Dekatron, Numitron, VFD, Cold Cathode, Panaplex
 - **Dynamic CSS Variables**: All UI elements respect theme colors (--primary-color, --accent-color, etc.)
-- **Chart Theme Integration**: Chart.js automatically adopts theme colors
+- **Chart Theme Integration**: Chart.js adopts the theme's colours *and* its character (line weight, glow, smoothing, grid style, number font); the AlphaHound channel panel derives its gamma/beta/alpha colours from each theme (see `docs/ALPHAHOUND_SERIAL.md`)
 - **Status Color Overrides**: Vintage themes include custom confidence/status colors
 - **Professional Icon System**: Custom SVG icons with consistent styling (no emoji)
 

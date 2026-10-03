@@ -60,6 +60,15 @@ Gamma Spectroscopy (9), Spectrogram (10), Analog Gauge (11), Sleep / Power Saver
 alpha/beta pulse heights), Radon (7: computed on the device) and G-Force (13: accelerometer). The product page lists modes 1-7 and 9-12 (there is no Mode 8); the guide adds
 G-Force and the Sleep mode. The top-bar mark follows the guide: a check when the mode uses the alpha/beta scintillator and it reports, an X otherwise.
 
+## Channel panel and themes
+
+The gamma / beta / alpha rates from `P` are presented by our own panel (`static/js/channels.js`), not a copy of the manufacturer's viewer: cards with a
+log meter and peak hold, a share-of-counts bar and a history chart (1 / 5 / 30 min, linear or log, CPS or CPM). It is drawn in the active theme's
+character: `style.css` gives every theme chart tokens (`--ch-line-w`, `--ch-glow`, `--ch-tension`, `--ch-step`, `--ch-grid-dash`, `--ch-font`,
+`--ch-radius`, `--ch-meter-mask`, `--ch-reading-glow`), `chart_theme.js` reads them for every chart, and `palette.js` derives the channel colours from the theme's
+own palette, separating them only as far as needed to tell them apart (the three channels also use different line patterns). To add a theme: define its
+colours as usual and, if it has a character of its own, add its `--ch-*` values; `tests/test_theme_js.py` and `tests/ui_channels_sweep.py` check the result.
+
 ## Firmware differences
 
 The December 2025 notes (`ALPHAHOUND_SERIAL_COMMANDS.md`) describe an older firmware: `P` answered `UB=C`, `L` an activity threshold, no unprompted dose stream,

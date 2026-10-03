@@ -9,6 +9,8 @@ import { estimatorUI } from './estimator_ui.js';
 import { updateDeviceUI, resetDeviceUI, getActiveDevice } from './device_features.js';
 import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
 import { notify, notifyAuto, confirmDialog, infoDialog, setNotifier } from './dialogs.js';
+import { ChannelPanel } from './channels.js';
+import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
 
 // Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
 window.chartManager = chartManager;
@@ -27,7 +29,7 @@ let deviceScreen = null; // AlphaHound display replica
 let ahDetailsInterval = null; // AlphaHound details refresh timer
 let ahAutoRefreshTimer = null; // AlphaHound spectrum auto-refresh timer
 let ahAutoRefreshBusy = false;
-let ahCpsCharts = null; // AlphaHound gamma / beta / alpha count-rate history charts
+let channelPanel = null; // AlphaHound gamma / beta / alpha channel panel (cards, meter, share bar, history chart)
 let lastCheckpointTime = 0; // Checkpoint save tracking
 const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
 let radiacodeDoseInterval = null;  // Radiacode dose rate polling interval
@@ -1322,6 +1324,7 @@ function setupEventListeners() {
 
             // Update chart colors for new theme
             chartManager.updateThemeColors();
+            window.dispatchEvent(new Event('themechange'));   // channel panel, sparklines, replica colours
 
             if (currentData) {
                 const scale = chartManager.getScaleType();
@@ -2558,8 +2561,6 @@ const ahSet = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
 };
-const fmtCps = (v) => (v === null || v === undefined || Number.isNaN(v))
-    ? '--' : `${v >= 1000 ? Math.round(v) : v.toFixed(2)} cps`;
 const fmtDoseText = (uRem) => (uRem === null || uRem === undefined)
     ? '--' : `${uRem.toFixed(2)} \u00b5Rem/h (${(uRem * 0.01).toFixed(3)} \u00b5Sv/h)`;
 let ahDetailsFailures = 0;
@@ -2576,22 +2577,34 @@ function ensureDoseSparkline() {
     rcDoseChart = new DoseRateChart(canvas, { label: 'Dose Rate', colorVar: '--secondary-color', maxPoints: 60 });
 }
 
-/** (Re)create the three count-rate history charts of the details panel. */
-function ensureCpsCharts() {
-    destroyCpsCharts();
-    const spec = { gamma: '#38bdf8', beta: '#f59e0b', alpha: '#ef4444' };
-    ahCpsCharts = {};
-    for (const [key, color] of Object.entries(spec)) {
-        const canvas = document.getElementById(`ah-chart-${key}`);
-        if (canvas) ahCpsCharts[key] = new DoseRateChart(canvas, { label: key, color, maxPoints: 120, hideAxis: true, lineWidth: 1.5 });
+/** Our channel panel (cards, log meter, share bar, history chart): created once, reused across connections. */
+function ensureChannelPanel() {
+    if (!channelPanel) {
+        channelPanel = new ChannelPanel(document, {
+            onUnitChange: (unit) => { if (deviceScreen) deviceScreen.setRateUnit(unit); },
+        });
     }
+    return channelPanel;
 }
 
-function destroyCpsCharts() {
-    if (!ahCpsCharts) return;
-    Object.values(ahCpsCharts).forEach((c) => c.destroy());
-    ahCpsCharts = null;
+function resetChannelPanel() {
+    if (channelPanel) channelPanel.reset();
 }
+
+/** Replica colours: a tint of the active theme (default) or the hardware's own white-blue. */
+function applyScreenColors() {
+    if (!deviceScreen) return;
+    const mode = document.getElementById('ah-screen-colors')?.value || 'theme';
+    deviceScreen.setPalette(mode === 'device' ? DEVICE_SCREEN_PALETTE : screenPalette(readThemeColors()));
+}
+
+/** A theme switch changes more than colours: redraw everything that reads the theme. */
+window.addEventListener('themechange', () => {
+    if (channelPanel) channelPanel.refreshTheme();
+    applyScreenColors();
+    if (rcDoseChart) rcDoseChart.refreshTheme();
+    if (doseChart) doseChart.refreshTheme();
+});
 
 /** Create the display replica once (the canvas lives in the AlphaHound details panel). */
 function ensureDeviceScreen() {
@@ -2600,7 +2613,7 @@ function ensureDeviceScreen() {
     if (!canvas) return null;
     deviceScreen = new DeviceScreen(canvas, {
         unit: document.getElementById('ah-screen-dose-unit')?.value,
-        rateUnit: document.getElementById('ah-screen-rate-unit')?.value,
+        rateUnit: channelPanel ? channelPanel.unit : (() => { try { return localStorage.getItem('ahRateUnit'); } catch (e) { return null; } })(),
     });
     const modeSelect = document.getElementById('ah-screen-mode');
     const slotSelect = document.getElementById('ah-screen-slot');
@@ -2620,7 +2633,15 @@ function ensureDeviceScreen() {
         if (slotSelect) slotSelect.value = String(slot + 1);
     };
     document.getElementById('ah-screen-dose-unit')?.addEventListener('change', (e) => deviceScreen.setUnit(e.target.value));
-    document.getElementById('ah-screen-rate-unit')?.addEventListener('change', (e) => deviceScreen.setRateUnit(e.target.value));
+    const colorsSelect = document.getElementById('ah-screen-colors');
+    if (colorsSelect) {
+        try { colorsSelect.value = localStorage.getItem('ahScreenColors') || 'theme'; } catch (e) { /* default */ }
+        colorsSelect.addEventListener('change', () => {
+            try { localStorage.setItem('ahScreenColors', colorsSelect.value); } catch (e) { /* ignore */ }
+            applyScreenColors();
+        });
+    }
+    applyScreenColors();
     // The arrows press the same buttons as the existing display controls: E/Q go to the device and the replica steps
     document.getElementById('btn-screen-prev')?.addEventListener('click', () => document.getElementById('btn-display-prev')?.click());
     document.getElementById('btn-screen-next')?.addEventListener('click', () => document.getElementById('btn-display-next')?.click());
@@ -2630,25 +2651,17 @@ function ensureDeviceScreen() {
 
 function onAlphaHoundCps(cps) {
     if (!cps) {
-        ['gamma', 'beta', 'alpha', 'total'].forEach((k) => ahSet(`ah-cps-${k}`, '--'));
+        if (channelPanel) channelPanel.showNoData();
         return;
     }
-    ahSet('ah-cps-gamma', fmtCps(cps.gamma));
-    ahSet('ah-cps-beta', fmtCps(cps.beta));
-    ahSet('ah-cps-alpha', fmtCps(cps.alpha));
-    ahSet('ah-cps-total', fmtCps(cps.total));
+    if (channelPanel) channelPanel.update(cps);
     if (deviceScreen) deviceScreen.setReadings({ cps });
-    if (ahCpsCharts) {
-        for (const key of ['gamma', 'beta', 'alpha']) {
-            if (ahCpsCharts[key]) ahCpsCharts[key].update(cps[key]);
-        }
-    }
 }
 
 /** Start everything that follows an AlphaHound connection (also used when a refresh restores it). */
 function startAlphaHoundMonitoring() {
     ensureDoseSparkline();
-    ensureCpsCharts();
+    ensureChannelPanel();
     ensureDeviceScreen();
     if (deviceScreen) deviceScreen.setConnected(true);
     api.setupDoseWebSocket(
@@ -2720,7 +2733,7 @@ function stopAlphaHoundDetails() {
     const auto = document.getElementById('ah-auto-refresh');
     if (auto) auto.checked = false;
     if (deviceScreen) deviceScreen.setConnected(false);
-    destroyCpsCharts();
+    resetChannelPanel();
     ['ah-port', 'ah-temp', 'ah-comp', 'ah-dose', 'ah-dose-avg', 'ah-cps-gamma', 'ah-cps-beta', 'ah-cps-alpha', 'ah-cps-total',
         'ah-log-count'].forEach((id) => ahSet(id, '--'));
 }

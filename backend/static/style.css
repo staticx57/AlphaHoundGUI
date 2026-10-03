@@ -215,7 +215,9 @@
 /* Cyberpunk neon glow effects */
 [data-theme="cyberpunk"] .card-bg,
 [data-theme="cyberpunk"] .upload-container,
-[data-theme="cyberpunk"] .chart-container {
+[data-theme="cyberpunk"] .chart-container,
+[data-theme="cyberpunk"] .ch-card,
+[data-theme="cyberpunk"] .ch-chart-box {
     box-shadow: 0 0 20px rgba(252, 238, 9, 0.15), 0 0 40px rgba(255, 0, 110, 0.1);
 }
 
@@ -265,7 +267,9 @@
 
 [data-theme="eberline"] .card-bg,
 [data-theme="eberline"] .upload-container,
-[data-theme="eberline"] .chart-container {
+[data-theme="eberline"] .chart-container,
+[data-theme="eberline"] .ch-card,
+[data-theme="eberline"] .ch-chart-box {
     border: 2px solid rgba(224, 123, 57, 0.5);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.4);
 }
@@ -306,7 +310,9 @@
 
 [data-theme="fluke"] .card-bg,
 [data-theme="fluke"] .upload-container,
-[data-theme="fluke"] .chart-container {
+[data-theme="fluke"] .chart-container,
+[data-theme="fluke"] .ch-card,
+[data-theme="fluke"] .ch-chart-box {
     border: 3px solid #ffc107;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -356,7 +362,9 @@
 
 [data-theme="oscilloscope"] .card-bg,
 [data-theme="oscilloscope"] .upload-container,
-[data-theme="oscilloscope"] .chart-container {
+[data-theme="oscilloscope"] .chart-container,
+[data-theme="oscilloscope"] .ch-card,
+[data-theme="oscilloscope"] .ch-chart-box {
     border: 1px solid rgba(51, 255, 102, 0.4);
     box-shadow: 0 0 20px rgba(51, 255, 102, 0.1), inset 0 0 30px rgba(0, 0, 0, 0.5);
 }
@@ -421,14 +429,17 @@
 
 [data-theme="nixie"] .card-bg,
 [data-theme="nixie"] .upload-container,
-[data-theme="nixie"] .chart-container {
+[data-theme="nixie"] .chart-container,
+[data-theme="nixie"] .ch-card,
+[data-theme="nixie"] .ch-chart-box {
     border: 2px solid rgba(255, 106, 0, 0.3);
     box-shadow: 0 0 15px rgba(255, 106, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 [data-theme="nixie"] .stat-value,
 [data-theme="nixie"] #dose-display,
-[data-theme="nixie"] #rc-dose-display {
+[data-theme="nixie"] #rc-dose-display,
+[data-theme="nixie"] .ch-reading b {
     text-shadow: 0 0 10px rgba(255, 106, 0, 0.8), 0 0 20px rgba(255, 106, 0, 0.4);
 }
 
@@ -457,7 +468,9 @@
 
 [data-theme="civildefense"] .card-bg,
 [data-theme="civildefense"] .upload-container,
-[data-theme="civildefense"] .chart-container {
+[data-theme="civildefense"] .chart-container,
+[data-theme="civildefense"] .ch-card,
+[data-theme="civildefense"] .ch-chart-box {
     border: 3px solid #ffd000;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
 }
@@ -490,7 +503,9 @@
 
 [data-theme="hp"] .card-bg,
 [data-theme="hp"] .upload-container,
-[data-theme="hp"] .chart-container {
+[data-theme="hp"] .chart-container,
+[data-theme="hp"] .ch-card,
+[data-theme="hp"] .ch-chart-box {
     border: 2px solid rgba(212, 165, 116, 0.4);
     box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
 }
@@ -531,7 +546,9 @@
 
 [data-theme="tektronix"] .card-bg,
 [data-theme="tektronix"] .upload-container,
-[data-theme="tektronix"] .chart-container {
+[data-theme="tektronix"] .chart-container,
+[data-theme="tektronix"] .ch-card,
+[data-theme="tektronix"] .ch-chart-box {
     border: 2px solid rgba(0, 162, 232, 0.5);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
@@ -572,7 +589,9 @@
 
 [data-theme="keithley"] .card-bg,
 [data-theme="keithley"] .upload-container,
-[data-theme="keithley"] .chart-container {
+[data-theme="keithley"] .chart-container,
+[data-theme="keithley"] .ch-card,
+[data-theme="keithley"] .ch-chart-box {
     border: 1px solid rgba(74, 144, 217, 0.3);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
@@ -613,7 +632,9 @@
 
 [data-theme="ludlum"] .card-bg,
 [data-theme="ludlum"] .upload-container,
-[data-theme="ludlum"] .chart-container {
+[data-theme="ludlum"] .chart-container,
+[data-theme="ludlum"] .ch-card,
+[data-theme="ludlum"] .ch-chart-box {
     border: 2px solid rgba(212, 145, 92, 0.4);
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
 }
@@ -643,7 +664,9 @@
 
 [data-theme="victoreen"] .card-bg,
 [data-theme="victoreen"] .upload-container,
-[data-theme="victoreen"] .chart-container {
+[data-theme="victoreen"] .chart-container,
+[data-theme="victoreen"] .ch-card,
+[data-theme="victoreen"] .ch-chart-box {
     border: 2px solid rgba(124, 182, 138, 0.4);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
 }
@@ -673,7 +696,9 @@
 
 [data-theme="canberra"] .card-bg,
 [data-theme="canberra"] .upload-container,
-[data-theme="canberra"] .chart-container {
+[data-theme="canberra"] .chart-container,
+[data-theme="canberra"] .ch-card,
+[data-theme="canberra"] .ch-chart-box {
     border: 1px solid rgba(38, 166, 154, 0.4);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
@@ -681,7 +706,9 @@
 /* Sci-Fi glassmorphism - ENHANCED */
 [data-theme="scifi"] .card-bg,
 [data-theme="scifi"] .upload-container,
-[data-theme="scifi"] .chart-container {
+[data-theme="scifi"] .chart-container,
+[data-theme="scifi"] .ch-card,
+[data-theme="scifi"] .ch-chart-box {
     backdrop-filter: blur(12px);
     box-shadow: 0 8px 32px rgba(0, 240, 255, 0.25), 0 0 40px rgba(182, 125, 255, 0.15);
     border: 1px solid rgba(0, 240, 255, 0.2);
@@ -2209,53 +2236,6 @@ select.feature-disabled {
     overflow-wrap: anywhere;
 }
 
-/* Count-rate charts: name and live value above a small history plot */
-.ah-cps-charts {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.5rem;
-    margin-top: 0.7rem;
-}
-
-.ah-cps-chart {
-    background: var(--bg-primary);
-    border-radius: 6px;
-    padding: 0.3rem 0.45rem 0.2rem;
-    min-width: 0;
-}
-
-.ah-cps-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.4rem;
-    font-size: 0.68rem;
-    font-weight: 700;
-    white-space: nowrap;
-}
-
-.ah-cps-head b {
-    color: var(--text-primary);
-    font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ah-cps-chart-box {
-    position: relative;
-    height: 78px;
-}
-
-.ah-total-row {
-    margin-top: 0.35rem;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
-
-.ah-total-row b {
-    color: var(--text-primary);
-}
-
 .ah-probe-output {
     margin: 0.5rem 0 0;
     padding: 0.5rem;
@@ -2359,4 +2339,297 @@ pre.app-dialog-body {
     #device-type-tabs .device-tab {
         flex: 1;
     }
+}
+
+/* ================= Radiation channels panel =================
+   Built from the app's own themed parts. Its colours (--ch-gamma / --ch-beta / --ch-alpha) are set by
+   channels.js from the active theme's palette; its character comes from the --ch-* tokens below, which the charts
+   read too (chart_theme.js): line weight, glow, smoothing, graticule style, number font, corner radius. */
+:root {
+    --ch-font: var(--font-family);
+    --ch-radius: 8px;
+    --ch-line-w: 1.75;
+    --ch-glow: 0;
+    --ch-tension: 0.25;
+    --ch-step: 0;
+    --ch-grid-dash: 0;
+    --ch-meter-mask: repeating-linear-gradient(90deg, #000 0 calc(25% - 2px), transparent calc(25% - 2px) 25%);
+    --ch-reading-glow: none;
+}
+
+[data-theme="light"] { --ch-line-w: 2; }
+[data-theme="scifi"] { --ch-radius: 14px; --ch-line-w: 2; --ch-glow: 6; --ch-tension: 0.35; }
+[data-theme="cyberpunk"] { --ch-radius: 2px; --ch-line-w: 2; --ch-glow: 8; --ch-tension: 0.05; --ch-grid-dash: 2 3;
+    --ch-meter-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px); }
+[data-theme="nuclear"] { --ch-radius: 6px; --ch-line-w: 2.25; --ch-glow: 4; }
+[data-theme="toxic"] { --ch-radius: 10px; --ch-line-w: 2; --ch-glow: 5; --ch-tension: 0.3; }
+[data-theme="oscilloscope"] { --ch-font: ui-monospace, "Cascadia Mono", Consolas, monospace; --ch-radius: 2px; --ch-line-w: 1.25;
+    --ch-glow: 10; --ch-tension: 0; --ch-grid-dash: 1 4; --ch-reading-glow: 0 0 6px currentColor;
+    --ch-meter-mask: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 6px); }
+[data-theme="nixie"] { --ch-font: "Courier New", ui-monospace, monospace; --ch-radius: 16px; --ch-line-w: 2.5; --ch-glow: 12;
+    --ch-tension: 0.4; --ch-reading-glow: 0 0 10px rgba(255, 106, 0, 0.8); --ch-meter-mask: none; }
+[data-theme="civildefense"] { --ch-font: "Arial Narrow", Arial, sans-serif; --ch-radius: 4px; --ch-line-w: 2.25; --ch-tension: 0; --ch-step: 1;
+    --ch-meter-mask: repeating-linear-gradient(90deg, #000 0 calc(25% - 4px), transparent calc(25% - 4px) 25%); }
+[data-theme="tektronix"], [data-theme="keithley"], [data-theme="fluke"], [data-theme="hp"],
+[data-theme="eberline"], [data-theme="ludlum"], [data-theme="victoreen"], [data-theme="canberra"] {
+    --ch-font: ui-monospace, "Cascadia Mono", Consolas, monospace; --ch-radius: 3px; --ch-line-w: 1.5; --ch-tension: 0;
+    --ch-grid-dash: 2 3;
+}
+[data-theme="tektronix"], [data-theme="keithley"] { --ch-meter-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px); }
+
+.ch-panel {
+    --ch-gamma: var(--primary-color);
+    --ch-beta: var(--secondary-color);
+    --ch-alpha: var(--accent-color);
+    margin-top: 0.7rem;
+}
+
+.ch-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem 0.75rem;
+}
+
+.ch-title {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.ch-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.ch-seg {
+    display: inline-flex;
+    border: 1px solid var(--border-color);
+    border-radius: var(--ch-radius);
+    overflow: hidden;
+}
+
+.ch-seg button {
+    padding: 0.18rem 0.55rem;
+    font-size: 0.7rem;
+    font-family: var(--ch-font);
+    background: transparent;
+    color: var(--text-secondary);
+    border: 0;
+    border-radius: 0;
+    cursor: pointer;
+}
+
+.ch-seg button + button {
+    border-left: 1px solid var(--border-color);
+}
+
+.ch-seg button[aria-pressed="true"] {
+    background: var(--primary-color);
+    color: var(--bg-color);
+    font-weight: 700;
+}
+
+.ch-seg button:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: -2px;
+}
+
+.ch-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.ch-card {
+    --ch-color: var(--ch-gamma);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--ch-color);
+    border-radius: var(--ch-radius);
+    padding: 0.45rem 0.6rem 0.5rem;
+    min-width: 0;
+}
+
+.ch-card[data-channel="beta"] { --ch-color: var(--ch-beta); }
+.ch-card[data-channel="alpha"] { --ch-color: var(--ch-alpha); }
+
+.ch-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.ch-sym {
+    color: var(--ch-color);
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.ch-pattern {
+    flex: 1;
+    height: 0;
+    margin-left: 0.25rem;
+    border-top: 2px solid var(--ch-color);
+    opacity: 0.8;
+}
+
+.ch-card[data-channel="beta"] .ch-pattern { border-top-style: dashed; }
+.ch-card[data-channel="alpha"] .ch-pattern { border-top-style: dotted; }
+
+.ch-reading {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    margin-top: 0.15rem;
+    font-family: var(--ch-font);
+}
+
+.ch-reading b {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    text-shadow: var(--ch-reading-glow);
+}
+
+.ch-reading small {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
+/* log meter: four decades (1 ... 10K per second), a peak-hold marker */
+.ch-meter {
+    position: relative;
+    height: 7px;
+    margin: 0.3rem 0 0.35rem;
+    background: var(--border-color);
+    border-radius: calc(var(--ch-radius) / 2);
+    -webkit-mask-image: var(--ch-meter-mask);
+    mask-image: var(--ch-meter-mask);
+}
+
+.ch-meter-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: var(--ch-color);
+    border-radius: inherit;
+    transition: width 0.4s ease-out;
+}
+
+.ch-meter-peak {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    left: 0;
+    width: 2px;
+    background: var(--text-primary);
+    transition: left 0.4s ease-out;
+}
+
+.ch-card:not(.ch-active) .ch-meter-fill {
+    opacity: 0.35;
+}
+
+.ch-stats {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.4rem;
+    font-size: 0.64rem;
+    color: var(--text-secondary);
+    font-family: var(--ch-font);
+    white-space: nowrap;
+}
+
+.ch-stats b {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* share of the counts */
+.ch-mix {
+    margin-top: 0.5rem;
+}
+
+.ch-mix-bar {
+    display: flex;
+    height: 8px;
+    gap: 2px;
+    border-radius: calc(var(--ch-radius) / 2);
+    overflow: hidden;
+    background: var(--border-color);
+}
+
+.ch-mix-bar span {
+    flex: 0 1 0;
+    min-width: 0;
+    transition: flex-grow 0.4s ease-out;
+}
+
+.ch-mix-bar [data-mix="gamma"] { background: var(--ch-gamma); }
+.ch-mix-bar [data-mix="beta"] { background: var(--ch-beta); }
+.ch-mix-bar [data-mix="alpha"] { background: var(--ch-alpha); }
+
+.ch-mix-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.9rem;
+    margin-top: 0.25rem;
+    font-size: 0.68rem;
+    font-family: var(--ch-font);
+    color: var(--text-secondary);
+}
+
+.ch-mix-legend [data-mix-label="gamma"] { color: var(--ch-gamma); }
+.ch-mix-legend [data-mix-label="beta"] { color: var(--ch-beta); }
+.ch-mix-legend [data-mix-label="alpha"] { color: var(--ch-alpha); }
+
+.ch-total {
+    margin-left: auto;
+}
+
+.ch-total b {
+    color: var(--text-primary);
+}
+
+/* history chart */
+.ch-chart-box {
+    position: relative;
+    height: 150px;
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.5rem 0.2rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--ch-radius);
+    overflow: hidden;
+}
+
+@media (max-width: 520px) {
+    .ch-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ch-meter-fill, .ch-meter-peak, .ch-mix-bar span {
+        transition: none;
+    }
+}
+
+/* Short desktop windows (a laptop at 1280x800): trim the page chrome so the whole device area fits without scrolling. */
+@media (min-width: 900px) and (max-height: 900px) {
+    header { padding: 0.9rem 2rem; }
+    h1 { font-size: 2rem; }
+    main { padding-top: 1rem; }
+    .ch-chart-box { height: clamp(104px, 15vh, 150px); }
 }

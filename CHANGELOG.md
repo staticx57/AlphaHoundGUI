@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [Session 2026-10-03] - Themed charts, channel panel, short-window layout
+
+### Added
+- **Radiation channels panel** (`static/js/channels.js`): one card per channel with the live rate, a log-scale meter with a peak-hold marker, the 1-minute average and the peak; a share-of-counts bar; a history chart with 1 / 5 / 30 minute windows, a linear or log axis, and a CPS / CPM toggle (the choice is remembered, and the replica follows the unit). It replaces three mini-charts that copied the manufacturer's viewer.
+- **Themes now change how charts are drawn, not only their colours.** Each theme sets chart-character tokens (`--ch-font`, `--ch-radius`, `--ch-line-w`, `--ch-glow`, `--ch-tension`, `--ch-step`, `--ch-grid-dash`, `--ch-meter-mask`, `--ch-reading-glow` in `style.css`) which `chart_theme.js` reads: the oscilloscope theme draws a thin glowing trace over a dotted graticule with a segmented LED meter in a monospaced font, the Nixie theme draws thick warm lines with a strong glow and rounded tubes, the civil-defence theme draws a blocky stepped histogram, the instrument themes (Tektronix, Keithley, Fluke, ...) are crisp and monospaced, and the light theme never glows. The spectrum, comparison and dose sparkline charts use the same tokens (grid colour and dash, tick fonts, tooltips, line weight, glow), and all of them refresh when the theme is switched.
+- **Channel colours come from the theme** (`palette.js`): gamma = the theme's primary colour, beta = secondary, alpha = accent; when a single-hue theme gives colours that are too alike (oscilloscope: all greens, Nixie: all oranges) they are moved apart by the smallest change in lightness, saturation and hue that makes them distinguishable and keeps at least 3:1 contrast on the theme's background. A theme that already has three colours (cyberpunk) is left untouched. Each channel also has its own line pattern (solid, dashed, dotted), so nothing relies on colour alone.
+- **Replica colours** option: a tint of the active theme (default) or the hardware's own white-blue.
+- `tests/ui_channels_sweep.py` (every theme at desktop and phone width: the chart really uses each theme's tokens, colours are distinct and readable, no overflow or JS errors) and `tests/ah_mock.py` (a mocked AlphaHound for browser tests); `tests/test_theme_js.py` (palette, chart theme and channel logic under Node, plus a check of all 17 theme blocks in `style.css`).
+
+### Changed
+- **Short desktop windows** (a laptop at 1280x800 or 1366x768): the page header and top margin shrink and the history chart scales with the window height, so the whole device area fits without scrolling.
+- The AlphaHound dose readout formats follow the device (whole uRem/h, two-decimal uSv); the JS test helpers decode Node's output as UTF-8.
+
 ## [Session 2026-10-02 PM] - AlphaHound modernization: CPS channels, display replica, remote control
 
 ### Added
@@ -11,7 +24,7 @@
 - **`backend/tools/devctl.py`**: connect / disconnect / restart / ensure / probe from the command line, for unattended work. Server opt-ins `ALPHAHOUND_AUTOCONNECT_PORT` and `ALPHAHOUND_KEEP_CONNECTED`.
 - Port errors are readable (409 "in use by another program") instead of a bare 500.
 
-- **Count-rate history charts** for gamma, beta and alpha in the details panel (as on AlphaView), and a 5 s **smoothed dose** next to the raw reading (`dose_rate_avg` in `/device/status`, `/device/details` and the WebSocket).
+- **Radiation channels panel** for gamma, beta and alpha in the details panel (our own, themed presentation, see the next section), and a 5 s **smoothed dose** next to the raw reading (`dose_rate_avg` in `/device/status`, `/device/details` and the WebSocket).
 - **Dose log survives restarts**: kept in `backend/data/dose_log.jsonl` (loaded at startup, trimmed when it grows far past 100 000 rows; `ALPHAHOUND_DOSE_LOG=off` keeps it in memory only).
 - **Channel statistics per acquisition**: mean gamma / beta / alpha CPS and peak total CPS are recorded during an AlphaHound acquisition, shown in the metadata panel, returned in `/device/acquisition/status` (`channels`) and written to the N42 `AcquisitionInfo`.
 
