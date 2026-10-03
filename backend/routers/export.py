@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
-from report_generator import generate_pdf_report
+from formats.report_generator import generate_pdf_report
 
 import logging
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ def export_n42(request: N42ExportRequest):
     """Export spectrum data as standards-compliant N42 XML file."""
     logger.info(f"[N42 Export] Endpoint called")
     try:
-        from n42_exporter import generate_n42_xml
+        from formats.n42_exporter import generate_n42_xml
         
         # Convert Pydantic model to dict for exporter
         request_dict = request.model_dump()
@@ -133,7 +133,7 @@ def export_n42_auto(request: dict):
     try:
         import os
         from datetime import datetime
-        from n42_exporter import generate_n42_xml
+        from formats.n42_exporter import generate_n42_xml
         
         # Create acquisitions directory if it doesn't exist
         save_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'acquisitions')
@@ -172,7 +172,7 @@ def export_n42_checkpoint(request: dict):
     try:
         import os
         from datetime import datetime
-        from n42_exporter import generate_n42_xml
+        from formats.n42_exporter import generate_n42_xml
         
         save_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'acquisitions')
         os.makedirs(save_dir, exist_ok=True)
@@ -218,7 +218,7 @@ class N42MetadataRequest(BaseModel):
 def get_n42_metadata(request: N42MetadataRequest):
     """Get current metadata from an N42 file."""
     try:
-        from n42_metadata_editor import N42MetadataEditor
+        from formats.n42_metadata_editor import N42MetadataEditor
         editor = N42MetadataEditor(request.xml_content)
         return {"metadata": editor.get_current_metadata()}
     except Exception as e:
@@ -243,7 +243,7 @@ class N42UpdateRequest(BaseModel):
 def update_n42_metadata(request: N42UpdateRequest):
     """Update metadata in an N42 file and return modified XML."""
     try:
-        from n42_metadata_editor import N42MetadataEditor
+        from formats.n42_metadata_editor import N42MetadataEditor
         from datetime import datetime
         
         editor = N42MetadataEditor(request.xml_content)

@@ -81,7 +81,7 @@ window.appState = {
 
 **Steps**:
 
-1. Open `backend/isotope_database.py`
+1. Open `backend/nuclides/isotope_database.py`
 2. Find the `ISOTOPE_DATABASE_SIMPLE` dictionary (around line 3)
 3. Add your isotope:
 
@@ -141,12 +141,12 @@ backend/
 
 | Task | Difficulty | File to Edit |
 |------|------------|--------------|
-| Add a new isotope | ⭐ Easy | `isotope_database.py` |
+| Add a new isotope | ⭐ Easy | `nuclides/isotope_database.py` |
 | Change UI colors | ⭐ Easy | `style.css` |
-| Modify peak detection sensitivity | ⭐⭐ Medium | `peak_detection.py` |
+| Modify peak detection sensitivity | ⭐⭐ Medium | `spectroscopy/peak_detection.py` |
 | Add a new API endpoint | ⭐⭐ Medium | `routers/analysis.py` |
 | Add a new device driver | ⭐⭐⭐ Advanced | New file + router |
-| Modify ML training | ⭐⭐⭐ Advanced | `ml_analysis.py` |
+| Modify ML training | ⭐⭐⭐ Advanced | `ml/ml_analysis.py` |
 
 ### Running in Development Mode
 
@@ -182,17 +182,54 @@ AlphaHoundGUI/
 │   │   ├── analysis.py         # File upload, peak detection, ML
 │   │   ├── device.py           # AlphaHound device control
 │   │   └── isotopes.py         # Custom isotope CRUD
-│   ├── alphahound_serial.py    # Device communication driver
-│   ├── isotope_database.py     # Isotope energy lookup
-│   ├── peak_detection.py       # Peak finding algorithm
-│   ├── ml_analysis.py          # ML identification (scikit-learn)
-│   ├── n42_parser.py           # N42/XML file parser
-│   ├── csv_parser.py           # CSV file parser
-│   ├── detector_efficiency.py  # Detector calibration data
-│   ├── spectral_analysis.py    # Gaussian peak fitting
-│   ├── roi_analysis.py         # Region-of-interest analysis
-│   ├── isotope_roi_database.py # ROI isotope definitions
-│   └── report_generator.py     # PDF export
+│   ├── formats/                # File formats: parsers, N42 export and editor, PDF report
+│   │   ├── n42_parser.py             # N42/XML file parser (multi-namespace)
+│   │   ├── csv_parser.py             # CSV file parser with Becquerel support
+│   │   ├── chn_spe_parser.py         # Ortec CHN and Maestro SPE parser
+│   │   ├── iaea_parser.py            # IAEA LiveChart gamma data parser
+│   │   ├── radiacode_xml_parser.py   # Radiacode XML spectrum parser
+│   │   ├── specutils_parser.py       # SandiaSpecUtils wrapper for 100+ formats
+│   │   ├── n42_exporter.py           # N42/XML file exporter
+│   │   ├── n42_metadata_editor.py    # N42 metadata editing (UI integration)
+│   │   └── report_generator.py       # PDF export with matplotlib plots
+│   ├── spectroscopy/           # Peak detection and fitting, ROI analysis, source identification
+│   │   ├── peak_detection.py         # scipy-based peak finding
+│   │   ├── peak_detection_enhanced.py# Advanced peak detection with multiplet support
+│   │   ├── fitting_engine.py         # Gaussian and Poisson peak fitting
+│   │   ├── multiplet_fitting.py      # Overlapping peak deconvolution
+│   │   ├── spectral_analysis.py      # SNIP, Poisson fitting, advanced analysis
+│   │   ├── analysis_utils.py         # Shared analysis pipeline for uploads and live devices
+│   │   ├── confidence_scoring.py     # Contextual confidence scoring engine
+│   │   ├── roi_analysis.py           # Region-of-interest analysis & enrichment
+│   │   ├── isotope_roi_database.py   # ROI isotope definitions
+│   │   ├── detector_efficiency.py    # Detector calibration data (AlphaHound, Radiacode)
+│   │   ├── gauss_area.py             # Gaussian peak area with per-channel width
+│   │   ├── activity_calculator.py    # Activity & dose calculations (Bq, μSv/h, MDA)
+│   │   ├── time_estimator.py         # Acquisition time needed for a target precision
+│   │   ├── spectrum_algebra.py       # Spectrum math operations with error propagation
+│   │   ├── source_analysis.py        # Source-specific analysis (lenses, dials, ore)
+│   │   ├── source_identification.py  # Auto-suggest source type from isotopes
+│   │   └── source_templates.py       # Full-spectrum fit of U-238 / Th-232 source templates
+│   ├── nuclides/               # Isotope database, decay chains and decay engines
+│   │   ├── isotope_database.py       # 100+ isotopes from IAEA/NNDC databases
+│   │   ├── isotope_validation.py     # Validation rules, incompatible-isotope lists
+│   │   ├── nuclear_data.py           # Half-life and nuclear constants
+│   │   ├── chain_detection_enhanced.py# Decay chain detection with secular equilibrium
+│   │   ├── decay_calculator.py       # Bateman equation solver for decay chains
+│   │   ├── decay_engine.py           # Decay engines (built-in solver, Curie) behind one API
+│   │   ├── decay_data.py             # Half-lives and branching fractions (ICRP 107 table)
+│   │   ├── bateman.py                # Branching Bateman solver for decay chains
+│   │   ├── curie_compat.py           # Thread-safety shim for the Curie library
+│   │   └── curie_integration.py      # Nuclear decay data via curie library
+│   ├── devices/                # AlphaHound and Radiacode drivers, acquisition manager
+│   │   ├── alphahound_serial.py      # AlphaHound serial communication driver
+│   │   ├── radiacode_driver.py       # Radiacode USB/BLE driver
+│   │   ├── radiacode_bleak_transport.py# BLE transport layer for Radiacode
+│   │   ├── device_calibration.py     # Energy calibration of the devices' own axes
+│   │   └── acquisition_manager.py    # Server-side acquisition timer & session management
+│   ├── ml/                     # AI identification (scikit-learn) and its training data
+│   │   ├── ml_analysis.py            # ML identification (scikit-learn)
+│   │   └── ml_data_loader.py         # Real data augmentation for ML training
 │   └── static/                 # Frontend files
 │       ├── index.html          # Main HTML
 │       ├── style.css           # Styling
@@ -294,8 +331,8 @@ Create `backend/routers/mydevice.py`:
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from mydevice_serial import my_device
-from peak_detection import detect_peaks
-from isotope_database import identify_isotopes, identify_decay_chains
+from spectroscopy.peak_detection import detect_peaks
+from nuclides.isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
 
 router = APIRouter(prefix="/mydevice", tags=["mydevice"])
@@ -377,7 +414,7 @@ app.include_router(mydevice.router)  # Add new router
 
 ### Adding Single Isotopes
 
-Edit `backend/isotope_database.py`:
+Edit `backend/nuclides/isotope_database.py`:
 
 ```python
 # In ISOTOPE_DATABASE_SIMPLE (for hobby use):
@@ -416,7 +453,7 @@ Custom isotopes persist in `backend/custom_isotopes.json`.
 
 ### Adding Decay Chains
 
-Edit the `DECAY_CHAINS` dictionary in `isotope_database.py`:
+Edit the `DECAY_CHAINS` dictionary in `nuclides/isotope_database.py`:
 
 ```python
 DECAY_CHAINS = {
@@ -640,7 +677,7 @@ const API = {
 
 ### Adding Isotopes to ML Training
 
-Edit `backend/ml_analysis.py`:
+Edit `backend/ml/ml_analysis.py`:
 
 ```python
 # The ML module automatically uses all isotopes from the database

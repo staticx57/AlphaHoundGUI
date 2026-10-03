@@ -8,8 +8,8 @@ import pathlib
 
 import pytest
 
-from analysis_utils import analyze_spectrum_peaks
-from csv_parser import parse_csv_spectrum
+from spectroscopy.analysis_utils import analyze_spectrum_peaks
+from formats.csv_parser import parse_csv_spectrum
 
 DATA = pathlib.Path(__file__).resolve().parent / "data" / "real_csv"
 GLASS = DATA / "uraniumglass5minutes.csv"
@@ -60,7 +60,7 @@ def test_peak_detection_on_a_sparse_spectrum_raises_no_numpy_warning():
     which would hide the problem and make the peak list empty."""
     import warnings
 
-    from peak_detection_enhanced import detect_peaks_enhanced
+    from spectroscopy.peak_detection_enhanced import detect_peaks_enhanced
 
     result = parse(GLASS)
     with warnings.catch_warnings(record=True) as caught:

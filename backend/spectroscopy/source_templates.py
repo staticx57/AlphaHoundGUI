@@ -24,7 +24,7 @@ from typing import Dict, Optional, Sequence
 import numpy as np
 from scipy.optimize import nnls
 
-from detector_efficiency import interpolate_efficiency, DETECTOR_DATABASE
+from spectroscopy.detector_efficiency import interpolate_efficiency, DETECTOR_DATABASE
 
 PRESENT_Z = 10.0
 PRESENT_FRACTION = 0.07
@@ -117,7 +117,7 @@ def fit_source_templates(energies, counts, metadata: Optional[dict] = None) -> O
     "sources": {name: {"z", "fraction", "present", "high"}}, "chains": {"U-238": {...}, "Th-232": {...}}}
     or None when the spectrum has too little usable range/signal.
     """
-    from spectral_analysis import snip_background
+    from spectroscopy.spectral_analysis import snip_background
 
     E = np.asarray(energies, dtype=float)
     c = np.asarray(counts, dtype=float)
@@ -222,7 +222,7 @@ def _fallback_chain_entry(parent):
     """Minimal chain record in the format the UI renders, for a series the fit supports
     but line matching did not list."""
     try:
-        from chain_detection_enhanced import KNOWN_CHAINS, get_chain_sequence_info, check_secular_equilibrium
+        from nuclides.chain_detection_enhanced import KNOWN_CHAINS, get_chain_sequence_info, check_secular_equilibrium
         info = KNOWN_CHAINS.get(parent, {})
         sequence = get_chain_sequence_info(parent)
         equilibrium = check_secular_equilibrium({}, parent)

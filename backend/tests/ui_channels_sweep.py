@@ -22,7 +22,7 @@ from ah_mock import install  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "ui_smoke_out", "channels")
 os.makedirs(OUT, exist_ok=True)
-URL = "http://localhost:3200/"
+URL = os.environ.get("ALPHAHOUND_URL", "http://localhost:3200").rstrip("/") + "/"   # another port: ALPHAHOUND_URL
 QUICK = "--quick" in sys.argv
 
 METRICS = r"""

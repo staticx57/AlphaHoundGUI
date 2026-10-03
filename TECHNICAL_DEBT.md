@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-03
 **Branch:** `chore/technical-debt-cleanup`
-**Tests at the time of writing:** 639 backend tests pass; the headless-browser smoke test (`backend/tests/ui_smoke.py`) passes 160/160.
+**Tests at the time of writing:** 641 backend tests pass; the headless-browser smoke test (`backend/tests/ui_smoke.py`) passes 160/160.
 
 This replaces the 2025-12-16 report, whose figures had gone stale (it listed `routers/analysis.py` at 1,464 lines and
 test coverage as unknown).
@@ -23,6 +23,8 @@ test coverage as unknown).
 | Temp-file leak | A CSV upload that was rejected left its temporary file in the temp directory (265 had piled up). The file is now removed on every path; `tests/test_csv_temp_cleanup.py` fails on the old code. |
 | Repo layout | 19 unreferenced images and a scraped web page moved to `TO_BE_DELETED/` (`backend/static` 16 MB to 1.7 MB); the seven guides and notes that sat in the root moved to `docs/` with every link fixed (root: 22 to 15 tracked files); `tests/test_repo_layout.py` fails if new root files, backup/temp files, files over 800 KB, unreferenced images or broken document links appear (each rule verified to fire on a real offender). |
 | Fixtures and user data | The real spectra the tests use moved from `backend/data/acquisitions/` to `backend/tests/data/real_spectra/`; `acquisitions/` (the user's own measurements, 70 files on disk) is ignored and untracked (the files stay on disk); a layout rule fails if any of it is tracked again. `spectrum_wrapper.py` (457 lines, imported by nothing) went to `TO_BE_DELETED/`; `generate_test_spectra.py` is in `tools/`. |
+| Backend packages | The 43 modules that sat side by side in `backend/` are in five packages: `formats/` (9: parsers, N42 export and editor, PDF report), `spectroscopy/` (17: peaks, fitting, ROI, source identification), `nuclides/` (10: isotope database, chains, decay engines), `devices/` (5: drivers, acquisition) and `ml/` (2); `backend/` keeps `main.py` and `core.py`. 186 import lines rewritten by script (lazy imports and `try/except ImportError` ones included), an AST check finds no bare import of a moved module, the three `__file__`-based data paths were adjusted, and all eight analysis snapshots (isotopes, chains, pipeline, source identification, CSV, CWT peaks, ROI, ML weights) are byte-for-byte identical before and after. A layout rule fails if a module is added loose to `backend/`. |
+| Browser tests on another port | The four `ui_*.py` scripts take the server from `ALPHAHOUND_URL` (default `http://localhost:3200`), so they can run against a second instance while a device is connected to the first. |
 | Test layout | `test_fitting_engine.py` and `test_multiplet_fitting.py` were outside `tests/` and never ran; they are in `tests/` now. The print-driven `test_becquerel_comparison.py` is `tools/becquerel_comparison.py`. |
 | Install files | `requirements_lightweight.txt` was missing `slowapi` (imported by `main.py`) and listed an unused `pillow`; `install_lightweight.bat` now installs from that file. The app imports cleanly with the optional packages absent. |
 
@@ -43,7 +45,7 @@ Fixed, each with tests in `tests/test_csv_columns.py` (they fail on the old pars
 Still open:
 
 - Becquerel cannot read `.csv` ("File type .csv can not be read"), so the pandas fallback is the only CSV parser that ever runs and the Becquerel branch in `_parse_csv_file` (and the `source` label "CSV File (Becquerel)") is dead code. Remove it, or restore a Becquerel read that works.
-- `ml_data_loader.py` augments real spectra with unseeded `np.random` (`uniform`, `poisson`), so a model trained with `ML_USE_REAL_DATA=1` differs on every training; the default synthetic training is fully seeded and reproducible. Pass a `numpy.random.Generator` seeded like the synthesiser if reproducibility matters for that path.
+- `ml/ml_data_loader.py` augments real spectra with unseeded `np.random` (`uniform`, `poisson`), so a model trained with `ML_USE_REAL_DATA=1` differs on every training; the default synthetic training is fully seeded and reproducible. Pass a `numpy.random.Generator` seeded like the synthesiser if reproducibility matters for that path.
 - `tests/data/radiacode_fisicas/manual_primary_peaks.csv` is the only real CSV in the test data and it is a peak list, not a spectrum, so there is no real-spectrum CSV test.
 
 ## Open: structural
@@ -54,7 +56,6 @@ Still open:
 | `setupEventListeners` in `main.js` | about 1,100 lines | One function wires nearly every control and shares module state; split by panel into modules that receive what they need. |
 | `style.css` | 2,909 lines, plus `button-fixes.css` and `device_styles.css` overrides; 350 inline `style=` attributes in `index.html` | |
 | Overlapping modules | `peak_detection` / `peak_detection_enhanced`; `source_analysis` / `source_identification`; `isotope_database` / `isotope_roi_database` / `nuclear_data` / `isotope_validation`; six parsers without a shared interface | The decay modules are deliberately layered (`decay_data` -> `bateman` -> `decay_calculator` -> `decay_engine`, with `curie_*` as an optional engine) and were rebuilt recently; leave them. |
-| Flat `backend/` | about 50 modules; only the routers are a package | |
 | Remaining silent handlers | `except Exception: pass` around close/disconnect calls in `radiacode_*`, `curie_compat` | These are cleanup paths where there is nothing to do; left as they are. |
 | `innerHTML` | 68 uses; the untrusted-text sites are escaped, the rest build markup from numbers and constants | Prefer `textContent` / DOM construction for new code. |
 | No authentication | The server binds `0.0.0.0:3200` for LAN access and exposes device control and file endpoints | Deliberate; document it, or add an opt-in token. |

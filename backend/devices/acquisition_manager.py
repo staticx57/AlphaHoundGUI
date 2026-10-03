@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
-from analysis_utils import analyze_spectrum_peaks
-from device_calibration import energies_from_device_spectrum, SOURCE_DEVICE, fallback_warning
+from spectroscopy.analysis_utils import analyze_spectrum_peaks
+from devices.device_calibration import energies_from_device_spectrum, SOURCE_DEVICE, fallback_warning
 
 import logging
 logger = logging.getLogger(__name__)
@@ -358,7 +358,7 @@ class AcquisitionManager:
             return
         
         try:
-            from n42_exporter import generate_n42_xml
+            from formats.n42_exporter import generate_n42_xml
             
             # Run analysis using common enhanced pipeline
             result = self._analyze()
@@ -380,7 +380,7 @@ class AcquisitionManager:
             }
             
             # Save to checkpoint file
-            save_dir = os.path.join(os.path.dirname(__file__), 'data', 'acquisitions')
+            save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'acquisitions')
             os.makedirs(save_dir, exist_ok=True)
             filepath = os.path.join(save_dir, 'acquisition_in_progress.n42')
             
@@ -407,7 +407,7 @@ class AcquisitionManager:
             return
         
         try:
-            from n42_exporter import generate_n42_xml
+            from formats.n42_exporter import generate_n42_xml
             
             # Run analysis using common enhanced pipeline
             result = self._analyze()
@@ -429,7 +429,7 @@ class AcquisitionManager:
             }
             
             # Save to timestamped file
-            save_dir = os.path.join(os.path.dirname(__file__), 'data', 'acquisitions')
+            save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'acquisitions')
             os.makedirs(save_dir, exist_ok=True)
             
             # Finalize filename

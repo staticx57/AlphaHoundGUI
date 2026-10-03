@@ -1,6 +1,6 @@
 
 import pytest
-from isotope_database import identify_isotopes, identify_decay_chains
+from nuclides.isotope_database import identify_isotopes, identify_decay_chains
 
 def test_identify_isotopes_simple():
     # Cs-137 at 662 keV

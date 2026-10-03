@@ -29,7 +29,7 @@ except ImportError as e:
 
 # Import the authoritative isotope database and IAEA intensity data
 try:
-    from isotope_database import ISOTOPE_DATABASE_ADVANCED, get_gamma_intensity, HAS_IAEA_DATA, IAEA_DATA
+    from nuclides.isotope_database import ISOTOPE_DATABASE_ADVANCED, get_gamma_intensity, HAS_IAEA_DATA, IAEA_DATA
     HAS_ISOTOPE_DB = True
     logger.info(f"[ML] Loaded {len(ISOTOPE_DATABASE_ADVANCED)} isotopes from database")
 except ImportError:
@@ -42,7 +42,7 @@ except ImportError:
 
 # Import real spectrum loader for training data augmentation
 try:
-    from ml_data_loader import load_real_training_data
+    from ml.ml_data_loader import load_real_training_data
     HAS_REAL_DATA_LOADER = True
     logger.info("[ML] Real spectrum loader available")
 except ImportError:
@@ -461,7 +461,7 @@ class MLIdentifier:
         spectra, labels = [], []
         # Natural-series daughters never occur alone: they are only trained as part of the series
         # mixtures below (a thorium lens must not be explained as "just Pb-214").
-        from source_templates import SERIES_MEMBERS
+        from spectroscopy.source_templates import SERIES_MEMBERS
         series_daughters = {m for parent, members in SERIES_MEMBERS.items() for m in members if m != parent}
         for isotope in isotopes:
             if isotope in series_daughters:

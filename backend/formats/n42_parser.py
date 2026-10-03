@@ -153,7 +153,7 @@ def parse_n42(file_content: str):
         acquisition = {}
         info = find_element(spectrum, ['.//n42:AcquisitionInfo', './/AcquisitionInfo'], ns)
         if info is not None:
-            from n42_exporter import ACQUISITION_FIELDS
+            from formats.n42_exporter import ACQUISITION_FIELDS
             for key, (tag, numeric) in ACQUISITION_FIELDS.items():
                 text = find_text(info, [f'n42:{tag}', tag], ns)
                 if text is None or not text.strip():

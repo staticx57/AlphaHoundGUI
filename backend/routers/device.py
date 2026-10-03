@@ -5,10 +5,10 @@ from typing import Literal, Optional
 import asyncio
 from datetime import datetime, timezone, timedelta
 import re
-from alphahound_serial import device as alphahound_device
-from radiacode_driver import radiacode_device
-from device_calibration import energies_from_device_spectrum, SOURCE_DEVICE
-from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
+from devices.alphahound_serial import device as alphahound_device
+from devices.radiacode_driver import radiacode_device
+from devices.device_calibration import energies_from_device_spectrum, SOURCE_DEVICE
+from spectroscopy.analysis_utils import analyze_spectrum_peaks, sanitize_for_json
 
 router = APIRouter(prefix="/device", tags=["device"])
 
@@ -278,7 +278,7 @@ async def acquire_spectrum(request: SpectrumRequest):
 # Server-Side Acquisition Endpoints (Browser-Independent)
 # ============================================================
 
-from acquisition_manager import acquisition_manager
+from devices.acquisition_manager import acquisition_manager
 
 
 class ManagedAcquisitionRequest(BaseModel):

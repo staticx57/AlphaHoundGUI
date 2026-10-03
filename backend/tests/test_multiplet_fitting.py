@@ -1,5 +1,5 @@
 import numpy as np
-from fitting_engine import AdvancedFittingEngine
+from spectroscopy.fitting_engine import AdvancedFittingEngine
 
 def test_multiplet_fit():
     print("Testing AdvancedFittingEngine.fit_multiplet...")

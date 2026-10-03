@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from detector_efficiency import DETECTOR_DATABASE, interpolate_efficiency  # noqa: E402
+from spectroscopy.detector_efficiency import DETECTOR_DATABASE, interpolate_efficiency  # noqa: E402
 
 # (energy keV, emission probability per decay of that nuclide) for the strong lines of each series
 URANIUM_SERIES = {

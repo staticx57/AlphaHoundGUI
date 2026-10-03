@@ -5,7 +5,7 @@ on a letter of its header (the counts ended up on the energy axis, or the first 
 line as the first line was taken for the header."""
 import pytest
 
-from csv_parser import parse_csv_spectrum
+from formats.csv_parser import parse_csv_spectrum
 
 COUNTS = [57, 50, 61, 49, 55, 52, 58, 47, 53, 60, 48, 51]
 ENERGIES = [round(3.0 + 2.7 * i, 3) for i in range(len(COUNTS))]

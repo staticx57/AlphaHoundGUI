@@ -60,9 +60,9 @@ if _extra:
 
 def load(kind, path):
     """Parse a spectrum file into the pipeline's input dict (no analysis yet)."""
-    from csv_parser import parse_csv_spectrum
-    from n42_parser import parse_n42
-    from radiacode_xml_parser import parse_radiacode_xml
+    from formats.csv_parser import parse_csv_spectrum
+    from formats.n42_parser import parse_n42
+    from formats.radiacode_xml_parser import parse_radiacode_xml
 
     raw = path.read_bytes()
     if kind == "rcxml":
@@ -82,7 +82,7 @@ def load(kind, path):
 
 
 def analyze_case(case):
-    from analysis_utils import analyze_spectrum_peaks
+    from spectroscopy.analysis_utils import analyze_spectrum_peaks
     cid, device, kind, path, *_ = case
     with contextlib.redirect_stdout(io.StringIO()):
         parsed = load(kind, path)

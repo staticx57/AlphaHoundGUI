@@ -6,7 +6,7 @@ Contains default settings and filtering functions.
 # Import detector profiles from centralized validation module
 # This is the SINGLE SOURCE OF TRUTH for detector capabilities
 try:
-    from isotope_validation import DETECTOR_PROFILES, get_detector_min_energy
+    from nuclides.isotope_validation import DETECTOR_PROFILES, get_detector_min_energy
 except ImportError:
     # Fallback for backwards compatibility
     DETECTOR_PROFILES = {

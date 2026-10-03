@@ -3,7 +3,7 @@ from scipy.optimize import curve_fit
 from scipy.special import voigt_profile
 from dataclasses import dataclass
 
-from gauss_area import channel_width_kev
+from spectroscopy.gauss_area import channel_width_kev
 from typing import Tuple, List, Optional, Dict
 
 import logging

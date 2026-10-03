@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from fitting_engine import AdvancedFittingEngine
+from spectroscopy.fitting_engine import AdvancedFittingEngine
 
 def test_single_peak_fit():
     print("Testing AdvancedFittingEngine.fit_single_peak...")

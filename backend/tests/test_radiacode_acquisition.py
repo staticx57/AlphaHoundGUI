@@ -4,7 +4,7 @@ import math
 
 from fastapi.testclient import TestClient
 
-import acquisition_manager as am_module
+from devices import acquisition_manager as am_module
 from main import app
 from routers import device as device_router
 
@@ -75,7 +75,7 @@ def test_manager_polls_radiacode_and_labels_results(monkeypatch):
 
 def test_radiacode_identity_names_model_from_serial(monkeypatch):
     from routers import device_radiacode as rc
-    from source_templates import resolve_detector
+    from spectroscopy.source_templates import resolve_detector
     monkeypatch.setattr(rc.radiacode_device, "get_device_info", lambda: {"serial_number": "RC-110-001593"})
     ident = rc.radiacode_identity()
     assert ident["instrument_model"] == "RadiaCode-110"
@@ -119,9 +119,9 @@ def test_accumulated_spectrum_analyzed_when_user_confirms_single_source(monkeypa
 
 def test_n42_records_the_real_instrument_and_round_trips():
     """A RadiaCode acquisition was saved stamped 'RadView Detection / AlphaHound'."""
-    from n42_exporter import generate_n42_xml
-    from n42_parser import parse_n42
-    from source_templates import resolve_detector
+    from formats.n42_exporter import generate_n42_xml
+    from formats.n42_parser import parse_n42
+    from spectroscopy.source_templates import resolve_detector
     counts, energies, _ = _rc_spectrum()
     meta = {"live_time": 300.0, "source": "Radiacode Device (RadiaCode-110)",
             "instrument_model": "RadiaCode-110", "serial_number": "RC-110-001593"}
@@ -132,13 +132,13 @@ def test_n42_records_the_real_instrument_and_round_trips():
 
 
 def test_n42_model_from_source_string_only():
-    from n42_exporter import instrument_from_metadata
+    from formats.n42_exporter import instrument_from_metadata
     assert instrument_from_metadata({"source": "Radiacode Device (RadiaCode-103G)"})["model"] == "RadiaCode-103G"
     assert instrument_from_metadata({"source": "RadiaCode XML", "instrument_model": "RadiaCode-103"})["model"] == "RadiaCode-103"
 
 
 def test_n42_defaults_to_alphahound_when_unknown():
-    from n42_exporter import generate_n42_xml
+    from formats.n42_exporter import generate_n42_xml
     counts, energies, _ = _rc_spectrum()
     xml = generate_n42_xml({"counts": counts, "energies": energies, "metadata": {"live_time": 10.0}})
     assert "<Model>AlphaHound</Model>" in xml

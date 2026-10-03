@@ -19,7 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from ah_mock import install  # noqa: E402
 
-URL = "http://localhost:3200/"
+URL = os.environ.get("ALPHAHOUND_URL", "http://localhost:3200").rstrip("/") + "/"   # another port: ALPHAHOUND_URL
 SPEC = os.path.join(HERE, "..", "data", "test_spectra", "synthetic_cesium137.n42")
 results = []
 

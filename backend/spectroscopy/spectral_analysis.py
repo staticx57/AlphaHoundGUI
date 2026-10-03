@@ -1,6 +1,6 @@
 
 import numpy as np
-from gauss_area import channel_width_kev
+from spectroscopy.gauss_area import channel_width_kev
 import scipy.optimize
 from scipy.signal import find_peaks
 

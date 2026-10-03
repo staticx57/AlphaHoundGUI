@@ -40,7 +40,7 @@ def verdict(case, preds):
 
 def run(detector_for=None, use_energies=True):
     logging.disable(logging.CRITICAL)
-    from ml_analysis import get_ml_identifier
+    from ml.ml_analysis import get_ml_identifier
     rows, ok_n, n = [], 0, 0
     for case in rb.CASES:
         if not case[3].exists():

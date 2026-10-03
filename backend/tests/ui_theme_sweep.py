@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "ui_smoke_out", "sweep")
 os.makedirs(OUT, exist_ok=True)
-URL = "http://localhost:3200/"
+URL = os.environ.get("ALPHAHOUND_URL", "http://localhost:3200").rstrip("/") + "/"   # another port: ALPHAHOUND_URL
 SPEC = os.path.join(HERE, "..", "data", "test_spectra", "synthetic_cesium137.n42")
 
 JS_METRICS = r"""

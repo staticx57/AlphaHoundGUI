@@ -32,7 +32,7 @@ class RealSpectrumLoader:
                      Defaults to backend/data directory.
         """
         if base_dir is None:
-            base_dir = Path(__file__).parent / "data"
+            base_dir = Path(__file__).resolve().parent.parent / "data"
         self.base_dir = Path(base_dir)
         
     def load_n42_spectrum(self, filepath: Path) -> Tuple[Optional[np.ndarray], Optional[str], Dict]:

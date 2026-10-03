@@ -113,7 +113,7 @@ The ML model's accuracy depends on training data quality. Adding real detector s
 
 ### Adding Spectra to Training
 
-Edit `backend/ml_analysis.py`:
+Edit `backend/ml/ml_analysis.py`:
 
 ```python
 def load_real_training_data(self):
@@ -163,7 +163,7 @@ The isotope database directly affects detection accuracy. To add more reference 
 
 #### 2. Add to Database
 
-Edit `backend/isotope_database.py`:
+Edit `backend/nuclides/isotope_database.py`:
 
 ```python
 # Add more energy lines with intensity > ~5%
@@ -222,7 +222,7 @@ ISOTOPE_DATABASE_ADVANCED = {
 
 ### Algorithm Parameters
 
-The peak detection in `backend/peak_detection.py` can be tuned:
+The peak detection in `backend/spectroscopy/peak_detection.py` can be tuned:
 
 ```python
 def detect_peaks(energies, counts, prominence_factor=0.05, distance=10):
@@ -305,7 +305,7 @@ def get_tolerance(energy_keV, base_resolution=0.10):
 
 ### Training Parameters
 
-Edit `backend/ml_analysis.py`:
+Edit `backend/ml/ml_analysis.py`:
 
 ```python
 class MLIdentifier:

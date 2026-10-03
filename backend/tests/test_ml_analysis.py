@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-import ml_analysis as ml
+from ml import ml_analysis as ml
 
 
 def test_resample_preserves_total_and_moves_line_to_right_channel():

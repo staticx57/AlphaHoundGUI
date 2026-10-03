@@ -1,7 +1,7 @@
 
 import pytest
 import numpy as np
-from spectral_analysis import fit_gaussian, calibrate_energy, subtract_background, calculate_resolution
+from spectroscopy.spectral_analysis import fit_gaussian, calibrate_energy, subtract_background, calculate_resolution
 
 def test_subtract_background():
     source = [100, 200, 300]

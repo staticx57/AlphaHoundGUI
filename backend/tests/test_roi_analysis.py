@@ -16,10 +16,10 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from detector_efficiency import DETECTOR_DATABASE, interpolate_efficiency   # noqa: E402
-from isotope_roi_database import ISOTOPE_ROI_DATABASE                         # noqa: E402
+from spectroscopy.detector_efficiency import DETECTOR_DATABASE, interpolate_efficiency   # noqa: E402
+from spectroscopy.isotope_roi_database import ISOTOPE_ROI_DATABASE                         # noqa: E402
 from spectrum_synth import THORIUM_SERIES, URANIUM_SERIES, linear_axis, make_spectrum, series_spectrum   # noqa: E402
-from roi_analysis import ROIAnalyzer, analyze_roi, analyze_uranium_enrichment, channel_width_at  # noqa: E402
+from spectroscopy.roi_analysis import ROIAnalyzer, analyze_roi, analyze_uranium_enrichment, channel_width_at  # noqa: E402
 
 DEVICES = ["AlphaHound CsI(Tl)", "AlphaHound BGO", "Radiacode 103", "Radiacode 103G", "Radiacode 110"]
 TRUTH = 3000.0

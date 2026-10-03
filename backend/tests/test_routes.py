@@ -72,7 +72,7 @@ def test_decay_prediction_honors_engine_selection(client, engine):
 
 def test_decay_prediction_unavailable_engine_falls_back(client, monkeypatch):
     """An engine that is not available here must degrade to another one, and say so."""
-    import decay_engine
+    from nuclides import decay_engine
     monkeypatch.setattr(decay_engine.decay_engine_manager._engines["curie"], "available", False, raising=False)
     response = client.post("/analyze/decay-prediction", json={
         "isotope": "Cs-137",

@@ -5,7 +5,7 @@ import math
 import pytest
 from fastapi.testclient import TestClient
 
-from device_calibration import (
+from devices.device_calibration import (
     SOURCE_DEVICE, SOURCE_FALLBACK, energies_from_device_spectrum,
 )
 from main import app
@@ -75,7 +75,7 @@ def test_device_spectrum_endpoint_fallback_skips_identification(mocked_device, m
 
 from types import SimpleNamespace
 
-from radiacode_driver import (
+from devices.radiacode_driver import (
     CALIBRATION_DEVICE, CALIBRATION_FALLBACK, resolve_energy_calibration,
 )
 

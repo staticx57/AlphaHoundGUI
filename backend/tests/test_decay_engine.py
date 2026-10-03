@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-import bateman
-import decay_engine
-from decay_calculator import (CHAINS, GRAPH, DecayInputError, bateman_solution, format_half_life, get_decay_chain,
+from nuclides import bateman
+from nuclides import decay_engine
+from nuclides.decay_calculator import (CHAINS, GRAPH, DecayInputError, bateman_solution, format_half_life, get_decay_chain,
                               get_decay_constant, get_isotope_info, normalize_isotope, predict_decay_chain)
-from decay_engine import BaseDecayEngine, BuiltinEngine, DecayEngineManager, decay_engine_manager
+from nuclides.decay_engine import BaseDecayEngine, BuiltinEngine, DecayEngineManager, decay_engine_manager
 from main import app
 
 YEAR = 365.25 * 86400
@@ -435,7 +435,7 @@ def test_curie_works_from_any_worker_thread():
 def test_curie_gamma_lookups_work_from_worker_threads():
     """The same bug made get_isotope_gammas() quietly return nothing on some threads (it swallows exceptions)."""
     from concurrent.futures import ThreadPoolExecutor
-    import curie_integration
+    from nuclides import curie_integration
     with ThreadPoolExecutor(max_workers=4) as pool:
         lines = list(pool.map(lambda name: curie_integration.get_isotope_gammas(name), ["Cs-137", "Co-60", "Am-241", "Cs-137"] * 3))
     assert all(lines), "an empty list means the Curie lookup failed on some thread"

@@ -7,8 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
-from radiacode_xml_parser import is_radiacode_xml, parse_radiacode_xml
-from source_templates import TEMPLATES, fit_source_templates, resolve_detector
+from formats.radiacode_xml_parser import is_radiacode_xml, parse_radiacode_xml
+from spectroscopy.source_templates import TEMPLATES, fit_source_templates, resolve_detector
 
 RC = pathlib.Path(__file__).parent / "data" / "radiacode_fisicas"
 
@@ -52,7 +52,7 @@ def test_bad_radiacode_xml_reports_error():
 
 
 def test_csv_with_hash_metadata_lines_uses_energy_column_and_duration():
-    from csv_parser import parse_csv_spectrum
+    from formats.csv_parser import parse_csv_spectrum
     rows = "\n".join(f"{i},{3.0 + 2.4 * i:.2f},{10 + (i == 200) * 500}" for i in range(1024))
     raw = ("# RadiaCode-110 spectrum export\n# duration_s,1048\n# calib_a0,3.0\n"
            "channel,energy_keV,counts\n" + rows + "\n").encode()
@@ -120,7 +120,7 @@ def test_display_min_is_detector_threshold():
 
 def test_resolution_aware_search_finds_shoulder_peak_cwt_misses():
     """Broad 338 keV line on the shoulder of a strong 239 keV line (RadiaCode resolution)."""
-    from peak_detection_enhanced import detect_peaks_cwt, detect_peaks_resolution_aware, merge_candidates
+    from spectroscopy.peak_detection_enhanced import detect_peaks_cwt, detect_peaks_resolution_aware, merge_candidates
     ch = np.arange(1024)
     E = 5.56 + 2.364 * ch + 0.000378 * ch ** 2
     dE = np.gradient(E)
@@ -130,7 +130,7 @@ def test_resolution_aware_search_finds_shoulder_peak_cwt_misses():
     cont = 4.0e5 * np.exp(-E / 250.0) + 2000.0
     rng = np.random.default_rng(7)
     gross = rng.poisson(cont + line(238.6, 6.0e6) + line(338.3, 1.2e6) + line(583.2, 1.5e6)).astype(float)
-    from spectral_analysis import snip_background
+    from spectroscopy.spectral_analysis import snip_background
     net = gross - np.asarray(snip_background(gross, iterations=24))
     found = detect_peaks_resolution_aware(E, net, gross, 0.084)
     merged = merge_candidates(detect_peaks_cwt(E, net), found, 0.084)
@@ -139,7 +139,7 @@ def test_resolution_aware_search_finds_shoulder_peak_cwt_misses():
 
 
 def test_resolution_aware_search_rejects_single_channel_spikes():
-    from peak_detection_enhanced import detect_peaks_resolution_aware
+    from spectroscopy.peak_detection_enhanced import detect_peaks_resolution_aware
     E = 3.0 + 2.4 * np.arange(1024)
     gross = np.full(1024, 50.0)
     gross[[200, 400, 600]] = 400.0           # one-channel spikes, physically too narrow

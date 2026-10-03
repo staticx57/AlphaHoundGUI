@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from csv_parser import parse_csv_spectrum
+from formats.csv_parser import parse_csv_spectrum
 
 GOOD = b"energy,counts\n" + b"".join(f"{3 + 2.7 * i},{50 + i}\n".encode() for i in range(32))
 REJECTED = {

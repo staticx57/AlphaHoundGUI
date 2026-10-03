@@ -19,7 +19,7 @@ import asyncio
 import threading
 import time
 from contextlib import asynccontextmanager
-from alphahound_serial import device as alphahound_device
+from devices.alphahound_serial import device as alphahound_device
 from routers import device, analysis, isotopes, device_radiacode, nuclear, export
 
 logger = logging.getLogger(__name__)

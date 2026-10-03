@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 # This provides intensity weights for better peak matching
 
 try:
-    from iaea_parser import load_all_isotopes, get_isotope_gammas
+    from formats.iaea_parser import load_all_isotopes, get_isotope_gammas
     IAEA_DATA = load_all_isotopes(min_intensity=0.5, top_n=15)
     HAS_IAEA_DATA = True
     logger.info(f"[Isotope Database] Loaded IAEA data for {len(IAEA_DATA)} isotopes")
@@ -22,7 +22,7 @@ except Exception as e:
 # ========== CURIE X-RAY DATA INTEGRATION ==========
 # Provides characteristic X-ray emission lines for improved isotope ID
 try:
-    from curie_integration import (
+    from nuclides.curie_integration import (
         get_element_xrays as _get_element_xrays,
         get_all_xrays_for_isotope as _get_all_xrays_for_isotope,
         calculate_attenuation,
@@ -481,11 +481,11 @@ def _apply_contextual_rules(isotope_matches, chains_detected, peaks):
     and demote natural-series matches that are probably Compton continuum when a man-made source dominates.
     """
     try:
-        from isotope_validation import INCOMPATIBLE_WITH_NATURAL
+        from nuclides.isotope_validation import INCOMPATIBLE_WITH_NATURAL
     except ImportError:
         INCOMPATIBLE_WITH_NATURAL = ["Cs-137", "I-131", "F-18", "Tc-99m", "Co-60", "Sr-90", "Pu-239", "Np-237"]
     try:
-        from isotope_validation import MANMADE_SIGNATURES
+        from nuclides.isotope_validation import MANMADE_SIGNATURES
     except ImportError:
         MANMADE_SIGNATURES = {'Cs-137': [661.7], 'Co-60': [1173.2, 1332.5], 'Am-241': [59.5]}
 
@@ -567,7 +567,7 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
 
     # Physics-based validation rules (single source of truth: isotope_validation.py)
     try:
-        from isotope_validation import generate_validation_rules
+        from nuclides.isotope_validation import generate_validation_rules
         validation_rules = generate_validation_rules(database)
     except ImportError:
         validation_rules = {}

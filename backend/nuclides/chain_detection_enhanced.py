@@ -30,7 +30,7 @@ except ImportError:
 
 # Import IAEA data for gamma line lookup
 try:
-    from iaea_parser import IAEA_DATA, get_isotope_gammas
+    from formats.iaea_parser import IAEA_DATA, get_isotope_gammas
     HAS_IAEA_DATA = True
 except ImportError:
     IAEA_DATA = {}
@@ -341,7 +341,7 @@ def check_secular_equilibrium(detected_members: Dict[str, List[Dict]], parent: s
         return result
 
     try:
-        from roi_analysis import ROIAnalyzer
+        from spectroscopy.roi_analysis import ROIAnalyzer
         analyzer = ROIAnalyzer(detector or GENERIC_EFFICIENCY_DETECTOR)
         first = analyzer.analyze(list(energies), list(counts), pair[0], max(float(live_time_s or 0.0), 1.0))
         second = analyzer.analyze(list(energies), list(counts), pair[1], max(float(live_time_s or 0.0), 1.0))

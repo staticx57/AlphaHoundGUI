@@ -9,7 +9,7 @@ This provides more robust peak detection than simple prominence-based methods.
 """
 
 import numpy as np
-from gauss_area import channel_width_kev
+from spectroscopy.gauss_area import channel_width_kev
 from typing import List, Dict, Optional, Tuple
 from scipy.signal import find_peaks, find_peaks_cwt, savgol_filter
 from scipy.optimize import curve_fit
@@ -324,7 +324,7 @@ def detect_peaks_enhanced(
     # Only for high-count spectra where Compton continuum distorts peak finding
     if apply_snip and np.max(counts) > 10000:
         try:
-            from spectral_analysis import snip_background
+            from spectroscopy.spectral_analysis import snip_background
             background = snip_background(counts, iterations=snip_iterations)
             net_counts = np.maximum(counts - background, 0)
             logger.debug(f"[Peak] Applied SNIP: max counts {np.max(counts):.0f} -> net {np.max(net_counts):.0f}")
@@ -348,7 +348,7 @@ def detect_peaks_enhanced(
         try:
             net_for_search = counts_for_detection
             if net_for_search is counts:
-                from spectral_analysis import snip_background
+                from spectroscopy.spectral_analysis import snip_background
                 net_for_search = counts - np.asarray(snip_background(counts, iterations=snip_iterations))
             extra = detect_peaks_resolution_aware(energies, net_for_search, counts, resolution_662,
                                                   min_energy, max_energy)

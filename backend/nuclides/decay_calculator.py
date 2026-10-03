@@ -16,8 +16,8 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-import bateman
-from decay_data import DECAY_TABLE, SOURCE as TABLE_SOURCE
+from nuclides import bateman
+from nuclides.decay_data import DECAY_TABLE, SOURCE as TABLE_SOURCE
 
 try:  # optional: a wider nuclide list for isotope information
     import radioactivedecay as _rd

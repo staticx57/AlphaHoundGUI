@@ -14,8 +14,8 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from radiacode_driver import radiacode_device
-from analysis_utils import analyze_spectrum_peaks
+from devices.radiacode_driver import radiacode_device
+from spectroscopy.analysis_utils import analyze_spectrum_peaks
 
 import logging
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ async def scan_radiacode_ble(timeout: float = 5.0) -> List[Dict[str, Any]]:
     
     # Import and call the async scan function directly
     try:
-        from radiacode_bleak_transport import scan_for_radiacode_devices
+        from devices.radiacode_bleak_transport import scan_for_radiacode_devices
         devices = await scan_for_radiacode_devices(timeout=timeout)
         return devices
     except Exception as e:
@@ -454,7 +454,7 @@ def get_accumulated_spectrum(analyze: bool = False):
 
 
 def _display_min(metadata):
-    from source_templates import detector_min_energy
+    from spectroscopy.source_templates import detector_min_energy
     return detector_min_energy(metadata)
 
 

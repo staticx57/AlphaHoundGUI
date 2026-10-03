@@ -149,7 +149,7 @@ radiacode>=0.4.0
 ```
 
 #### 1.2 Create Radiacode Driver
-**File:** `backend/radiacode_driver.py`
+**File:** `backend/devices/radiacode_driver.py`
 
 ```python
 from radiacode import RadiaCode, RealTimeData
@@ -201,7 +201,7 @@ class RadiacodeDevice:
 ```
 
 #### 1.3 Add Detector Efficiency Database
-**File:** `backend/detector_efficiency.py` (modify)
+**File:** `backend/spectroscopy/detector_efficiency.py` (modify)
 
 ```python
 DETECTOR_DATABASE = {
@@ -244,7 +244,7 @@ DETECTOR_DATABASE = {
 
 ```python
 from fastapi import APIRouter, HTTPException
-from radiacode_driver import RadiacodeDevice
+from devices.radiacode_driver import RadiacodeDevice
 
 router = APIRouter(prefix="/radiacode", tags=["radiacode"])
 device = RadiacodeDevice()
@@ -299,7 +299,7 @@ Add device type toggle to connect panel:
 
 ### Phase 4: ML Tuning (1-2 hours)
 
-Update `ml_analysis.py` to support multiple detector profiles:
+Update `ml/ml_analysis.py` to support multiple detector profiles:
 
 ```python
 DETECTOR_PROFILES = {

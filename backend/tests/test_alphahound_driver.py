@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-import alphahound_serial as ah
+from devices import alphahound_serial as ah
 
 
 class FakeSerial:

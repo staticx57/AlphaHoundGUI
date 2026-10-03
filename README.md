@@ -181,7 +181,7 @@
 
   > [!WARNING]
   > **Windows: BLE Scan Finds No Devices**
-  > On Windows, `pyserial`'s USB-detection code imports `pywin32` (`pythoncom`/`win32com`) for COM-port lookup, which initializes COM in STA mode on the process. Bleak's WinRT backend refuses to run BLE callbacks on an STA thread unless told it's safe, so `/radiacode/scan-ble` silently returns `[]` and connect attempts fail with `Device ... was not found`, even though the device is in range. This is fixed in `backend/radiacode_bleak_transport.py` by calling `bleak.backends.winrt.util.allow_sta()` on import (Windows only). If you see this symptom on an older checkout, update to the latest commit.
+  > On Windows, `pyserial`'s USB-detection code imports `pywin32` (`pythoncom`/`win32com`) for COM-port lookup, which initializes COM in STA mode on the process. Bleak's WinRT backend refuses to run BLE callbacks on an STA thread unless told it's safe, so `/radiacode/scan-ble` silently returns `[]` and connect attempts fail with `Device ... was not found`, even though the device is in range. This is fixed in `backend/devices/radiacode_bleak_transport.py` by calling `bleak.backends.winrt.util.allow_sta()` on import (Windows only). If you see this symptom on an older checkout, update to the latest commit.
 - **Real-Time Dose Rate**: μSv/h streaming with live updates
 - **Spectrum Acquisition**: 1024-channel spectrum with device calibration
 - **Device Control**: Clear spectrum, reset dose accumulator
@@ -214,7 +214,7 @@
 - **MDA Calculation**: Minimum Detectable Activity based on Poisson statistics
 - **Gamma Dose Rate**: Estimates μSv/h from activity and distance (inverse square law)
 - **Auto-Population**: Acquisition time pulled from N42/CSV metadata
-- **How the net counts are found** (`roi_analysis.py`): a window of ±1 FWHM at the detector's resolution with a background band on each side of the peak; where a neighbouring line makes that unreliable, a Gaussian fit with a sloped baseline that gives each neighbour its own amplitude. The result says which method was used, and shows the limits (neighbouring lines it cannot separate, a one-sided background). Uncertainties include the counting error, the fit quality and, for a one-sided background, the continuum slope.
+- **How the net counts are found** (`spectroscopy/roi_analysis.py`): a window of ±1 FWHM at the detector's resolution with a background band on each side of the peak; where a neighbouring line makes that unreliable, a Gaussian fit with a sloped baseline that gives each neighbour its own amplitude. The result says which method was used, and shows the limits (neighbouring lines it cannot separate, a one-sided background). Uncertainties include the counting error, the fit quality and, for a one-sided background, the continuum slope.
 - **Lines of the same nuclide that blend into the peak** (Ac-228 911/965/969 keV, U-235 164/186/205 keV) are counted in the emission probability, so the activity is not overstated.
 - **Both device families**: the ROI panel preselects the detector profile from the loaded file (AlphaHound CsI(Tl) / BGO, Radiacode 103 / 103G / 110), including Radiacode's non-linear energy axis.
 - **Accuracy**: tested on spectra with known peak areas; a very strong, curved continuum can leave the fitted area 1-4 % low (up to ~8 % for BGO at 1 MeV), well inside the uncertainty of the generic efficiencies. Treat Bq values as indicative; calibrate with a known source for accurate ones.
@@ -238,7 +238,7 @@
   - **Cobalt-60 Source**: Age estimation and original source strength calculation
   - **Potassium-40**: Mass estimation, human body K-40 comparison (4400 Bq)
   - **Uranium Ore**: U-238 + U-235 detection
-- **Source-Specific Analysis**: Tailored calculations for each source type (see `source_analysis.py`)
+- **Source-Specific Analysis**: Tailored calculations for each source type (see `spectroscopy/source_analysis.py`)
 - **Diagnostic Feedback**: Explains why results are indeterminate ("Low SNR", "Overlapping peaks")
 - **📖 See [ROI Analysis Documentation](docs/MODULARITY_GUIDE.md#roi-analysis) for extension guide**
 
@@ -410,37 +410,54 @@ AlphaHoundGUI/
 │   │   ├── device.py                    # AlphaHound device control
 │   │   ├── device_radiacode.py          # Radiacode device control
 │   │   └── isotopes.py                  # Custom isotope CRUD
-│   ├── alphahound_serial.py             # AlphaHound serial communication driver
-│   ├── radiacode_driver.py              # Radiacode USB/BLE driver
-│   ├── radiacode_bleak_transport.py     # BLE transport layer for Radiacode
-│   ├── acquisition_manager.py           # Server-side acquisition timer & session management
-│   ├── isotope_database.py              # 100+ isotopes from IAEA/NNDC databases
-│   ├── peak_detection.py                # scipy-based peak finding
-│   ├── peak_detection_enhanced.py       # Advanced peak detection with multiplet support
-│   ├── ml_analysis.py                   # ML identification (scikit-learn)
-│   ├── ml_data_loader.py                # Real data augmentation for ML training
-│   ├── spectral_analysis.py             # SNIP, Poisson fitting, advanced analysis
-│   ├── spectrum_algebra.py              # Spectrum math operations with error propagation
-│   ├── chain_detection_enhanced.py      # Decay chain detection with secular equilibrium
-│   ├── confidence_scoring.py            # Contextual confidence scoring engine
-│   ├── n42_parser.py                    # N42/XML file parser (multi-namespace)
-│   ├── n42_exporter.py                  # N42/XML file exporter
-│   ├── n42_metadata_editor.py           # N42 metadata editing (UI integration)
-│   ├── csv_parser.py                    # CSV file parser with Becquerel support
-│   ├── chn_spe_parser.py                # Ortec CHN and Maestro SPE parser
-│   ├── specutils_parser.py              # SandiaSpecUtils wrapper for 100+ formats
-│   ├── detector_efficiency.py           # Detector calibration data (AlphaHound, Radiacode)
-│   ├── roi_analysis.py                  # Region-of-interest analysis & enrichment
-│   ├── source_analysis.py               # Source-specific analysis (lenses, dials, ore)
-│   ├── source_identification.py         # Auto-suggest source type from isotopes
-│   ├── activity_calculator.py           # Activity & dose calculations (Bq, μSv/h, MDA)
-│   ├── curie_integration.py             # Nuclear decay data via curie library
-│   ├── decay_calculator.py              # Bateman equation solver for decay chains
-│   ├── nuclear_data.py                  # Half-life and nuclear constants
-│   ├── iaea_parser.py                   # IAEA LiveChart gamma data parser
-│   ├── report_generator.py              # PDF export with matplotlib plots
-│   ├── fitting_engine.py                # Gaussian and Poisson peak fitting
-│   ├── multiplet_fitting.py             # Overlapping peak deconvolution
+│   ├── formats/                         # File formats: parsers, N42 export and editor, PDF report
+│   │   ├── n42_parser.py                # N42/XML file parser (multi-namespace)
+│   │   ├── csv_parser.py                # CSV file parser with Becquerel support
+│   │   ├── chn_spe_parser.py            # Ortec CHN and Maestro SPE parser
+│   │   ├── iaea_parser.py               # IAEA LiveChart gamma data parser
+│   │   ├── radiacode_xml_parser.py      # Radiacode XML spectrum parser
+│   │   ├── specutils_parser.py          # SandiaSpecUtils wrapper for 100+ formats
+│   │   ├── n42_exporter.py              # N42/XML file exporter
+│   │   ├── n42_metadata_editor.py       # N42 metadata editing (UI integration)
+│   │   └── report_generator.py          # PDF export with matplotlib plots
+│   ├── spectroscopy/                    # Peak detection and fitting, ROI analysis, source identification
+│   │   ├── peak_detection.py            # scipy-based peak finding
+│   │   ├── peak_detection_enhanced.py   # Advanced peak detection with multiplet support
+│   │   ├── fitting_engine.py            # Gaussian and Poisson peak fitting
+│   │   ├── multiplet_fitting.py         # Overlapping peak deconvolution
+│   │   ├── spectral_analysis.py         # SNIP, Poisson fitting, advanced analysis
+│   │   ├── analysis_utils.py            # Shared analysis pipeline for uploads and live devices
+│   │   ├── confidence_scoring.py        # Contextual confidence scoring engine
+│   │   ├── roi_analysis.py              # Region-of-interest analysis & enrichment
+│   │   ├── isotope_roi_database.py      # ROI isotope definitions
+│   │   ├── detector_efficiency.py       # Detector calibration data (AlphaHound, Radiacode)
+│   │   ├── gauss_area.py                # Gaussian peak area with per-channel width
+│   │   ├── activity_calculator.py       # Activity & dose calculations (Bq, μSv/h, MDA)
+│   │   ├── time_estimator.py            # Acquisition time needed for a target precision
+│   │   ├── spectrum_algebra.py          # Spectrum math operations with error propagation
+│   │   ├── source_analysis.py           # Source-specific analysis (lenses, dials, ore)
+│   │   ├── source_identification.py     # Auto-suggest source type from isotopes
+│   │   └── source_templates.py          # Full-spectrum fit of U-238 / Th-232 source templates
+│   ├── nuclides/                        # Isotope database, decay chains and decay engines
+│   │   ├── isotope_database.py          # 100+ isotopes from IAEA/NNDC databases
+│   │   ├── isotope_validation.py        # Validation rules, incompatible-isotope lists
+│   │   ├── nuclear_data.py              # Half-life and nuclear constants
+│   │   ├── chain_detection_enhanced.py  # Decay chain detection with secular equilibrium
+│   │   ├── decay_calculator.py          # Bateman equation solver for decay chains
+│   │   ├── decay_engine.py              # Decay engines (built-in solver, Curie) behind one API
+│   │   ├── decay_data.py                # Half-lives and branching fractions (ICRP 107 table)
+│   │   ├── bateman.py                   # Branching Bateman solver for decay chains
+│   │   ├── curie_compat.py              # Thread-safety shim for the Curie library
+│   │   └── curie_integration.py         # Nuclear decay data via curie library
+│   ├── devices/                         # AlphaHound and Radiacode drivers, acquisition manager
+│   │   ├── alphahound_serial.py         # AlphaHound serial communication driver
+│   │   ├── radiacode_driver.py          # Radiacode USB/BLE driver
+│   │   ├── radiacode_bleak_transport.py # BLE transport layer for Radiacode
+│   │   ├── device_calibration.py        # Energy calibration of the devices' own axes
+│   │   └── acquisition_manager.py       # Server-side acquisition timer & session management
+│   ├── ml/                              # AI identification (scikit-learn) and its training data
+│   │   ├── ml_analysis.py               # ML identification (scikit-learn)
+│   │   └── ml_data_loader.py            # Real data augmentation for ML training
 │   └── static/
 │       ├── index.html                   # Main HTML interface
 │       ├── style.css                    # Application styling with CSS variables

@@ -43,9 +43,9 @@ except ImportError as e:
     print("  Install with: pip install becquerel")
 
 # Import our current implementation
-from spectral_analysis import fit_gaussian, snip_background, subtract_background, calibrate_energy
-from isotope_database import identify_isotopes
-from n42_parser import parse_n42
+from spectroscopy.spectral_analysis import fit_gaussian, snip_background, subtract_background, calibrate_energy
+from nuclides.isotope_database import identify_isotopes
+from formats.n42_parser import parse_n42
 
 print()
 

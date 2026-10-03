@@ -241,7 +241,7 @@ def parse_spectrum_file(filepath):
     else:
         # Try SandiaSpecUtils for 100+ other formats
         try:
-            from specutils_parser import parse_with_specutils, is_specutils_available
+            from formats.specutils_parser import parse_with_specutils, is_specutils_available
             if is_specutils_available():
                 result = parse_with_specutils(filepath)
                 # Normalize output format

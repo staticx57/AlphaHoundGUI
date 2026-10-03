@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
-from alphahound_serial import device as dev
+from devices.alphahound_serial import device as dev
 
 CPS = {"gamma": 5.0, "beta": 1.5, "alpha": 0.5, "dose": 12.5, "total": 7.0, "age_s": 0.3}
 
@@ -241,7 +241,7 @@ def test_health_endpoint_and_user_disconnect_flag(client, monkeypatch):
 
 
 def test_driver_remembers_a_deliberate_disconnect_until_the_next_connect(monkeypatch):
-    import alphahound_serial as ah
+    from devices import alphahound_serial as ah
 
     class Port:
         is_open = True

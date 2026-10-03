@@ -89,3 +89,15 @@ def test_user_acquisitions_are_not_tracked():
     """backend/data/acquisitions/ is where the app saves the user's own measurements; fixtures live in tests/data/."""
     saved = sorted(f for f in tracked_files() if f.startswith("backend/data/acquisitions/"))
     assert not saved, "user data in git (use backend/tests/data/real_spectra for fixtures): " + ", ".join(saved[:5])
+
+
+BACKEND_TOP_LEVEL_MODULES = {"main.py", "core.py"}
+
+
+def test_backend_modules_live_in_packages():
+    """backend/ holds the entry point and shared settings; everything else belongs in formats/, spectroscopy/, nuclides/,
+    devices/, ml/ or routers/ (47 modules once sat side by side)."""
+    loose = sorted(f for f in tracked_files()
+                   if f.startswith("backend/") and f.count("/") == 1 and f.endswith(".py")
+                   and f.split("/")[1] not in BACKEND_TOP_LEVEL_MODULES)
+    assert not loose, "put these in a package: " + ", ".join(loose)

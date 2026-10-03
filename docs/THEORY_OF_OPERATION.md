@@ -29,21 +29,21 @@ flowchart TB
         end
         
         subgraph Engines["Calculation Engines"]
-            DecayEng[decay_calculator.py]
-            ActCalc[activity_calculator.py]
-            PeakFit[peak_detection.py]
-            MLID[ml_analysis.py]
+            DecayEng[nuclides/decay_calculator.py]
+            ActCalc[spectroscopy/activity_calculator.py]
+            PeakFit[spectroscopy/peak_detection.py]
+            MLID[ml/ml_analysis.py]
         end
         
         subgraph Parsers["Data Ingestion"]
-            N42[n42_parser.py]
-            CSV[csv_parser.py]
-            UniLoad[specutils_parser.py]
+            N42[formats/n42_parser.py]
+            CSV[formats/csv_parser.py]
+            UniLoad[formats/specutils_parser.py]
         end
     end
     
     subgraph Hardware["Hardware Layer"]
-        Driver[alphahound_serial.py]
+        Driver[devices/alphahound_serial.py]
         Device[AlphaHound Device]
     end
     
@@ -72,16 +72,16 @@ graph LR
     Req[Client Request] --> Main[main.py / FastAPI]
     
     subgraph DeviceRoutes["/device (routers/device.py)"]
-        D_Conn["/connect"] --> Serial[alphahound_serial.py]
+        D_Conn["/connect"] --> Serial[devices/alphahound_serial.py]
         D_Spec["/spectrum"] --> Serial
         D_Dose["/dose/stream"] --> WS[WebSocket]
     end
     
     subgraph AnalysisRoutes["/analyze (routers/analysis.py)"]
         A_Up["/upload"] --> ParserLogic{Parser Selector}
-        A_ROI["/roi"] --> ActCalc[activity_calculator.py]
-        A_Decay["/decay-prediction"] --> DecayCalc[decay_calculator.py]
-        A_ML["/ml-identify"] --> ML[ml_analysis.py]
+        A_ROI["/roi"] --> ActCalc[spectroscopy/activity_calculator.py]
+        A_Decay["/decay-prediction"] --> DecayCalc[nuclides/decay_calculator.py]
+        A_ML["/ml-identify"] --> ML[ml/ml_analysis.py]
     end
     
     subgraph ParserLogic["Universal Loader Strategy"]
@@ -102,9 +102,9 @@ graph LR
 | **Device Router** | `routers/device.py` | Serial port discovery, device connection, spectrum acquisition |
 | **Analysis Router** | `routers/analysis.py` | File upload, peak fitting, ML identification, ROI analysis |
 | **Isotopes Router** | `routers/isotopes.py` | Custom isotope management (CRUD operations) |
-| **Peak Detection** | `peak_detection.py` | Scipy-based peak finding algorithm |
-| **Isotope Database** | `isotope_database.py` | 100+ isotopes with gamma energies from IAEA/NNDC |
-| **ML Analysis** | `ml_analysis.py` | scikit-learn MLP training (synthetic spectra) and prediction |
+| **Peak Detection** | `spectroscopy/peak_detection.py` | Scipy-based peak finding algorithm |
+| **Isotope Database** | `nuclides/isotope_database.py` | 100+ isotopes with gamma energies from IAEA/NNDC |
+| **ML Analysis** | `ml/ml_analysis.py` | scikit-learn MLP training (synthetic spectra) and prediction |
 | **Core Settings** | `core.py` | Default thresholds and confidence filtering logic |
 
 ---
@@ -226,7 +226,7 @@ The peak detection uses `scipy.signal.find_peaks` with adaptive thresholds based
 ### Algorithm Details
 
 ```python
-# From peak_detection.py
+# From spectroscopy/peak_detection.py
 def detect_peaks(energies, counts, prominence_factor=0.05, distance=10):
     # 1. Calculate adaptive prominence threshold
     max_count = np.max(counts)
@@ -524,7 +524,7 @@ UPLOAD_SETTINGS = {
 For files not natively supported (e.g., `.spc`, `.pcf`, `.dat`), the system wraps `SandiaSpecUtils`:
 
 ```python
-# specutils_parser.py
+# formats/specutils_parser.py
 def parse_generic_file(file_path):
     # 1. Detect format using SpecUtils
     spec = SpecUtils.Spectrum(file_path)

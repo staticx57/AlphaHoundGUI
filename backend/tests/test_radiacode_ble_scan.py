@@ -17,7 +17,7 @@ pytest.importorskip("bleak")
 from bleak.backends.device import BLEDevice          # noqa: E402
 from bleak.backends.scanner import AdvertisementData  # noqa: E402
 
-import radiacode_bleak_transport as transport         # noqa: E402
+from devices import radiacode_bleak_transport as transport         # noqa: E402
 
 
 def device(address, name):

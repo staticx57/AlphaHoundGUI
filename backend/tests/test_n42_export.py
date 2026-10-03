@@ -16,8 +16,8 @@ import os
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from n42_exporter import generate_n42_xml, validate_n42_structure
-from n42_parser import parse_n42
+from formats.n42_exporter import generate_n42_xml, validate_n42_structure
+from formats.n42_parser import parse_n42
 
 
 class TestN42Export:
@@ -294,7 +294,7 @@ def test_channel_statistics_round_trip_through_n42():
 
 def test_alphahound_instrument_names_its_manufacturer():
     """An AlphaHound named in the metadata is a RadView Detection instrument, not 'Unknown'."""
-    from n42_exporter import instrument_from_metadata
+    from formats.n42_exporter import instrument_from_metadata
     info = instrument_from_metadata({"instrument_model": "AlphaHound"})
     assert info["manufacturer"] == "RadView Detection" and info["model"] == "AlphaHound"
     assert instrument_from_metadata({"instrument_model": "AlphaHound AB+G", "instrument_manufacturer": "Acme"})["manufacturer"] == "Acme"

@@ -1,7 +1,7 @@
 """Exposure during an acquisition = integrated instrument dose rate (valid for mixed sources)."""
 import pytest
 
-import acquisition_manager as am
+from devices import acquisition_manager as am
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def test_alphahound_dose_rate_converted_from_urem(monkeypatch):
 
 
 def test_radiacode_dose_rate_uses_newest_reading_and_caches(monkeypatch):
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Rt:
         def __init__(self, v):
@@ -81,7 +81,7 @@ def test_radiacode_dose_rate_uses_newest_reading_and_caches(monkeypatch):
 
 
 def test_radiacode_cumulative_dose_from_raredata(monkeypatch):
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Rt:
         def __init__(self, v):
@@ -111,7 +111,7 @@ def test_radiacode_cumulative_dose_from_raredata(monkeypatch):
 
 def test_dose_counter_self_check(monkeypatch):
     """dose / duration should reproduce the mean dose rate when the x10,000 scale is right."""
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Rt:
         def __init__(self, v):
@@ -144,7 +144,7 @@ def test_dose_counter_self_check(monkeypatch):
 ])
 def test_display_direction_maps_to_device_enum(value, expected):
     """Orientation never worked: it imported DisplayDirection from the wrong module/members."""
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
     sent = {}
 
     class Dev:
@@ -158,7 +158,7 @@ def test_display_direction_maps_to_device_enum(value, expected):
 
 
 def test_display_direction_rejects_unknown():
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Dev:
         def set_display_direction(self, d):
@@ -170,7 +170,7 @@ def test_display_direction_rejects_unknown():
 
 
 def test_dose_register_preferred_and_converted_from_microroentgen(monkeypatch):
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Dev:
         def _batch_read_vsfrs(self, regs):
@@ -189,7 +189,7 @@ def test_dose_register_preferred_and_converted_from_microroentgen(monkeypatch):
 
 
 def test_dose_register_failure_falls_back_to_raredata():
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Dev:
         def _batch_read_vsfrs(self, regs):
@@ -204,7 +204,7 @@ def test_dose_register_failure_falls_back_to_raredata():
 
 
 def test_session_dose_integrates_new_readings_and_resets(monkeypatch):
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Rt:
         def __init__(self, v):
@@ -275,7 +275,7 @@ def test_radiacode_adapter_exposes_device_duration(monkeypatch):
 
 
 def test_radiacode_logs_device_events_and_flags_alarms(monkeypatch):
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class Ev:
         def __init__(self, name, param=0):
@@ -301,7 +301,7 @@ def test_radiacode_logs_device_events_and_flags_alarms(monkeypatch):
 
 
 def test_radiacode_alarm_limits_read_register_by_register(monkeypatch):
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class V:
         CR_LEV1_cp10s, CR_LEV2_cp10s, DR_LEV1_uR_h, DR_LEV2_uR_h = 1, 2, 3, 4
@@ -328,7 +328,7 @@ def test_radiacode_alarm_limits_read_register_by_register(monkeypatch):
 
 def test_dsur_read_failure_warns_once_per_connection(monkeypatch, caplog):
     import logging
-    import radiacode_driver as rd
+    from devices import radiacode_driver as rd
 
     class V:
         DS_uR = 1

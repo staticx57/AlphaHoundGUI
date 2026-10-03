@@ -22,7 +22,7 @@ Key spectral signatures:
 
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
-from roi_analysis import ROIAnalyzer
+from spectroscopy.roi_analysis import ROIAnalyzer
 
 
 @dataclass

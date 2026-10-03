@@ -329,7 +329,7 @@ def create_n42_from_template(
     Returns:
         N42 XML string
     """
-    from n42_exporter import generate_n42_xml, ACQUISITION_FIELDS
+    from formats.n42_exporter import generate_n42_xml, ACQUISITION_FIELDS
     
     metadata = metadata or {}
     

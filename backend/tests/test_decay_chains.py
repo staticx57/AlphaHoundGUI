@@ -9,8 +9,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import chain_detection_enhanced as chains   # noqa: E402
-from analysis_utils import analyze_spectrum_peaks   # noqa: E402
+from nuclides import chain_detection_enhanced as chains   # noqa: E402
+from spectroscopy.analysis_utils import analyze_spectrum_peaks   # noqa: E402
 from spectrum_synth import THORIUM_SERIES, URANIUM_SERIES, linear_axis, series_spectrum   # noqa: E402
 
 DEVICES = ["AlphaHound CsI(Tl)", "Radiacode 103", "Radiacode 110"]

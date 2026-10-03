@@ -1,6 +1,6 @@
 # AI Identification (ML) Guide
 
-`backend/ml_analysis.py` — a small neural network (scikit-learn `MLPClassifier`) that classifies a gamma
+`backend/ml/ml_analysis.py` — a small neural network (scikit-learn `MLPClassifier`) that classifies a gamma
 spectrum. It is a second opinion next to the line-matching / decay-chain / spectrum-fit analysis, not a
 replacement. PyRIID was evaluated and dropped (its numpy 1.26 / scipy 1.13 / TensorFlow 2.16 pins cannot
 coexist with this app, and it only supplied an MLP; the spectrum synthesis was already this project's code).
@@ -8,7 +8,7 @@ coexist with this app, and it only supplied an MLP; the spectrum synthesis was a
 ## How it works
 
 1. **Training (first use, ~7 s, cached in memory).** Spectra are synthesised from the isotope database
-   (`isotope_database.py`, IAEA/NNDC lines with intensities). Each training spectrum has:
+   (`nuclides/isotope_database.py`, IAEA/NNDC lines with intensities). Each training spectrum has:
    one gain (±3 %) and offset (±8 keV) error for the whole spectrum, a resolution scale, a log-uniform
    total (5 k – 2 M counts), Gaussian photopeaks with energy-dependent FWHM, efficiency falling with
    energy, a Compton shelf, environmental background (K-40, Bi-214, Tl-208, ...) and Poisson noise.

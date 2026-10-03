@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## [Session 2026-10-03 evening] - Technical debt and repository sprawl
+
+### Changed - layout
+- **Backend modules are in packages.** `formats/`, `spectroscopy/`, `nuclides/`, `devices/`, `ml/`; `backend/` keeps `main.py` and `core.py`. Imports read `from spectroscopy.roi_analysis import ...`. Output of every analysis path is unchanged (8 snapshots, byte for byte); tests, tools and the guides' code samples use the new paths.
+- **Test fixtures and user data are separate.** The real spectra the tests use are in `backend/tests/data/real_spectra/` (and two real CSVs in `real_csv/`); `backend/data/acquisitions/`, where the app saves the user's own measurements, is ignored and no longer tracked.
+- **Root cleaned up.** The seven guides and notes moved to `docs/` (links fixed), 19 unreferenced images (15 MB) and dead files moved to `TO_BE_DELETED/` (delete with `git rm -r TO_BE_DELETED`); the upstream GUI is kept in `legacy/` for its licence.
+- `tests/test_repo_layout.py` fails on new root files, backup/temp files, tracked files over 800 KB, unreferenced images, broken document links, tracked user acquisitions and loose backend modules.
+
+### Fixed
+- CSV: a one-column file read as calibrated with the counts on the energy axis; a headerless one lost its first value; a `Calibration:` first line made the file fail to load; a rejected upload left a temporary file behind.
+- A scipy divide-by-zero warning on sparse spectra (CWT peak detection), without changing any peak.
+- Untrusted text (Bluetooth device names, server errors, custom isotope names) is HTML-escaped before it reaches `innerHTML`.
+
+### Refactored (outputs proved identical against snapshots taken first)
+`analyze_uranium_ratio`, `ROIAnalyzer.analyze`, `identify_isotopes`, `identify_decay_chains`, `identify_source_type`, `analyze_spectrum_peaks`, `parse_csv_spectrum` and `MLIdentifier.lazy_train` were split into small functions; `main.js` lost its toast and decay-tool code to `toast.js` and `decay_tool.js`.
+
+### Note
+The browser smoke test's peak-count checks pinned 6 peaks for a synthetic Cs-137 file whose extra peaks are noise; the count changed to 5 in the ROI review commit. The checks now compare the summary card with the table instead of a fixed number.
+
 ## [Session 2026-10-03 PM] - ROI and decay-chain review, library audit
 
 Everything below was measured before it was changed: synthetic spectra with known peak areas and activities on every detector profile (AlphaHound CsI(Tl) and BGO, Radiacode 103 / 103G / 110), Monte Carlo runs for bias and pull, and probes on the labelled real spectra of both device families (`tests/real_benchmark.py` cases). 607 backend tests pass on the installed libraries and on the newest releases of every dependency; the headless-browser smoke test passes 160/160.

@@ -70,7 +70,7 @@ except ImportError:
 
 # Try to import bleak-based transport for cross-platform BLE
 try:
-    from radiacode_bleak_transport import BleakBluetooth, scan_radiacode_sync, HAS_BLEAK, DeviceNotFound as BleakDeviceNotFound
+    from devices.radiacode_bleak_transport import BleakBluetooth, scan_radiacode_sync, HAS_BLEAK, DeviceNotFound as BleakDeviceNotFound
 except ImportError:
     HAS_BLEAK = False
     BleakBluetooth = None

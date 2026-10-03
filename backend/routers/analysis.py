@@ -4,30 +4,30 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Response
 from pydantic import BaseModel, field_validator, Field
 from typing import List, Optional, Dict
 import math
-from n42_parser import parse_n42
-from radiacode_xml_parser import is_radiacode_xml, parse_radiacode_xml
-from csv_parser import parse_csv_spectrum
-from peak_detection import detect_peaks
-from isotope_database import identify_isotopes, identify_decay_chains
+from formats.n42_parser import parse_n42
+from formats.radiacode_xml_parser import is_radiacode_xml, parse_radiacode_xml
+from formats.csv_parser import parse_csv_spectrum
+from spectroscopy.peak_detection import detect_peaks
+from nuclides.isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
-from spectral_analysis import fit_gaussian, calibrate_energy, subtract_background
-from chn_spe_parser import parse_chn_file, parse_spe_file
-from detector_efficiency import get_detector_names, calculate_mda, DETECTOR_DATABASE
-from decay_calculator import predict_decay_chain
+from spectroscopy.spectral_analysis import fit_gaussian, calibrate_energy, subtract_background
+from formats.chn_spe_parser import parse_chn_file, parse_spe_file
+from spectroscopy.detector_efficiency import get_detector_names, calculate_mda, DETECTOR_DATABASE
+from nuclides.decay_calculator import predict_decay_chain
 
 # Enhanced analysis modules (with fallback)
 try:
-    from peak_detection_enhanced import detect_peaks_enhanced
-    from chain_detection_enhanced import identify_decay_chains_enhanced
-    from confidence_scoring import enhance_isotope_identifications
-    from multiplet_fitting import enhance_peaks_with_multiplet_fitting
+    from spectroscopy.peak_detection_enhanced import detect_peaks_enhanced
+    from nuclides.chain_detection_enhanced import identify_decay_chains_enhanced
+    from spectroscopy.confidence_scoring import enhance_isotope_identifications
+    from spectroscopy.multiplet_fitting import enhance_peaks_with_multiplet_fitting
     HAS_ENHANCED_ANALYSIS = True
     logger.info("[Analysis] Enhanced analysis modules loaded")
 except ImportError as e:
     HAS_ENHANCED_ANALYSIS = False
     logger.warning(f"[Analysis] Enhanced modules not available: {e}")
 
-from analysis_utils import analyze_spectrum_peaks, sanitize_for_json
+from spectroscopy.analysis_utils import analyze_spectrum_peaks, sanitize_for_json
 
 
 # Constants for input validation
@@ -252,7 +252,7 @@ async def upload_file(file: UploadFile = File(...)):
     else:
         # Try generic parser (SandiaSpecUtils) for all other allowed extensions
         try:
-            from specutils_parser import parse_spectrum_generic
+            from formats.specutils_parser import parse_spectrum_generic
             import tempfile
             import os
             
@@ -350,7 +350,7 @@ def ml_identify(request: MLIdentifyRequest):
     """
     try:
         # Lazy import: the model is trained on first use
-        from ml_analysis import get_ml_identifier
+        from ml.ml_analysis import get_ml_identifier
         
         ml = get_ml_identifier()
         if ml is None:
@@ -437,7 +437,7 @@ def snip_background_endpoint(request: dict):
         isotopes: (optional) Re-identified isotopes
     """
     try:
-        from spectral_analysis import subtract_background, snip_background
+        from spectroscopy.spectral_analysis import subtract_background, snip_background
         
         counts = request.get('counts', [])
         iterations = int(request.get('iterations', 24))
@@ -502,9 +502,9 @@ def analyze_roi_endpoint(request: ROIAnalysisRequest):
     Designed for AlphaHound AB+G detectors.
     """
     try:
-        from roi_analysis import analyze_roi
-        from isotope_roi_database import get_roi_isotope_names
-        from source_analysis import get_enhanced_analysis
+        from spectroscopy.roi_analysis import analyze_roi
+        from spectroscopy.isotope_roi_database import get_roi_isotope_names
+        from spectroscopy.source_analysis import get_enhanced_analysis
         
         # Validate isotope exists
         valid_isotopes = get_roi_isotope_names()
@@ -558,7 +558,7 @@ def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
     Designed for AlphaHound AB+G detectors.
     """
     try:
-        from roi_analysis import analyze_uranium_enrichment
+        from spectroscopy.roi_analysis import analyze_uranium_enrichment
         
         # Check if source_type implies uranium context
         source_type = "auto"
@@ -585,7 +585,7 @@ def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
 def get_roi_isotopes():
     """Get list of available isotopes for ROI analysis."""
     try:
-        from isotope_roi_database import get_roi_isotope_names, ISOTOPE_ROI_DATABASE
+        from spectroscopy.isotope_roi_database import get_roi_isotope_names, ISOTOPE_ROI_DATABASE
         
         isotopes = []
         for name in get_roi_isotope_names():
@@ -618,7 +618,7 @@ def identify_source_endpoint(request: UraniumRatioRequest):
     If no match is found, returns the raw isotope detection data.
     """
     try:
-        from source_identification import identify_source_type
+        from spectroscopy.source_identification import identify_source_type
         
         result = identify_source_type(
             energies=request.energies,
@@ -642,7 +642,7 @@ def identify_source_endpoint(request: UraniumRatioRequest):
 def get_source_types():
     """Get list of known source types for the dropdown selector."""
     try:
-        from source_identification import SOURCE_SIGNATURES
+        from spectroscopy.source_identification import SOURCE_SIGNATURES
         
         source_types = [
             {
@@ -676,7 +676,7 @@ def get_source_types():
 def get_detectors():
     """Get list of available AlphaHound AB+G detector configurations."""
     try:
-        from detector_efficiency import DETECTOR_DATABASE
+        from spectroscopy.detector_efficiency import DETECTOR_DATABASE
         
         detectors = []
         for name, data in DETECTOR_DATABASE.items():
@@ -712,7 +712,7 @@ def export_model_endpoint(request: dict):
         File download or error message
     """
     try:
-        from ml_analysis import get_ml_identifier
+        from ml.ml_analysis import get_ml_identifier
         import tempfile
         import os
         
@@ -768,7 +768,7 @@ def spectrum_algebra_endpoint(request: dict):
         options: Operation-specific options
     """
     try:
-        from spectrum_algebra import add_spectra, subtract_spectra, normalize_spectrum, compare_spectra
+        from spectroscopy.spectrum_algebra import add_spectra, subtract_spectra, normalize_spectrum, compare_spectra
         
         operation = request.get('operation', 'add')
         spectra = request.get('spectra', [])
@@ -830,7 +830,7 @@ def anomaly_detection_endpoint(request: dict):
         Anomaly score and flags
     """
     try:
-        from ml_analysis import get_ml_identifier
+        from ml.ml_analysis import get_ml_identifier
         import numpy as np
         
         counts = request.get('counts', [])
@@ -944,7 +944,7 @@ def analyze_multiplet_endpoint(request: dict):
         - r_squared for overall fit quality
     """
     try:
-        from fitting_engine import AdvancedFittingEngine
+        from spectroscopy.fitting_engine import AdvancedFittingEngine
         import numpy as np
         
         energies = request.get('energies', [])
@@ -1016,7 +1016,7 @@ class TimeEstimatorRequest(BaseModel):
 def estimate_acquisition_time_endpoint(request: TimeEstimatorRequest):
     """Estimate acquisition time from spectrum counts."""
     try:
-        from time_estimator import estimate_time_from_spectrum
+        from spectroscopy.time_estimator import estimate_time_from_spectrum
         result = estimate_time_from_spectrum(
             counts=[float(c) for c in request.counts],
             source_type=request.source_type

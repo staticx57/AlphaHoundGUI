@@ -37,7 +37,7 @@ def get_decay_engines_endpoint():
     Get available radioactive decay calculation engines and current system defaults.
     """
     try:
-        from decay_engine import decay_engine_manager
+        from nuclides.decay_engine import decay_engine_manager
         return {
             "engines": decay_engine_manager.list_engines(),
             "default": decay_engine_manager.get_default_engine_name(),
@@ -55,7 +55,7 @@ def predict_decay_endpoint(request: DecayPredictionRequest):
     Input that cannot be computed (unknown isotope, a non-positive duration or activity, a stable parent) is a 400.
     """
     try:
-        from decay_engine import decay_engine_manager
+        from nuclides.decay_engine import decay_engine_manager
         
         target_isotope = request.isotope or request.parent_isotope or "Cs-137"
         
@@ -92,7 +92,7 @@ def get_isotope_info_endpoint(request: IsotopeInfoRequest):
     Returns half-life, decay mode, daughter isotope, and decay chain membership.
     """
     try:
-        from decay_calculator import get_isotope_info, get_decay_chain
+        from nuclides.decay_calculator import get_isotope_info, get_decay_chain
         
         info = get_isotope_info(request.isotope)
         info['decay_chain'] = get_decay_chain(request.isotope)
@@ -114,7 +114,7 @@ def get_gamma_constants():
     Returns dictionary of isotope names to gamma constants (μSv·m²/h per MBq).
     """
     try:
-        from activity_calculator import GAMMA_DOSE_CONSTANTS as GAMMA_CONSTANTS
+        from spectroscopy.activity_calculator import GAMMA_DOSE_CONSTANTS as GAMMA_CONSTANTS
         
         return {
             "constants": GAMMA_CONSTANTS,
@@ -144,7 +144,7 @@ def search_gamma_line_endpoint(
         List of matching gamma lines sorted by proximity
     """
     try:
-        from nuclear_data import search_gamma_line
+        from nuclides.nuclear_data import search_gamma_line
         
         results = search_gamma_line(
             energy=energy,
@@ -180,7 +180,7 @@ def search_xray_line_endpoint(
         List of matching X-ray lines sorted by proximity
     """
     try:
-        from nuclear_data import search_xray_line
+        from nuclides.nuclear_data import search_xray_line
         
         results = search_xray_line(energy=energy, delta=delta)
         
@@ -211,7 +211,7 @@ def decay_chain_spectrum_endpoint(
         Complete decay chain with all gamma-emitting daughters
     """
     try:
-        from nuclear_data import decay_chain_spectrum
+        from nuclides.nuclear_data import decay_chain_spectrum
         
         result = decay_chain_spectrum(
             parent=parent,
@@ -240,7 +240,7 @@ def get_isotope_lines_endpoint(
         List of gamma lines for that isotope, sorted by intensity
     """
     try:
-        from nuclear_data import get_isotope_gamma_lines
+        from nuclides.nuclear_data import get_isotope_gamma_lines
         
         results = get_isotope_gamma_lines(
             isotope=isotope,
@@ -261,7 +261,7 @@ def get_isotope_lines_endpoint(
 def calculate_dose_rate_endpoint(request: DoseRateRequest):
     """Calculate gamma dose rate at specified distance."""
     try:
-        from activity_calculator import calculate_dose_rate
+        from spectroscopy.activity_calculator import calculate_dose_rate
         result = calculate_dose_rate(
             activity_bq=request.activity_bq,
             isotope=request.isotope,

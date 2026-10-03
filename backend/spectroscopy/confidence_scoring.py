@@ -17,7 +17,7 @@ import math
 
 # Import activity estimation
 try:
-    from detector_efficiency import estimate_activity
+    from spectroscopy.detector_efficiency import estimate_activity
     HAS_ACTIVITY_ESTIMATION = True
 except ImportError:
     HAS_ACTIVITY_ESTIMATION = False

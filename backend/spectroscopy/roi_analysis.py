@@ -18,9 +18,9 @@ from typing import Dict, List, Sequence, Tuple, Optional
 import numpy as np
 from dataclasses import dataclass
 
-from detector_efficiency import get_detector, interpolate_efficiency
-from isotope_roi_database import get_roi_isotope, get_roi_window, get_background_region
-from activity_calculator import calculate_activity_bq, bq_to_uci, calculate_mda_bq
+from spectroscopy.detector_efficiency import get_detector, interpolate_efficiency
+from spectroscopy.isotope_roi_database import get_roi_isotope, get_roi_window, get_background_region
+from spectroscopy.activity_calculator import calculate_activity_bq, bq_to_uci, calculate_mda_bq
 
 import logging
 logger = logging.getLogger(__name__)
@@ -419,7 +419,7 @@ def _validated_spectrum(energies, counts) -> Tuple[np.ndarray, np.ndarray]:
 def _source_validation(isotope_name: str, source_type: str) -> Tuple[Optional[str], Optional[str]]:
     """(note, warning): whether the isotope fits the selected source type's profile; both None for 'auto' or unknown types."""
     try:
-        from source_identification import get_source_signature
+        from spectroscopy.source_identification import get_source_signature
         signature = get_source_signature(source_type) if source_type and source_type not in ["auto", "unknown"] else None
     except ImportError:
         signature = None

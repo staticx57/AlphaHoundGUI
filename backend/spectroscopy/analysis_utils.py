@@ -5,17 +5,17 @@ Unifies the analysis pipeline across file uploads (N42/CSV) and live devices (Al
 
 import math
 from typing import List, Optional, Dict
-from peak_detection import detect_peaks
-from isotope_database import identify_isotopes, identify_decay_chains
+from spectroscopy.peak_detection import detect_peaks
+from nuclides.isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
-from spectral_analysis import fit_gaussian
+from spectroscopy.spectral_analysis import fit_gaussian
 
 # Enhanced analysis modules (with fallback)
 try:
-    from peak_detection_enhanced import detect_peaks_enhanced
-    from chain_detection_enhanced import identify_decay_chains_enhanced
-    from confidence_scoring import enhance_isotope_identifications
-    from multiplet_fitting import enhance_peaks_with_multiplet_fitting
+    from spectroscopy.peak_detection_enhanced import detect_peaks_enhanced
+    from nuclides.chain_detection_enhanced import identify_decay_chains_enhanced
+    from spectroscopy.confidence_scoring import enhance_isotope_identifications
+    from spectroscopy.multiplet_fitting import enhance_peaks_with_multiplet_fitting
     HAS_ENHANCED_ANALYSIS = True
 except ImportError:
     HAS_ENHANCED_ANALYSIS = False
@@ -54,7 +54,7 @@ def _detect_peaks(result: dict, energies, counts, use_enhanced: bool) -> list:
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
         try:
             try:
-                from source_templates import resolve_detector, _resolution
+                from spectroscopy.source_templates import resolve_detector, _resolution
                 r662 = _resolution(resolve_detector(result.get("metadata")))
             except Exception:
                 r662 = None
@@ -88,7 +88,7 @@ def _reconcile_with_template_fit(result: dict, energies, counts, peaks, decay_ch
     and can report a clearly-off energy calibration. Returns the (decay_chains, isotopes) to report.
     """
     try:
-        from source_templates import fit_source_templates, reconcile_with_fit
+        from spectroscopy.source_templates import fit_source_templates, reconcile_with_fit
         fit = fit_source_templates(energies, counts, result.get("metadata"))
         if fit:
             result["source_fit"] = fit
@@ -127,7 +127,7 @@ def _assess_data_quality(peaks, energies, counts, live_time: float) -> dict:
     
     # Calculate MDA for key isotopes (Cs-137 as reference)
     try:
-        from detector_efficiency import calculate_mda
+        from spectroscopy.detector_efficiency import calculate_mda
         background_counts = 0
         for i, e in enumerate(energies):
             if 650 <= e <= 680 and i < len(counts):
@@ -173,7 +173,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
 
     # Which detector profile (efficiency, resolution) describes this spectrum: the ROI panel preselects it
     try:
-        from source_templates import resolve_detector
+        from spectroscopy.source_templates import resolve_detector
         result["detector_profile"] = resolve_detector(result.get("metadata"))
     except Exception as e:
         logger.debug(f"[Analysis] Detector profile not resolved: {e}")
@@ -182,7 +182,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     # electronic noise, e.g. the large pile in a RadiaCode's first channels).
     if is_calibrated:
         try:
-            from source_templates import detector_min_energy
+            from spectroscopy.source_templates import detector_min_energy
             result["display_min_keV"] = detector_min_energy(result.get("metadata"))
         except Exception:
             logger.debug('display_min_keV not set', exc_info=True)
@@ -253,8 +253,8 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
 
     # Secular equilibrium of each reported series, measured on the spectrum with the ROI engine (the peak list is too coarse)
     try:
-        from chain_detection_enhanced import check_secular_equilibrium
-        from source_templates import resolve_detector
+        from nuclides.chain_detection_enhanced import check_secular_equilibrium
+        from spectroscopy.source_templates import resolve_detector
         detector = resolve_detector(result.get("metadata"))
         for chain in decay_chains:
             chain["equilibrium_status"] = check_secular_equilibrium(
@@ -278,7 +278,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     
     # Add XRF detection for low-energy peaks
     try:
-        from nuclear_data import detect_xrf_peaks
+        from nuclides.nuclear_data import detect_xrf_peaks
         peak_energies = [p.get('energy', 0) for p in peaks if p.get('energy', 0) < 100]
         if peak_energies:
             xrf_results = detect_xrf_peaks(peak_energies)

@@ -4,7 +4,7 @@ This document describes when and how various analysis enhancements are applied.
 
 ## SNIP Background Removal
 
-**Location:** `peak_detection_enhanced.py` → `detect_peaks_enhanced()`
+**Location:** `spectroscopy/peak_detection_enhanced.py` → `detect_peaks_enhanced()`
 
 **When Applied:**
 - `apply_snip=True` (default) AND
@@ -23,7 +23,7 @@ This document describes when and how various analysis enhancements are applied.
 
 ## Dynamic Energy Tolerance
 
-**Location:** `chain_detection_enhanced.py` → `match_peaks_to_chain()`
+**Location:** `nuclides/chain_detection_enhanced.py` → `match_peaks_to_chain()`
 
 **When Applied:**
 - High-count spectra: max peak counts > 10,000 → uses **60 keV** tolerance
@@ -51,6 +51,6 @@ This document describes when and how various analysis enhancements are applied.
 
 ## Files Modified
 
-- `peak_detection_enhanced.py` - SNIP integration
-- `chain_detection_enhanced.py` - Dynamic tolerance
+- `spectroscopy/peak_detection_enhanced.py` - SNIP integration
+- `nuclides/chain_detection_enhanced.py` - Dynamic tolerance
 - `core.py` - Settings thresholds

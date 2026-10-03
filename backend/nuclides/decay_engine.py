@@ -24,8 +24,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-import bateman
-from decay_calculator import DecayInputError, GRAPH, TABLE_SOURCE, _rd_graph, normalize_isotope
+from nuclides import bateman
+from nuclides.decay_calculator import DecayInputError, GRAPH, TABLE_SOURCE, _rd_graph, normalize_isotope
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ except Exception:
     rd = None
     HAS_RADIOACTIVEDECAY = False
 
-from curie_compat import CURIE_LOCK, make_curie_thread_safe
+from nuclides.curie_compat import CURIE_LOCK, make_curie_thread_safe
 
 try:
     import curie
@@ -163,7 +163,7 @@ class BuiltinEngine(BaseDecayEngine):
 
 
 def bateman_parents() -> Tuple[str, ...]:
-    from decay_data import PARENTS
+    from nuclides.decay_data import PARENTS
     return PARENTS
 
 
@@ -390,7 +390,7 @@ class DecayEngineManager:
 
     def list_isotopes(self) -> List[Dict[str, Any]]:
         """The parents the built-in engine (and so every engine) can start from, for the isotope picker: name and half-life."""
-        from decay_calculator import format_half_life
+        from nuclides.decay_calculator import format_half_life
         names = sorted(bateman_parents(), key=lambda n: (re.sub(r"[^A-Za-z]", "", n), int(re.sub(r"\D", "", n) or 0)))
         return [{"name": n, "half_life": format_half_life(GRAPH.get(n, (None, ()))[0])} for n in names if bateman.is_radioactive(GRAPH, n)]
 

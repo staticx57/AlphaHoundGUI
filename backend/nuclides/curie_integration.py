@@ -7,7 +7,7 @@ enabling dynamic gamma line lookups, X-ray emission energies, and
 mass attenuation coefficient calculations for shielding correction.
 
 Usage:
-    from curie_integration import (
+    from nuclides.curie_integration import (
         get_isotope_gammas,
         get_element_xrays,
         calculate_attenuation,
@@ -22,7 +22,7 @@ from typing import List, Dict, Optional, Tuple
 
 import functools
 
-from curie_compat import CURIE_LOCK, make_curie_thread_safe
+from nuclides.curie_compat import CURIE_LOCK, make_curie_thread_safe
 
 # Try to import curie
 try:

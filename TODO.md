@@ -22,7 +22,7 @@ Open items:
 - [ ] (Total dose is now also shown next to the live dose rate: `rc-dose-total`.) Verify RC-110 end to end after a fresh connect: Dose row shows "(session)" total; compare with the device screen (device DS_uR register and RareData are not served by firmware 4.14 over BLE: see `/radiacode/diagnostics/dose-sources`).
 - [x] Restore Radiacode UI state on page refresh while the server is still connected (`checkRadiacodeStatus`, ui_smoke section H).
 - [x] Device alarm events: driver logs `Event` records; `GET /radiacode/events?since_id=` and `/radiacode/alarm-limits`; UI toasts new alarms. Verified on the RC-110 (2026-10-02): alarms are edge-triggered (fire when the dose rate crosses a limit, so a source already above the limit at connect gives none); pulling the lens away and back toasts each time. Alarm limits are API-only (no UI yet).
-- [x] PyRIID / AI Identify: PyRIID dropped (pins numpy 1.26 / scipy 1.13 / TF 2.16, and was only an MLP wrapper here). `ml_analysis.py` now uses a scikit-learn MLP on a new physics-based synthesiser, resampling spectra onto the model grid with the device calibration. Real-spectra scorecard: `python backend/tests/ml_benchmark.py` (8/9 consistent; known miss: the weak community uranium-glaze CSV reads Tl-201 at <20%). Classes are named for what the spectrum shows (`Th-232 series`, `U-238 series`, `Ra-226 series`, `Cs-137 + Co-60`, ...), not for objects: a gamma spectrum cannot tell a thoriated lens from a mantle; use source-type analysis for that. Real-data augmentation is opt-in (`ML_USE_REAL_DATA=1`). Old PyRIID module and guides removed/archived.
+- [x] PyRIID / AI Identify: PyRIID dropped (pins numpy 1.26 / scipy 1.13 / TF 2.16, and was only an MLP wrapper here). `ml/ml_analysis.py` now uses a scikit-learn MLP on a new physics-based synthesiser, resampling spectra onto the model grid with the device calibration. Real-spectra scorecard: `python backend/tests/ml_benchmark.py` (8/9 consistent; known miss: the weak community uranium-glaze CSV reads Tl-201 at <20%). Classes are named for what the spectrum shows (`Th-232 series`, `U-238 series`, `Ra-226 series`, `Cs-137 + Co-60`, ...), not for objects: a gamma spectrum cannot tell a thoriated lens from a mantle; use source-type analysis for that. Real-data augmentation is opt-in (`ML_USE_REAL_DATA=1`). Old PyRIID module and guides removed/archived.
 - [ ] Tooling notes: servers are restarted with `powershell -File $TEMP/restart.ps1`-style (kill port 3200, start `python main.py` in backend); a restart drops the Radiacode BLE link. Browser tests: `python backend/tests/ui_smoke.py`, `ui_theme_sweep.py` (set PYTHONIOENCODING=utf-8 on Windows); real-spectrum benchmark: `python backend/tests/real_benchmark.py`.
 ### AlphaHound modernization (2026-10-02 PM, see docs/ALPHAHOUND_SERIAL.md)
 Done and verified on the live AB+G (COM8): `P` polling and CPS parsing, dose stream vs `DB` reply fix, details panel, display replica (Mode 4 compared with RadView's product photos), dose log CSV, `devctl restart` with automatic reconnect.
@@ -78,9 +78,9 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [x] Light theme XRF section contrast fixed (CSS vars `--xrf-text/--xrf-accent`; confidence badge now follows theme switches)
 - [x] Isotope confidence bars and decay-chain cards now follow theme switches (`getThemeColors()` returns CSS var references; covered by `ui_smoke.py` section E). Note: only valid for CSS contexts, not canvas/Chart.js
 - [ ] Sweep (`backend/tests/ui_theme_sweep.py`) checks only overflow/contrast/JS errors on 17 themes × 2 viewports; extend to the Radiacode tab, modals and the 35 proposed themes
-- [x] Uncalibrated spectra (e.g. community `Data,Energy` CSVs whose Energy column is just 0,1,2…) no longer get isotope/chain matching on channel numbers; peaks are kept, a `warnings` entry is returned and shown as a toast (`analysis_utils.py`; tests in `test_api_endpoints.py`, `ui_smoke.py` section F)
-- [x] **Series discrimination fixed with a full-spectrum template fit** (`backend/source_templates.py`, wired into `analysis_utils.analyze_spectrum_peaks`): NNLS fit of radium-series / fresh-uranium / thorium-series / K-40 / Cs-137 / Co-60 templates using per-detector resolution and efficiency on the spectrum's real (nonlinear) axis, with bounded gain/offset/resolution search and smooth continuum terms. It now decides which U-238/Th-232 chains are reported, confirms single sources, and demotes isotopes whose peaks other sources already explain. Real-data benchmark (`backend/tests/real_benchmark.py`, `test_real_benchmark.py`): 15/24 → 35/35 checks on 11 labelled real spectra (RadiaCode-103 ×4 vendored under MIT, AlphaHound ×5, RadiaCode-110 ×2 local-only). Thresholds (z ≥ 10, fraction ≥ 0.07) were set from these same 11 spectra: true series ≥ z 12.5 / f 0.09, wrong series ≤ z 7.3 / f 0.05.
-- [x] RadiaCode/BecqMoni XML (`<ResultDataFile>`) uploads now parse (`radiacode_xml_parser.py`; previously 400); CSVs with `# key,value` metadata lines now parse (previously 500)
+- [x] Uncalibrated spectra (e.g. community `Data,Energy` CSVs whose Energy column is just 0,1,2…) no longer get isotope/chain matching on channel numbers; peaks are kept, a `warnings` entry is returned and shown as a toast (`spectroscopy/analysis_utils.py`; tests in `test_api_endpoints.py`, `ui_smoke.py` section F)
+- [x] **Series discrimination fixed with a full-spectrum template fit** (`backend/spectroscopy/source_templates.py`, wired into `analysis_utils.analyze_spectrum_peaks`): NNLS fit of radium-series / fresh-uranium / thorium-series / K-40 / Cs-137 / Co-60 templates using per-detector resolution and efficiency on the spectrum's real (nonlinear) axis, with bounded gain/offset/resolution search and smooth continuum terms. It now decides which U-238/Th-232 chains are reported, confirms single sources, and demotes isotopes whose peaks other sources already explain. Real-data benchmark (`backend/tests/real_benchmark.py`, `test_real_benchmark.py`): 15/24 → 35/35 checks on 11 labelled real spectra (RadiaCode-103 ×4 vendored under MIT, AlphaHound ×5, RadiaCode-110 ×2 local-only). Thresholds (z ≥ 10, fraction ≥ 0.07) were set from these same 11 spectra: true series ≥ z 12.5 / f 0.09, wrong series ≤ z 7.3 / f 0.05.
+- [x] RadiaCode/BecqMoni XML (`<ResultDataFile>`) uploads now parse (`formats/radiacode_xml_parser.py`; previously 400); CSVs with `# key,value` metadata lines now parse (previously 500)
 - [x] Result `warnings` include an energy-calibration check when identified sources anchor the fit and it shifts lines by >2.5 % at 662 keV (RadiaCode test unit reads ~3 % low)
 - [ ] Grow the labelled real benchmark (more AlphaHound captures with known sources, a RadiaCode Cs-137/K-40/Co-60, mixed sources, background-only) and re-check the fit thresholds; ask the RadiaCode-110 file author (HighWay777/RadiaCode-Spectrometer) about a licence so those can be committed
 - [ ] Fit range starts at 120 keV: below it (X-rays, Am-241 59.5, Th-234 63/93) the isotope list still relies on line matching (e.g. U-234 credited from a 36 keV bump). Consider a low-energy model or explicit X-ray templates
@@ -89,7 +89,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [ ] Build a small labelled benchmark of real, calibrated spectra (known source → expected isotopes/chains, plus must-not-detect) before changing chain thresholds; get ground-truth calibration for the Takumar captures first
 - [ ] Fix/validate `backend/tools/generate_test_spectra.py` so each synthetic file's intended peaks dominate; then add golden tests (expected isotopes, no spurious chains)
 - [ ] Remove dead frontend code for elements that no longer exist (see `LEGACY_NULL_GUARDED` in `backend/tests/test_frontend_ids.py`: `*-top` controls, `btn-rc-*`, etc.), then empty that allowlist
-- [x] **ROI peak fitting** (2026-10-03): `roi_analysis.py` was rebuilt (two-band window, else a peak fit with neighbours; effective branching for blended lines; non-linear axes), validated on synthetic spectra for AlphaHound and Radiacode profiles and on the labelled real spectra; `tests/test_roi_analysis.py`. See CHANGELOG.
+- [x] **ROI peak fitting** (2026-10-03): `spectroscopy/roi_analysis.py` was rebuilt (two-band window, else a peak fit with neighbours; effective branching for blended lines; non-linear axes), validated on synthetic spectra for AlphaHound and Radiacode profiles and on the labelled real spectra; `tests/test_roi_analysis.py`. See CHANGELOG.
 - [ ] ROI: lines of a *different* nuclide inside the window cannot be separated by these detectors (Cs-137 beside Bi-214 609 keV, Ac-228 338 keV on Pb-214 352 keV); the result warns but still reports a detection. A source-aware correction (use the chain or template fit to subtract the other nuclide) would fix it.
 - [ ] ROI: ground-truth the generic efficiency curves per detector with a known source (the AlphaHound CsI measured 7.1 % FWHM at 662 keV on the Cs-137 verification file against the 10 % in the database; the fit already adapts, the efficiencies do not).
 - [ ] Decay chains: the line-matching tolerance in `match_peaks_to_chain` still widens to 60 keV above 10,000 counts and lets one peak explain several lines (member lists such as "Tl-208: 575.8, 895.3 keV" can repeat a peak). Replace by a resolution-aware tolerance and one-to-one assignment once the benchmark has more labelled spectra.
@@ -101,7 +101,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [ ] Add unit tests for frontend JavaScript modules
 - [x] Add unit tests for backend API endpoints ✅ (`backend/tests/test_api_endpoints.py`; 59 tests pass)
 - [ ] Implement TypeScript for type safety
-- [x] **Centralize Peak Detection** ✅ (csv_parser.py no longer detects peaks/isotopes; all formats go through `analyze_spectrum_peaks()` in `analysis_utils.py`) — original note: Remove `detect_peaks()` calls from individual parsers (csv_parser.py, etc.) and have all peak detection happen in `_analyze_spectrum_peaks()` in `analysis.py`. This ensures consistent detection across all file formats (N42, CSV, CHN, SPE, SPC, PCF, etc.) and simplifies threshold tuning.
+- [x] **Centralize Peak Detection** ✅ (formats/csv_parser.py no longer detects peaks/isotopes; all formats go through `analyze_spectrum_peaks()` in `spectroscopy/analysis_utils.py`) — original note: Remove `detect_peaks()` calls from individual parsers (formats/csv_parser.py, etc.) and have all peak detection happen in `_analyze_spectrum_peaks()` in `analysis.py`. This ensures consistent detection across all file formats (N42, CSV, CHN, SPE, SPC, PCF, etc.) and simplifies threshold tuning.
 
 ### Performance Optimization
 - [x] Analysis + Radiacode routes moved off the event loop (sync handlers run in threadpool)
@@ -131,19 +131,19 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [x] **Auto-populate ROI acquisition time**: Pulls from N42/CSV metadata (live_time/real_time/acquisition_time)
 - [x] **Change ROI time unit to minutes**: Accepts fractional minutes (e.g., 1.5) for consistency with acquisition UI
 
-### Source-Specific Analysis Enhancements ✅ (Implemented in `source_analysis.py`)
+### Source-Specific Analysis Enhancements ✅ (Implemented in `spectroscopy/source_analysis.py`)
 
 #### Thoriated Lens (Th-232)
 - [x] ThO₂ mass estimation from Th-234 activity - `analyze_thoriated_lens()`
-- [x] Secular equilibrium check (Pb-212/Th-234 ratio) - `chain_detection_enhanced.py`
-- [x] Pb-212 (239 keV), Tl-208 (583 keV) in isotope database - `isotope_database.py`
+- [x] Secular equilibrium check (Pb-212/Th-234 ratio) - `nuclides/chain_detection_enhanced.py`
+- [x] Pb-212 (239 keV), Tl-208 (583 keV) in isotope database - `nuclides/isotope_database.py`
 
 #### Smoke Detector (Am-241)
 - [x] Compare to standard detector activity (~37 kBq) - `analyze_smoke_detector()`
 - [ ] Age estimation from Pu-241 ingrowth *(Deferred - requires long-term tracking)*
 
 #### Radium Dial (Ra-226)
-- [x] Dose rate estimation (μSv/hr at contact and distance) - `activity_calculator.py`
+- [x] Dose rate estimation (μSv/hr at contact and distance) - `spectroscopy/activity_calculator.py`
 - [x] Radium mass estimation from Bi-214 activity - `analyze_radium_dial()`
 - [ ] Age verification via Pb-210 equilibrium *(Deferred - Pb-210 not easily detectable)*
 
@@ -160,7 +160,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [x] Original source strength calculation - `analyze_cobalt60()`
 
 #### Universal
-- [x] Dose rate estimation for all source types - `activity_calculator.py`
+- [x] Dose rate estimation for all source types - `spectroscopy/activity_calculator.py`
 
 ### New Source Types ✅ (2025-12-17)
 - [x] **Uranium Ore** - Full U-238 chain + U-235 detection
@@ -169,9 +169,9 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [x] **Synthetic Test Spectra** - 6 N42 files in `backend/data/test_spectra/`
 
 ### Low Priority / Future
-- [x] **Radiacode Device Integration** ✅ Implemented in `radiacode_driver.py` + `routers/device_radiacode.py` - USB connection, spectrum, dose rate polling
+- [x] **Radiacode Device Integration** ✅ Implemented in `devices/radiacode_driver.py` + `routers/device_radiacode.py` - USB connection, spectrum, dose rate polling
 - [x] **Radiacode Bluetooth on Windows**: ✅ Implemented using `bleak` library. Added BLE device scanning, device selection dropdown, and cross-platform BLE connectivity (Windows/macOS/Linux).
-- [x] **Radiacode BLE Scan Fix (Windows)**: Fixed `pyserial`/`pywin32` COM STA conflict that silently broke BLE scan/connect on Windows (`allow_sta()` in `radiacode_bleak_transport.py`).
+- [x] **Radiacode BLE Scan Fix (Windows)**: Fixed `pyserial`/`pywin32` COM STA conflict that silently broke BLE scan/connect on Windows (`allow_sta()` in `devices/radiacode_bleak_transport.py`).
 
 ---
 
@@ -196,7 +196,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 ### ML Integration
 - [x] **PyRIID Integration**: MLPClassifier, 90+ isotopes, IAEA intensity data, 2168+ training samples
 - [x] **Peak Detection Enhancement**: Improved threshold, 20+ peaks detected
-- [x] **U-235/U-238 Prioritization**: Abundance weighting in isotope_database.py
+- [x] **U-235/U-238 Prioritization**: Abundance weighting in nuclides/isotope_database.py
 
 ### UI Features
 - [x] **Custom Isotope Definitions**: Add via UI, import/export JSON

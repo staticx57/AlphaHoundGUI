@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Directory containing downloaded IAEA data
-IAEA_DATA_DIR = os.path.join(os.path.dirname(__file__), 'data', 'idb', 'isotopes')
+IAEA_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'idb', 'isotopes')
 
 
 def parse_iaea_csv(filepath: str, min_intensity: float = 0.01, min_energy: float = 20.0) -> Dict:

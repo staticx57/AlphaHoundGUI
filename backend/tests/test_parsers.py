@@ -1,7 +1,7 @@
 
 import pytest
-from n42_parser import parse_n42
-from csv_parser import parse_csv_spectrum
+from formats.n42_parser import parse_n42
+from formats.csv_parser import parse_csv_spectrum
 
 def test_parse_n42(mock_n42_content):
     result = parse_n42(mock_n42_content)
