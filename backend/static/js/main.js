@@ -21,6 +21,10 @@ import { showToast } from './toast.js';
 
 initA11y();
 import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
+import { setupDeviceTabs } from './device_tabs.js';
+import { setupExports } from './exports_ui.js';
+import { setupAnalysisPanels } from './analysis_panels.js';
+import { setupDoseAndAlertSettings } from './dose_alert_settings.js';
 
 // Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
 window.chartManager = chartManager;
@@ -710,13 +714,13 @@ function setupEventListeners() {
     setupUiModeListener();
     setupDeviceTabs();
     setupRadiacodeConnection();
-    setupExports();
+    setupExports({ ui, getCurrentData: () => currentData });
     setupSettingsAndHistory();
     setupThemeAndChartControls();
     setupDeviceControls();
     setupComparisonAndBackground();
     setupSnipAndCalibration();
-    setupAnalysisPanels();
+    setupAnalysisPanels({ ui, isCompareMode: () => compareMode, getCurrentData: () => currentData });
 }
 
 /** Drag and drop, the upload button and the file input. */
@@ -791,51 +795,6 @@ function setupUiModeListener() {
             debug(`[Settings] UI Mode changed to: ${newMode}`);
         });
     });
-}
-
-/** Switching between the AlphaHound and Radiacode connection rows. */
-function setupDeviceTabs() {
-    // ============================================================
-    // Device Type Tab Switching (AlphaHound / Radiacode)
-    // Now toggles connection rows, not entire panels
-    // ============================================================
-    const tabAlphahound = document.getElementById('tab-alphahound');
-    const tabRadiacode = document.getElementById('tab-radiacode');
-    const alphahoundRow = document.getElementById('alphahound-connection-row');
-    const radiacodeRow = document.getElementById('radiacode-connection-row');
-    const deviceTitle = document.getElementById('device-title');
-
-    if (tabAlphahound && tabRadiacode && alphahoundRow && radiacodeRow) {
-        tabAlphahound.addEventListener('click', () => {
-            // Update tab active state
-            tabAlphahound.classList.add('active');
-            tabRadiacode.classList.remove('active');
-
-            // Show AlphaHound connection, hide Radiacode
-            alphahoundRow.style.display = 'flex';
-            radiacodeRow.style.display = 'none';
-            const quickPanel = document.getElementById('device-quick-panel');
-            if (quickPanel) quickPanel.dataset.device = 'alphahound';
-
-            // Update title
-            if (deviceTitle) deviceTitle.textContent = 'AlphaHound Device';
-        });
-
-        tabRadiacode.addEventListener('click', () => {
-            // Update tab active state
-            tabRadiacode.classList.add('active');
-            tabAlphahound.classList.remove('active');
-
-            // Show Radiacode connection, hide AlphaHound
-            radiacodeRow.style.display = 'flex';
-            alphahoundRow.style.display = 'none';
-            const quickPanel = document.getElementById('device-quick-panel');
-            if (quickPanel) quickPanel.dataset.device = 'radiacode';
-
-            // Update title
-            if (deviceTitle) deviceTitle.textContent = 'Radiacode Device';
-        });
-    }
 }
 
 /** Radiacode connection mode, BLE scan, connect, disconnect, spectrum, clear and dose reset. */
@@ -1083,168 +1042,6 @@ function setupRadiacodeConnection() {
     });
 }
 
-/** PDF and N42 export and the N42 metadata editor. */
-function setupExports() {
-    // PDF Export
-    document.getElementById('btn-export-pdf').addEventListener('click', async () => {
-        if (!currentData) return;
-        const btn = document.getElementById('btn-export-pdf');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 14px; height: 14px;"> Generating...';
-        btn.disabled = true;
-
-        try {
-            const response = await fetch('/export/pdf', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filename: currentData.metadata?.filename || 'spectrum',
-                    metadata: currentData.metadata || {},
-                    energies: currentData.energies,
-                    counts: currentData.counts,
-                    peaks: currentData.peaks || [],
-                    isotopes: currentData.isotopes || [],
-                    decay_chains: currentData.decay_chains || []
-                })
-            });
-
-            if (!response.ok) throw new Error('PDF generation failed');
-
-            // Download it: window.open() after an await is blocked as a pop-up by many browsers, and a URL revoked after
-            // one second can leave the new tab empty.
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const base = String(currentData.metadata?.filename || 'spectrum').replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '_');
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${base || 'spectrum'}_report.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            setTimeout(() => window.URL.revokeObjectURL(url), 30000);
-        } catch (err) {
-            notifyAuto('Error generating PDF: ' + err.message);
-        } finally {
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
-        }
-    });
-
-    // N42 Export
-    document.getElementById('btn-export-n42').addEventListener('click', async () => {
-        if (!currentData) {
-            notifyAuto('No spectrum data to export');
-            return;
-        }
-
-        const btn = document.getElementById('btn-export-n42');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 14px; height: 14px;"> Exporting...';
-        btn.disabled = true;
-
-        try {
-            const response = await api.exportN42({
-                ...currentData,
-                // Ensure we use the best metadata available (including potential edits)
-                metadata: {
-                    ...currentData.metadata,
-                    // Ensure critical fields are set if missing
-                    live_time: currentData.metadata?.live_time || currentData.metadata?.acquisition_time || 1.0,
-                    real_time: currentData.metadata?.real_time || currentData.metadata?.acquisition_time || 1.0,
-                    start_time: currentData.metadata?.start_time || new Date().toISOString(),
-                    source: currentData.metadata?.source || 'AlphaHound Device',
-                    channels: currentData.counts.length
-                }
-            });
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            // Use existing filename or generate one
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            a.download = (currentData.metadata?.filename || `spectrum_export_${timestamp}`).replace('.n42', '') + '.n42';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-
-            // Revert button
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
-        } catch (err) {
-            notifyAuto('Error exporting N42: ' + err.message);
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
-        }
-    });
-
-    // Edit N42 Metadata Button
-    const btnEditN42 = document.getElementById('btn-edit-n42');
-    btnEditN42?.addEventListener('click', async () => {
-        if (!currentData) return ui.showError('No spectrum loaded to edit');
-
-        // Prevent multiple simultaneous clicks
-        if (btnEditN42.disabled) return;
-
-        // Use stored raw XML or generate it
-        let xmlContent = currentData._rawXml;
-
-        if (!xmlContent) {
-            // Generate template from current data
-            const toast = document.createElement('div');
-            toast.textContent = 'Generating metadata template...';
-            toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);';
-            document.body.appendChild(toast);
-
-            // declared before the try: the catch below restores the button from it too
-            const originalHtml = btnEditN42.innerHTML;
-            try {
-                // Set loading state
-                btnEditN42.disabled = true;
-                btnEditN42.style.opacity = '0.7';
-                btnEditN42.innerHTML = '<span class="spinner-inline"></span> Generating...';
-
-                // We use export_n42 logic to generate the XML string
-                const response = await api.exportN42({
-                    ...currentData,
-                    metadata: currentData.metadata || {}
-                });
-                if (response.ok) {
-                    xmlContent = await response.text();
-                    currentData._rawXml = xmlContent;
-                }
-
-                // Restore button
-                btnEditN42.disabled = false;
-                btnEditN42.style.opacity = '1';
-                btnEditN42.innerHTML = originalHtml;
-            } catch (e) {
-                console.error(e);
-                btnEditN42.disabled = false;
-                btnEditN42.style.opacity = '1';
-                btnEditN42.innerHTML = originalHtml;
-            }
-            toast.remove();
-        }
-
-        if (xmlContent) {
-            n42MetadataEditor.show(xmlContent, (newXml) => {
-                currentData._rawXml = newXml;
-
-                // Show success message
-                const toast = document.createElement('div');
-                toast.textContent = 'N42 Metadata Updated';
-                toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#10b981;color:white;padding:12px 24px;border-radius:8px;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);animation: slideIn 0.3s ease-out;';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 3000);
-            });
-        } else {
-            ui.showError('Could not initialize N42 editor');
-        }
-    });
-}
-
 /** The settings modal (mode, sliders, apply, reset) and the history modal. */
 function setupSettingsAndHistory() {
     // Settings Modal
@@ -1255,7 +1052,7 @@ function setupSettingsAndHistory() {
     document.getElementById('close-settings').addEventListener('click', () => {
         document.getElementById('settings-modal').style.display = 'none';
     });
-    setupDoseAndAlertSettings();
+    setupDoseAndAlertSettings({ ui, alertCenter });
 
     // Simple/Advanced Mode Toggle
     document.querySelectorAll('input[name="analysis-mode"]').forEach(radio => {
@@ -1690,179 +1487,6 @@ function setupSnipAndCalibration() {
 
     // NOTE: Scale toggle, reset zoom, and compare mode listeners are already registered above (lines 347-398)
     // Duplicate registrations removed to prevent double-execution
-}
-
-/** The analysis panel, peak fitting, AI identification and the peaks toggle. */
-function setupAnalysisPanels() {
-    // Analysis Panel Toggle
-    document.getElementById('btn-analysis').addEventListener('click', () => {
-        const panel = document.getElementById('analysis-panel');
-        const btn = document.getElementById('btn-analysis');
-        const isOpen = panel.style.display !== 'none';
-
-        panel.style.display = isOpen ? 'none' : 'flex';
-        if (isOpen) {
-            btn.classList.remove('active');
-        } else {
-            btn.classList.add('active');
-            // Close compare if open
-            if (compareMode) document.getElementById('btn-compare').click();
-        }
-    });
-
-    // Peak Fitting
-    document.getElementById('btn-run-fit').addEventListener('click', async () => {
-        if (!currentData || !currentData.peaks) return;
-        const resultsContainer = document.getElementById('analysis-results');
-        resultsContainer.innerHTML = '<p>Fitting peaks...</p>';
-
-        try {
-            const response = await fetch('/analyze/fit-peaks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    energies: currentData.energies,
-                    counts: currentData.counts,
-                    peaks: currentData.peaks
-                })
-            });
-
-            if (!response.ok) throw new Error('Analysis failed');
-            const data = await response.json();
-
-            if (data.fits && data.fits.length > 0) {
-                resultsContainer.innerHTML = `
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
-                                <th style="padding: 4px;">Energy</th>
-                                <th style="padding: 4px;">FWHM</th>
-                                <th style="padding: 4px;">Net Area</th>
-                                <th style="padding: 4px;">Resolution</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.fits.map(fit => {
-                    const res = (fit.fwhm / fit.energy) * 100;
-                    return `
-                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                        <td style="padding: 4px;">${fit.energy.toFixed(2)} keV</td>
-                                        <td style="padding: 4px;">${fit.fwhm.toFixed(2)} keV</td>
-                                        <td style="padding: 4px;">${fit.net_area.toFixed(0)}</td>
-                                        <td style="padding: 4px;">${res.toFixed(1)}%</td>
-                                    </tr>
-                                `;
-                }).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } else {
-                resultsContainer.innerHTML = '<p>No peaks fitted successfully.</p>';
-            }
-        } catch (err) {
-            resultsContainer.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(err.message)}</p>`;
-        }
-    });
-
-    // ML Identification: one request path for every button (analysis panel, isotopes box, summary card)
-    const aiTableHtml = (data) => {
-        const quality = data.quality || 'unknown';
-        const qualityColors = { good: '#10b981', moderate: '#f59e0b', low_confidence: '#ef4444', no_match: '#6b7280' };
-        const qualityLabels = {
-            good: '<img src="/static/icons/check.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> High Confidence',
-            moderate: '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Moderate',
-            low_confidence: '<img src="/static/icons/warning.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> Low Confidence',
-            no_match: '? No Match'
-        };
-        const badge = quality !== 'unknown' ?
-            `<span style="color: ${qualityColors[quality]}; font-size: 0.8rem; margin-left: 0.5rem;">${qualityLabels[quality]}</span>` : '';
-        return `
-            <h4 style="margin-top: 0;">ML Predictions${badge}</h4>
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                <thead>
-                    <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
-                        <th style="padding: 4px;">Isotope</th>
-                        <th style="padding: 4px;">Confidence</th>
-                        <th style="padding: 4px;">Method</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.predictions.map(pred => `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); ${pred.suppressed ? 'opacity: 0.5;' : ''}">
-                            <td style="padding: 4px;"><strong>${pred.isotope}</strong>${pred.suppressed ? ' <span style="font-size:0.7rem;color:#ef4444;">(suppressed)</span>' : ''}</td>
-                            <td style="padding: 4px;">${pred.confidence.toFixed(1)}%</td>
-                            <td style="padding: 4px;">${pred.method}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem;">
-                Note: First run trains the model (~10-30s). Subsequent runs are instant.
-            </p>
-        `;
-    };
-
-    let aiRunning = false;
-    /** @param {{table?: boolean}} [opts] table: also write the full predictions table into the analysis panel */
-    async function runAiIdentify({ table = false } = {}) {
-        if (!currentData || !currentData.counts) return notifyAuto('No spectrum data loaded');
-        if (aiRunning) return;
-        aiRunning = true;
-        const signature = spectrumSignature(currentData.counts);
-        const tableBox = document.getElementById('analysis-results');
-        const runButton = document.getElementById('btn-run-ml');
-        const original = runButton ? runButton.innerHTML : '';
-        if (runButton) {
-            runButton.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 16px; height: 16px;"> Running...';
-            runButton.disabled = true;
-        }
-        ui.setAiState({ status: 'running', signature });
-        if (table && tableBox) tableBox.innerHTML = '<p>Running AI identification...</p>';
-        try {
-            const response = await fetch('/analyze/ml-identify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ counts: currentData.counts, energies: currentData.energies })
-            });
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(error.detail || 'ML identification failed');
-            }
-            const data = await response.json();
-            ui.setAiState({ status: 'done', predictions: data.predictions || [], quality: data.quality, signature });
-            if (table && tableBox) {
-                tableBox.innerHTML = data.predictions && data.predictions.length
-                    ? aiTableHtml(data) : '<p>No ML predictions available.</p>';
-            }
-        } catch (err) {
-            ui.setAiState({ status: 'error', error: err.message, signature });
-            if (table && tableBox) tableBox.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(err.message)}</p>`;
-        } finally {
-            aiRunning = false;
-            if (runButton) {
-                runButton.innerHTML = original;
-                runButton.disabled = false;
-            }
-        }
-    }
-    document.getElementById('btn-ml-identify').addEventListener('click', () => runAiIdentify({ table: true }));
-    document.getElementById('btn-run-ml')?.addEventListener('click', () => runAiIdentify());
-    document.getElementById('btn-rs-ai')?.addEventListener('click', () => runAiIdentify());
-
-    // Detected Peaks Toggle
-    const btnTogglePeaks = document.getElementById('btn-toggle-peaks');
-    const peaksScrollArea = document.getElementById('peaks-scroll-area');
-    if (btnTogglePeaks && peaksScrollArea) {
-        btnTogglePeaks.addEventListener('click', () => {
-            if (peaksScrollArea.style.display === 'none') {
-                peaksScrollArea.style.display = 'block';
-                btnTogglePeaks.textContent = 'Hide';
-            } else {
-                peaksScrollArea.style.display = 'none';
-                btnTogglePeaks.textContent = 'Show';
-            }
-        });
-    }
 }
 
 // Calibration Tool
@@ -2460,86 +2084,6 @@ function ensureDoseSparkline() {
     }
     canvas.offsetHeight;  // force layout so the canvas has dimensions
     rcDoseChart = new DoseRateChart(canvas, { label: 'Dose Rate', colorVar: '--secondary-color', maxPoints: 60 });
-}
-
-/** Settings: dose unit and alert limits. They apply immediately (no Apply button needed) and are remembered. */
-function setupDoseAndAlertSettings() {
-    const $ = (id) => document.getElementById(id);
-    const unitSel = $('pref-dose-unit');
-    if (!unitSel) return;
-    const showLimit = () => {
-        const unit = resolveUnit(getDosePref(), 'uRem');
-        const st = loadAlerts(safeStorage());
-        $('pref-alert-dose-value').value = Number(fromUSv(st.doseUSvH, unit).toPrecision(4));
-        $('pref-alert-dose-unit').textContent = unitLabel(unit);
-    };
-    const notifyHint = () => {
-        const hint = $('pref-notify-state');
-        if (!hint) return;
-        const N = window.Notification;
-        hint.textContent = !N ? 'Not supported by this browser.'
-            : N.permission === 'denied' ? 'Blocked in the browser settings.' : '';
-    };
-    const load = () => {
-        const st = loadAlerts(safeStorage());
-        unitSel.value = getDosePref();
-        $('pref-alert-dose').checked = st.doseEnabled;
-        $('pref-alert-cps').checked = st.cpsEnabled;
-        $('pref-alert-cps-value').value = st.cps;
-        $('pref-alert-sound').checked = st.sound;
-        $('pref-alert-notify').checked = st.notify;
-        showLimit();
-        notifyHint();
-    };
-    const store = () => {
-        const unit = resolveUnit(getDosePref(), 'uRem');
-        const st = loadAlerts(safeStorage());
-        const limit = parseFloat($('pref-alert-dose-value').value);
-        const cps = parseFloat($('pref-alert-cps-value').value);
-        saveAlerts({
-            doseEnabled: $('pref-alert-dose').checked,
-            doseUSvH: limit > 0 ? toUSv(limit, unit) : st.doseUSvH,
-            cpsEnabled: $('pref-alert-cps').checked,
-            cps: cps > 0 ? cps : st.cps,
-            sound: $('pref-alert-sound').checked,
-            notify: $('pref-alert-notify').checked,
-        }, safeStorage());
-        alertCenter.reload();
-    };
-    unitSel.addEventListener('change', () => {
-        const before = resolveUnit(getDosePref(), 'uRem');
-        const limitUSv = toUSv(parseFloat($('pref-alert-dose-value').value) || 0, before);   // keep the limit when the unit changes
-        if (limitUSv > 0) saveAlerts({ ...loadAlerts(safeStorage()), doseUSvH: limitUSv }, safeStorage());
-        setDosePref(unitSel.value);
-        showLimit();
-        alertCenter.reload();
-        ui.refreshMetadata();
-        showToast('Dose unit updated; readouts change with their next reading.', 'info');
-    });
-    ['pref-alert-dose', 'pref-alert-dose-value', 'pref-alert-cps', 'pref-alert-cps-value', 'pref-alert-sound'].forEach((id) => {
-        $(id).addEventListener('change', store);
-    });
-    $('pref-alert-notify').addEventListener('change', async (e) => {
-        if (e.target.checked && window.Notification && Notification.permission === 'default') {
-            try { await Notification.requestPermission(); } catch (err) { /* ignore */ }
-        }
-        if (e.target.checked && (!window.Notification || Notification.permission !== 'granted')) e.target.checked = false;
-        notifyHint();
-        store();
-    });
-    $('btn-alert-test')?.addEventListener('click', () => {
-        alertCenter.test();
-        showToast('Test alert: you should hear a beep if sound is on.', 'info');
-    });
-    $('btn-alert-reset')?.addEventListener('click', () => {
-        saveAlerts({ ...DEFAULT_ALERTS }, safeStorage());
-        setDosePref('auto');
-        load();
-        alertCenter.reload();
-        ui.refreshMetadata();
-    });
-    $('btn-settings')?.addEventListener('click', load);
-    load();
 }
 
 /** Our channel panel (cards, log meter, share bar, history chart): created once, reused across connections. */
