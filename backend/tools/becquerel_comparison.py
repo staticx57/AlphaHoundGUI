@@ -12,7 +12,7 @@ Comparison areas:
 3. Background subtraction (SNIP algorithm)
 4. Uncertainty propagation
 
-Run with: python test_becquerel_comparison.py
+Run with: python tools/becquerel_comparison.py (from backend/)
 """
 
 import sys
@@ -21,7 +21,7 @@ import time
 import numpy as np
 
 # Add backend to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # =============================================================================
 # SETUP AND IMPORTS

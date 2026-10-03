@@ -1,12 +1,15 @@
-# AlphaHound GUI - Core Dependencies
+# AlphaHound GUI - lightweight install: the core app and the AlphaHound, without AI identification (scikit-learn),
+# Radiacode support or the nuclide-data libraries. The app starts without them and falls back to its built-in tables.
+# Used by install_lightweight.bat. For everything: requirements.txt.
 fastapi
 uvicorn
 python-multipart
-pyserial
 websockets
-matplotlib
-reportlab
+slowapi
+pyserial
 numpy
 scipy
-pillow
 pandas
+matplotlib
+reportlab
+becquerel

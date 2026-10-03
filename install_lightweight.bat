@@ -8,7 +8,7 @@ echo AI identification (scikit-learn) will NOT be available.
 echo.
 echo Installing core packages...
 python -m pip install --upgrade pip
-python -m pip install fastapi uvicorn python-multipart pyserial websockets matplotlib reportlab numpy scipy pillow pandas becquerel slowapi
+python -m pip install -r requirements_lightweight.txt
 
 echo.
 echo ========================================
