@@ -32,6 +32,24 @@ def _split_comment_metadata(content: bytes):
     return ("\n".join(kept) + "\n").encode("utf-8"), meta
 
 
+def _numeric_list(values, what):
+    """Values as numbers; text where numbers belong means this is not a spectrum (ValueError, a client error)."""
+    out = []
+    for v in values:
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            f = v
+        else:
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                raise ValueError(f"The {what} column contains text that is not a number (for example {str(v)[:20]!r}). "
+                                 "A spectrum CSV needs numeric counts (and optionally energies).")
+        if f != f or f in (float("inf"), float("-inf")):
+            raise ValueError(f"The {what} column contains a value that is not a finite number.")
+        out.append(f)
+    return out
+
+
 def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     """
     Parse a CSV spectrum file using Becquerel.
@@ -149,6 +167,11 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
         except Exception as manual_error:
             raise ValueError(f"Failed to parse CSV with both Becquerel ({str(bq_error)}) and Manual fallback ({str(manual_error)})")
     
+    counts = _numeric_list(counts, "counts")
+    energies = _numeric_list(energies, "energy") if energies else energies
+    if not counts:
+        raise ValueError("No spectrum data found in the CSV")
+
     # === HEADER CALIBRATION PARSING (Fuzzy Match) ===
     # Even if we didn't find an Energy column, the header might have "Calibration: a0, a1" 
     # or "Energy = 0 + 2*ch" which we can use to generate energies.

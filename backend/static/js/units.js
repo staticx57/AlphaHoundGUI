@@ -70,6 +70,32 @@ export function fromUSv(uSv, unit) {
     return unit === 'uRem' ? uSv * UREM_PER_USV : uSv;
 }
 
+/**
+ * The Radiacode's own alarm thresholds (GET /radiacode/alarm-limits) as display rows, dose values in the chosen unit.
+ * The device reports rates in uSv/h or uR/h (dose_unit "Sv" / "R", about 100 uR per uSv), doses in Sv or R, counts in cps or cpm.
+ * Rows with no value (a register this firmware does not serve) are left out.
+ */
+export function formatAlarmLimits(limits, unit) {
+    if (!limits || typeof limits !== 'object') return [];
+    const sv = limits.dose_unit !== 'R';
+    const rateUSv = (v) => (sv ? v : v / UREM_PER_USV);                 // device rate -> uSv/h
+    const doseUSv = (v) => (sv ? v * 1e6 : (v * 1e6) / UREM_PER_USV);    // device dose (Sv or R) -> uSv
+    const have = (a, b) => [a, b].some((v) => typeof v === 'number' && Number.isFinite(v));
+    const pair = (a, b, fmt) => [a, b].map((v) => (typeof v === 'number' && Number.isFinite(v) ? fmt(v) : '--')).join(' / ');
+    const rows = [];
+    if (have(limits.l1_dose_rate, limits.l2_dose_rate)) {
+        rows.push({ label: 'Dose rate', value: pair(limits.l1_dose_rate, limits.l2_dose_rate, (v) => formatDoseRate(rateUSv(v), unit).text) });
+    }
+    if (have(limits.l1_count_rate, limits.l2_count_rate)) {
+        const cu = limits.count_unit === 'cpm' ? 'cpm' : 'cps';
+        rows.push({ label: 'Count rate', value: pair(limits.l1_count_rate, limits.l2_count_rate, (v) => `${Number(v.toPrecision(4))} ${cu}`) });
+    }
+    if (have(limits.l1_dose, limits.l2_dose)) {
+        rows.push({ label: 'Accumulated dose', value: pair(limits.l1_dose, limits.l2_dose, (v) => formatDoseTotal(doseUSv(v), unit)) });
+    }
+    return rows;
+}
+
 export function getDosePref(storage = safeStorage()) {
     try {
         const v = storage?.getItem(PREF_KEY);

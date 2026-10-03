@@ -246,7 +246,8 @@ async def upload_file(file: UploadFile = File(...)):
             finally:
                 os.unlink(tmp_path)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error parsing CHN/SPE: {str(e)}")
+            # a file we cannot read is the client's problem (400), not a server fault
+            raise HTTPException(status_code=400, detail=f"Error parsing CHN/SPE: {str(e)}")
             
     else:
         # Try generic parser (SandiaSpecUtils) for all other allowed extensions
@@ -301,7 +302,7 @@ async def upload_file(file: UploadFile = File(...)):
         except ImportError:
             raise HTTPException(status_code=501, detail="SandiaSpecUtils support not available (module missing)")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Generic parser error: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Could not read this file as a spectrum: {str(e)}")
 
 @router.post("/analyze/fit-peaks")
 def analyze_fit_peaks(request: AnalysisRequest):

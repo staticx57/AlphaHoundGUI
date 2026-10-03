@@ -555,6 +555,16 @@ export class AlphaHoundAPI {
         return await response.json();
     }
 
+    /** The device's own alarm thresholds (read-only; they are set on the device). */
+    async getRadiacodeAlarmLimits() {
+        const response = await fetch('/radiacode/alarm-limits');
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Failed to read the alarm limits');
+        }
+        return await response.json();
+    }
+
     // ==================== Phase 1: Quick Win Features ====================
 
     /**

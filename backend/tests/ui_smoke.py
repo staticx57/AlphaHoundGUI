@@ -192,6 +192,10 @@ with sync_playwright() as p:
         status=200, content_type="application/json", body=_json.dumps({"dose_rate_uSv_h": 0.12})))
     ph.route("**/radiacode/info/extended", lambda route, request: route.fulfill(
         status=200, content_type="application/json", body="{}"))
+    ph.route("**/radiacode/alarm-limits", lambda route, request: route.fulfill(
+        status=200, content_type="application/json", body=json.dumps(
+            {"l1_dose_rate": 0.5, "l2_dose_rate": 1.0, "l1_count_rate": 100, "l2_count_rate": 200, "count_unit": "cps",
+             "l1_dose": None, "l2_dose": None, "dose_unit": "Sv"})))
     ph.goto(URL, wait_until="networkidle")
     ph.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
     check("H refresh restores connected state", ph.inner_text("#device-conn-label") == "Connected")
@@ -200,6 +204,10 @@ with sync_playwright() as p:
           ph.is_visible("#btn-disconnect-device") is True and not ph.is_visible("#btn-connect-radiacode"))
     ph.wait_for_function("document.getElementById('rc-dose-display').textContent !== '--'", timeout=8000)
     check("H refresh resumes dose polling", ph.inner_text("#rc-dose-display") != "--")
+    ph.wait_for_function("document.getElementById('rc-alarm-limits').textContent.includes('Dose rate')", timeout=8000)
+    limits_text = ph.text_content("#rc-alarm-limits")
+    check("H the device's own alarm limits are shown (read-only) in the diagnostics",
+          "0.50" in limits_text and "1.00" in limits_text and "100 cps / 200 cps" in limits_text, limits_text)
     ph.wait_for_function("document.getElementById('rc-dose-total').textContent !== 'Total --'", timeout=8000)
     check("H total dose is visible without opening Device Settings",
           ph.is_visible("#rc-dose-total") and "Total" in ph.inner_text("#rc-dose-total"), ph.inner_text("#rc-dose-total"))
@@ -606,6 +614,100 @@ with sync_playwright() as p:
           pn.input_value("#pref-alert-dose-value"))
     check("N no JS errors or native dialogs", not errs_n, "; ".join(errs_n[:3]))
     ctx_n.close()
+
+    # O. Robustness: no internet, PDF download, unreadable files, Settings persistence, calculators, upload while streaming
+    ctx_o = browser.new_context(viewport={"width": 1400, "height": 1000})
+    external = []
+
+    def _gate(route, request):
+        if request.url.startswith(URL.rstrip("/")) or request.url.startswith(("data:", "blob:")):
+            route.fallback()
+        else:
+            external.append(request.url)
+            route.abort()
+    ctx_o.route("**/*", _gate)               # an offline machine, or a LAN client without internet
+    po = ctx_o.new_page()
+    errs_o = []
+    po.on("pageerror", lambda e: errs_o.append(f"pageerror: {e}"))
+    po.on("dialog", lambda d: (errs_o.append("native dialog: " + d.message), d.dismiss()))
+    po.goto(URL, wait_until="load")
+    po.set_input_files("#file-input", SPEC)
+    po.wait_for_selector("#dashboard", state="visible", timeout=20000)
+    po.wait_for_function("window.Chart && Chart.getChart(document.getElementById('spectrumChart'))", timeout=10000)
+    check("O the charting libraries come from the app, so charts work with no internet",
+          not any(("jsdelivr" in u or "cdnjs" in u) for u in external), ", ".join(external[:3]))
+    with po.expect_download(timeout=20000) as dl:
+        po.click("#btn-export-pdf")
+    download = dl.value
+    with open(download.path(), "rb") as fh:
+        head = fh.read(8)
+    check("O PDF export downloads a real PDF file", head.startswith(b"%PDF-") and download.suggested_filename.endswith("_report.pdf"),
+          f"{download.suggested_filename} {head!r}")
+    check("O ... without opening a pop-up tab", len(ctx_o.pages) == 1)
+    with po.expect_response(lambda r: r.url.endswith("/upload"), timeout=20000) as bad:
+        po.set_input_files("#file-input", files=[{"name": "words.csv", "mimeType": "text/csv", "buffer": b"this,is,not\nnumbers,at,all\n"}])
+    check("O an unreadable CSV is refused with a client error", bad.value.status == 400, str(bad.value.status))
+    po.wait_for_function("document.getElementById('drop-zone').textContent.includes('Error')", timeout=5000)
+    shown = po.inner_text("#drop-zone")
+    check("O the drop zone says what was wrong and offers to try again", "not a number" in shown and po.locator("#drop-zone #file-input").count() == 1, shown[:120])
+    po.set_input_files("#file-input", SPEC)
+    po.wait_for_function("document.getElementById('rs-name').textContent.trim() === 'Cs-137'", timeout=20000)
+    check("O after the failed upload a good file loads normally", True)
+    # Settings persist across a reload (the Estimator lives in Expert mode: the simple layout hides the analysis tools)
+    po.click("#btn-settings")
+    po.check("input[name=ui-mode][value=expert]")
+    po.click("#btn-apply-settings")
+    po.reload(wait_until="load")
+    po.click("#btn-settings")
+    check("O the UI mode chosen in Settings is still selected after a reload", po.is_checked("input[name=ui-mode][value=expert]")
+          and po.evaluate("JSON.parse(localStorage.getItem('analysisSettings')).uiMode") == "expert")
+    po.click("#close-settings")
+    # the calculators in the Estimator
+    po.set_input_files("#file-input", SPEC)
+    po.wait_for_selector("#dashboard", state="visible", timeout=20000)
+    po.click("#btn-analysis")
+    po.click("#btn-estimator-tool")
+    po.wait_for_selector("#estimator-modal", state="visible")
+    po.click("#tab-time-est")
+    po.fill("#est-cpm", "1000")
+    po.click("#btn-calc-time")
+    po.wait_for_selector("#time-est-result", state="visible", timeout=5000)
+    check("O the time calculator gives an answer", any(ch.isdigit() for ch in po.inner_text("#est-duration-result")), po.inner_text("#est-duration-result"))
+    po.click("#tab-mda")
+    po.click("#btn-calc-mda")
+    po.wait_for_selector("#mda-result", state="visible", timeout=5000)
+    check("O the MDA calculator gives an answer in Bq", "Bq" in po.inner_text("#mda-value") and any(ch.isdigit() for ch in po.inner_text("#mda-value")), po.inner_text("#mda-value"))
+    po.keyboard.press("Escape")
+    po.wait_for_function("getComputedStyle(document.getElementById('estimator-modal')).display === 'none'", timeout=3000)
+    check("O Esc closes the Estimator", True)
+    check("O no JS errors or native dialogs in these flows", not errs_o, "; ".join(errs_o[:3]))
+    ctx_o.close()
+
+    # P. A spectrum upload while the AlphaHound is streaming: the live sparkline keeps going and the page does not stall
+    ctx_p = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pp = ctx_p.new_page()
+    errs_p = []
+    pp.on("pageerror", lambda e: errs_p.append(f"pageerror: {e}"))
+    _install_ah(pp, burst=0)
+    pp.goto(URL, wait_until="networkidle")
+    pp.select_option("#port-select", "COM8")
+    pp.click("#btn-connect-device")
+    pp.wait_for_function("document.getElementById('device-conn-label').textContent === 'Connected'", timeout=8000)
+    spark = """() => { const ch = window.Chart && Chart.getChart(document.getElementById('rcDoseRateChart'));
+                       return ch ? ch.data.datasets[0].data.filter(v => v !== null).length : -1 }"""
+    pp.wait_for_function(f"({spark})() >= 3", timeout=8000)
+    before = pp.evaluate(spark)
+    pp.evaluate("""() => { window.__gap = 0; let last = performance.now();
+                           setInterval(() => { const n = performance.now(); window.__gap = Math.max(window.__gap, n - last - 100); last = n; }, 100); }""")
+    pp.set_input_files("#file-input", SPEC)
+    pp.wait_for_selector("#dashboard", state="visible", timeout=20000)
+    pp.wait_for_timeout(2500)
+    after = pp.evaluate(spark)
+    check("P the live dose sparkline keeps drawing while a spectrum is uploaded", after > before or after >= 5, f"{before} -> {after}")
+    check("P the page did not stall during the upload (longest main-thread pause under 1.5 s)", pp.evaluate("window.__gap") < 1500, str(pp.evaluate("window.__gap")))
+    check("P the AlphaHound is still shown as connected", pp.inner_text("#device-conn-label") == "Connected")
+    check("P no JS errors", not errs_p, "; ".join(errs_p[:3]))
+    ctx_p.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

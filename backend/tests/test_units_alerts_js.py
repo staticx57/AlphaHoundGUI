@@ -143,3 +143,28 @@ def test_safe_distance(tmp_path):
                  a.safeDistanceM(500, 20, 50), a.safeDistanceM(NaN, 20)];
     """)
     assert out["d"] == [0.2, 0, 0, 0, 0, 2.5, 0]                  # 10 cm * sqrt(80/20) = 20 cm; inverse-square
+
+
+def test_device_alarm_limits_rows(tmp_path):
+    out = run_js(tmp_path, """
+        const sv = { l1_dose_rate: 0.5, l2_dose_rate: 1.0, l1_count_rate: 100, l2_count_rate: 200.5, count_unit: 'cps',
+                     l1_dose: 0.00001, l2_dose: 0.0001, dose_unit: 'Sv' };
+        out.sv = u.formatAlarmLimits(sv, 'uSv');
+        out.svRem = u.formatAlarmLimits(sv, 'uRem');
+        const r = { l1_dose_rate: 50, l2_dose_rate: 100, l1_count_rate: 60, l2_count_rate: 120, count_unit: 'cpm', l1_dose: 0.001, l2_dose: null, dose_unit: 'R' };
+        out.r = [u.formatAlarmLimits(r, 'uSv'), u.formatAlarmLimits(r, 'uRem')];
+        out.partial = u.formatAlarmLimits({ l1_dose_rate: null, l2_dose_rate: 2, l1_count_rate: null, l2_count_rate: null, dose_unit: 'Sv' }, 'uSv');
+        out.none = [u.formatAlarmLimits(null, 'uSv'), u.formatAlarmLimits({}, 'uSv'), u.formatAlarmLimits('x', 'uSv')];
+    """)
+    assert out["sv"] == [
+        {"label": "Dose rate", "value": "0.50 µSv/h / 1.00 µSv/h"},
+        {"label": "Count rate", "value": "100 cps / 200.5 cps"},
+        {"label": "Accumulated dose", "value": "10.00 µSv / 100.00 µSv"},
+    ]
+    assert out["svRem"][0]["value"] == "50.0 µRem/h / 100 µRem/h"
+    assert out["r"][0][0]["value"] == "0.50 µSv/h / 1.00 µSv/h"          # 50 uR/h = 0.5 uSv/h (about 100 uR per uSv)
+    assert out["r"][1][0]["value"] == "50.0 µRem/h / 100 µRem/h"
+    assert out["r"][0][1]["value"] == "60 cpm / 120 cpm"
+    assert out["r"][0][2]["value"] == "10.00 µSv / --"                         # 0.001 R = 1000 uR = 10 uSv; a missing level shows "--"
+    assert out["partial"] == [{"label": "Dose rate", "value": "-- / 2.00 µSv/h"}]      # missing registers shown as "--", empty rows dropped
+    assert out["none"] == [[], [], []]

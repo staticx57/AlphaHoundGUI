@@ -11,7 +11,7 @@ import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
 import { notify, notifyAuto, confirmDialog, infoDialog, setNotifier } from './dialogs.js';
 import { ChannelPanel } from './channels.js';
 import { spectrumSignature } from './summary.js';
-import { formatDoseRate, formatDoseTotal, resolveUnit, getDosePref, setDosePref, toUSv, fromUSv, unitLabel, UREM_PER_USV, safeStorage } from './units.js';
+import { formatAlarmLimits, formatDoseRate, formatDoseTotal, resolveUnit, getDosePref, setDosePref, toUSv, fromUSv, unitLabel, UREM_PER_USV, safeStorage } from './units.js';
 import { AlertCenter, loadAlerts, saveAlerts, DEFAULT_ALERTS } from './alerts.js';
 import { initA11y } from './a11y.js';
 
@@ -88,6 +88,7 @@ async function pollRadiacodeDose() {
 
         // Update device info on the first poll, then every 10 polls (~20 seconds)
         pollRadiacodeDose._pollCount = (pollRadiacodeDose._pollCount || 0) + 1;
+        if (pollRadiacodeDose._pollCount === 1) refreshRadiacodeAlarmLimits();
         if (pollRadiacodeDose._pollCount === 1 || pollRadiacodeDose._pollCount % 10 === 0) {
             try {
                 const extendedInfo = await api.getRadiacodeExtendedInfo();
@@ -549,6 +550,22 @@ if (btnPowerOff) {
 // ==================== Phase 3: Diagnostics GUI ====================
 
 // Refresh Diagnostics
+/** Show the device's own alarm thresholds (read-only) in the diagnostics; quietly "not available" if the firmware will not say. */
+async function refreshRadiacodeAlarmLimits() {
+    const el = document.getElementById('rc-alarm-limits');
+    if (!el) return;
+    try {
+        const rows = formatAlarmLimits(await api.getRadiacodeAlarmLimits(), resolveUnit(getDosePref(), 'uSv'));
+        el.replaceChildren(...(rows.length ? rows.map((r) => {
+            const line = document.createElement('div');
+            line.textContent = `${r.label}: ${r.value}`;
+            return line;
+        }) : [document.createTextNode('not available on this device')]));
+    } catch (e) {
+        el.textContent = 'not available';
+    }
+}
+
 const btnRefreshDiagnostics = document.getElementById('btn-refresh-diagnostics');
 if (btnRefreshDiagnostics) {
     btnRefreshDiagnostics.addEventListener('click', async () => {
@@ -565,6 +582,7 @@ if (btnRefreshDiagnostics) {
             document.getElementById('rc-fw-signature').textContent = fwSigResult.fw_signature || '--';
             document.getElementById('rc-base-time').textContent = baseTimeResult.base_time || '--';
             await checkDeviceMessages();
+            await refreshRadiacodeAlarmLimits();
 
             showToast('Diagnostics refreshed', 'success');
         } catch (err) {
@@ -1063,10 +1081,18 @@ function setupEventListeners() {
 
             if (!response.ok) throw new Error('PDF generation failed');
 
+            // Download it: window.open() after an await is blocked as a pop-up by many browsers, and a URL revoked after
+            // one second can leave the new tab empty.
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+            const base = String(currentData.metadata?.filename || 'spectrum').replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '_');
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${base || 'spectrum'}_report.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => window.URL.revokeObjectURL(url), 30000);
         } catch (err) {
             notifyAuto('Error generating PDF: ' + err.message);
         } finally {

@@ -22,6 +22,11 @@
 - The AlphaHound dose readout formats follow the device (whole uRem/h, two-decimal uSv); the JS test helpers decode Node's output as UTF-8.
 
 ### Fixed
+- **No internet, no charts.** The charting libraries came from CDNs, so on an offline machine or a LAN client without internet the spectrum never drew. Chart.js 4.5.1, the zoom and annotation plugins and Hammer.js are now served from `static/vendor/` (versions in its README); the Inter font loads without blocking the page and falls back to the system font.
+- **PDF export** opened a new tab with `window.open()` after waiting for the server (blocked as a pop-up by many browsers, and the URL was revoked after one second); it now downloads `<name>_report.pdf`.
+- **Unreadable uploads** are client errors: a CSV with text where counts belong used to come back as a "spectrum" of strings (HTTP 200), and an unparseable `.txt` / CHN / SPE file answered 500. Both answer 400 with a message that names the problem, and the drop zone shows it.
+- **The MDA calculator used a native `prompt()`** (the last one in the app) for the isotope energy and silently did nothing when prompts are blocked; it has an Isotope Energy field now, and its errors are toasts instead of replacing the upload drop zone.
+- **Radiacode alarm limits** (`GET /radiacode/alarm-limits`, previously without any UI): the device's own level 1 / level 2 thresholds are shown read-only in Advanced Diagnostics.
 - **AI Identify sent two requests per click** from the isotopes box (a forwarded click also triggered the analysis-panel handler, which overwrote the peak-fit results). All AI buttons share one request path now.
 - **A stale AI answer stayed on screen after loading another spectrum**; it is cleared for a new spectrum and marked outdated while a live acquisition keeps growing.
 

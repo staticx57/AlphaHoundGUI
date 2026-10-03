@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { ui } from './ui.js';
+import { notifyAuto } from './dialogs.js';
 
 export class EstimatorUI {
     constructor() {
@@ -45,6 +46,7 @@ export class EstimatorUI {
             detectorSelect: document.getElementById('est-detector'),
             bgCounts: document.getElementById('est-bg-counts'),
             mdaTime: document.getElementById('est-mda-time'),
+            mdaEnergy: document.getElementById('est-mda-energy'),
             btnCalcMDA: document.getElementById('btn-calc-mda'),
             mdaResult: document.getElementById('mda-result'),
             mdaValue: document.getElementById('mda-value')
@@ -232,9 +234,12 @@ export class EstimatorUI {
         const bg = parseFloat(this.elements.bgCounts.value) || 0;
         const time = parseFloat(this.elements.mdaTime.value) || 60;
         const detector = this.elements.detectorSelect.value;
-        const isoEnergy = prompt("Enter Isotope Energy (keV) to estimate efficiency:", "662"); // Quick hack for energy
-
-        if (!isoEnergy) return;
+        const isoEnergy = parseFloat(this.elements.mdaEnergy?.value);
+        if (!(isoEnergy > 0)) {
+            notifyAuto('Enter the isotope energy in keV (for example 662 for Cs-137).');
+            this.elements.mdaEnergy?.focus();
+            return;
+        }
 
         try {
             this.elements.btnCalcMDA.textContent = 'Calculating...';
@@ -242,7 +247,7 @@ export class EstimatorUI {
                 background_counts: bg,
                 live_time_s: time,
                 detector: detector,
-                energy_keV: parseFloat(isoEnergy)
+                energy_keV: isoEnergy
             });
 
             this.elements.mdaResult.style.display = 'block';
@@ -252,7 +257,7 @@ export class EstimatorUI {
                 this.elements.mdaValue.textContent = "Error";
             }
         } catch (e) {
-            ui.showError(e.message);
+            notifyAuto('MDA calculation failed: ' + e.message);   // a toast; ui.showError would replace the upload drop zone
         } finally {
             this.elements.btnCalcMDA.textContent = 'Calculate MDA';
         }

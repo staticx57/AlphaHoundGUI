@@ -136,6 +136,7 @@
   - **8 Vintage Computing**: Apple II, C64, IBM 5150, Amiga, VT-100, BBC Micro, Atari ST, ZX Spectrum
   - **6 Vintage Radiological**: Canberra Packard, Bicron, TASC, Nuclear Data, Radiation Alert, Radon Scout
   - **6 Vacuum Tube Display**: Magic Eye, Dekatron, Numitron, VFD, Cold Cathode, Panaplex
+- **Works offline and on a LAN**: the server listens on all interfaces (`http://<computer-ip>:3200` from a phone or laptop on the network) and serves its charting libraries itself, so no internet is needed
 - **Dynamic CSS Variables**: All UI elements respect theme colors (--primary-color, --accent-color, etc.)
 - **Chart Theme Integration**: Chart.js adopts the theme's colours *and* its character (line weight, glow, smoothing, grid style, number font); the AlphaHound channel panel derives its gamma/beta/alpha colours from each theme (see `docs/ALPHAHOUND_SERIAL.md`)
 - **Status Color Overrides**: Vintage themes include custom confidence/status colors
