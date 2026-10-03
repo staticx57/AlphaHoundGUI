@@ -151,42 +151,101 @@ def _assess_data_quality(peaks, energies, counts, live_time: float) -> dict:
     return data_quality
 
 
-def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0, use_enhanced: bool = True) -> dict:
-    """
-    Common analysis pipeline for all spectrum sources.
-    Detects peaks, identifies isotopes, and finds decay chains.
-    
-    Args:
-        result: Parsed spectrum dict with 'counts' and 'energies'
-        is_calibrated: Whether the spectrum has energy calibration
-        live_time: Acquisition time in seconds
-        use_enhanced: Whether to use enhanced analysis modules if available
-    
-    Returns:
-        Updated result dict with 'peaks', 'isotopes', 'decay_chains', and 'analysis_mode'
-    """
-    if not result.get("counts") or not result.get("energies"):
-        return result
-    
-    energies = result["energies"]
-    counts = result["counts"]
-
-    # Which detector profile (efficiency, resolution) describes this spectrum: the ROI panel preselects it
+def _annotate_detector(result: dict, is_calibrated: bool):
+    """Which detector profile describes this spectrum (the ROI panel preselects it) and its lower display limit."""
     try:
         from spectroscopy.source_templates import resolve_detector
         result["detector_profile"] = resolve_detector(result.get("metadata"))
     except Exception as e:
         logger.debug(f"[Analysis] Detector profile not resolved: {e}")
 
-    # Lower display limit: the detector's specified threshold (channels below it hold
-    # electronic noise, e.g. the large pile in a RadiaCode's first channels).
+    # The detector's specified threshold: channels below it hold electronic noise (e.g. the large pile in a RadiaCode's first channels)
     if is_calibrated:
         try:
             from spectroscopy.source_templates import detector_min_energy
             result["display_min_keV"] = detector_min_energy(result.get("metadata"))
         except Exception:
             logger.debug('display_min_keV not set', exc_info=True)
-    
+
+
+def _identify(peaks, current_settings: dict, use_enhanced: bool):
+    """Line-matching isotope identification and decay-chain detection (enhanced when available, with the basic one as fallback)."""
+    all_isotopes = identify_isotopes(
+        peaks,
+        energy_tolerance=current_settings['energy_tolerance'],
+        mode=current_settings.get('mode', 'simple')
+    )
+
+    if use_enhanced and HAS_ENHANCED_ANALYSIS:
+        try:
+            all_chains = identify_decay_chains_enhanced(
+                peaks,
+                energy_tolerance=current_settings['energy_tolerance'],
+                min_score=0.25
+            )
+            # Also enhance isotope confidence scores
+            all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
+        except Exception as e:
+            logger.warning(f"[Analysis] Enhanced chain detection failed: {e}")
+            all_chains = identify_decay_chains(
+                peaks, all_isotopes,
+                energy_tolerance=current_settings['energy_tolerance']
+            )
+    else:
+        all_chains = identify_decay_chains(
+            peaks, all_isotopes,
+            energy_tolerance=current_settings['energy_tolerance']
+        )
+    return all_isotopes, all_chains
+
+
+def _add_equilibrium_status(decay_chains, result: dict, energies, counts, live_time: float):
+    """Secular equilibrium of each reported series, measured on the spectrum with the ROI engine (the peak list is too coarse)."""
+    try:
+        from nuclides.chain_detection_enhanced import check_secular_equilibrium
+        from spectroscopy.source_templates import resolve_detector
+        detector = resolve_detector(result.get("metadata"))
+        for chain in decay_chains:
+            chain["equilibrium_status"] = check_secular_equilibrium(
+                chain.get("detected_members", {}), chain.get("parent"), energies, counts, detector, live_time)
+    except Exception as e:
+        logger.warning(f"[Analysis] Equilibrium check failed: {e}")
+
+
+def _add_xrf_detections(result: dict, peaks):
+    """X-ray fluorescence lines among the low-energy peaks."""
+    try:
+        from nuclides.nuclear_data import detect_xrf_peaks
+        peak_energies = [p.get('energy', 0) for p in peaks if p.get('energy', 0) < 100]
+        if peak_energies:
+            xrf_results = detect_xrf_peaks(peak_energies)
+            if xrf_results:
+                result["xrf_detections"] = xrf_results
+    except Exception:
+        logger.debug('XRF detection skipped', exc_info=True)
+
+
+def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0, use_enhanced: bool = True) -> dict:
+    """
+    Common analysis pipeline for all spectrum sources.
+    Detects peaks, identifies isotopes, and finds decay chains.
+
+    Args:
+        result: Parsed spectrum dict with 'counts' and 'energies'
+        is_calibrated: Whether the spectrum has energy calibration
+        live_time: Acquisition time in seconds
+        use_enhanced: Whether to use enhanced analysis modules if available
+
+    Returns:
+        Updated result dict with 'peaks', 'isotopes', 'decay_chains', and 'analysis_mode'
+    """
+    if not result.get("counts") or not result.get("energies"):
+        return result
+
+    energies = result["energies"]
+    counts = result["counts"]
+
+    _annotate_detector(result, is_calibrated)
     peaks = _detect_peaks(result, energies, counts, use_enhanced)
 
     # Without an energy calibration the "energies" are channel numbers, so matching them
@@ -205,42 +264,12 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
         result["isotopes"] = []
         result["decay_chains"] = []
         return result
-    
-    # Select settings based on calibration and acquisition time
-    if is_calibrated and live_time > 30.0:
-        current_settings = DEFAULT_SETTINGS
-    else:
-        current_settings = UPLOAD_SETTINGS
-    
-    # Identify isotopes
-    all_isotopes = identify_isotopes(
-        peaks, 
-        energy_tolerance=current_settings['energy_tolerance'], 
-        mode=current_settings.get('mode', 'simple')
-    )
-    
-    # Use enhanced chain detection if available
-    if use_enhanced and HAS_ENHANCED_ANALYSIS:
-        try:
-            all_chains = identify_decay_chains_enhanced(
-                peaks,
-                energy_tolerance=current_settings['energy_tolerance'],
-                min_score=0.25
-            )
-            # Also enhance isotope confidence scores
-            all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
-        except Exception as e:
-            logger.warning(f"[Analysis] Enhanced chain detection failed: {e}")
-            all_chains = identify_decay_chains(
-                peaks, all_isotopes, 
-                energy_tolerance=current_settings['energy_tolerance']
-            )
-    else:
-        all_chains = identify_decay_chains(
-            peaks, all_isotopes, 
-            energy_tolerance=current_settings['energy_tolerance']
-        )
-    
+
+    # Settings by acquisition time: a long calibrated acquisition is judged strictly, an upload or a short one leniently
+    current_settings = DEFAULT_SETTINGS if live_time > 30.0 else UPLOAD_SETTINGS
+
+    all_isotopes, all_chains = _identify(peaks, current_settings, use_enhanced)
+
     weighted_chains = apply_abundance_weighting(all_chains)
     # The simple-mode isotope cap is applied after the spectrum fit below: capping first lets isotopes
     # of a series the fit later rules out (e.g. U-238 daughters on a thorium source) use up the slots
@@ -250,42 +279,22 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
 
     decay_chains, isotopes = _reconcile_with_template_fit(
         result, energies, counts, peaks, decay_chains, isotopes, current_settings)
-
-    # Secular equilibrium of each reported series, measured on the spectrum with the ROI engine (the peak list is too coarse)
-    try:
-        from nuclides.chain_detection_enhanced import check_secular_equilibrium
-        from spectroscopy.source_templates import resolve_detector
-        detector = resolve_detector(result.get("metadata"))
-        for chain in decay_chains:
-            chain["equilibrium_status"] = check_secular_equilibrium(
-                chain.get("detected_members", {}), chain.get("parent"), energies, counts, detector, live_time)
-    except Exception as e:
-        logger.warning(f"[Analysis] Equilibrium check failed: {e}")
+    _add_equilibrium_status(decay_chains, result, energies, counts, live_time)
 
     if current_settings.get("mode") == "simple":
         isotopes = sorted(isotopes, key=lambda i: i.get("confidence", 0), reverse=True)[:current_settings.get("max_isotopes", 999)]
 
-    # Try multiplet fitting for better peak deconvolution
+    # Multiplet fitting for better peak deconvolution
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
         try:
             peaks = enhance_peaks_with_multiplet_fitting(energies, counts, peaks)
             result["peaks"] = peaks
         except Exception as e:
             logger.warning(f"[Analysis] Multiplet fitting failed: {e}")
-    
+
     result["isotopes"] = isotopes
     result["decay_chains"] = decay_chains
-    
-    # Add XRF detection for low-energy peaks
-    try:
-        from nuclides.nuclear_data import detect_xrf_peaks
-        peak_energies = [p.get('energy', 0) for p in peaks if p.get('energy', 0) < 100]
-        if peak_energies:
-            xrf_results = detect_xrf_peaks(peak_energies)
-            if xrf_results:
-                result["xrf_detections"] = xrf_results
-    except Exception:
-        logger.debug('XRF detection skipped', exc_info=True)
-    
+
+    _add_xrf_detections(result, peaks)
     result["data_quality"] = _assess_data_quality(peaks, energies, counts, live_time)
     return sanitize_for_json(result)
