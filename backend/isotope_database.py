@@ -596,147 +596,134 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     return sorted(isotope_matches.values(), key=lambda x: (x['confidence'], x['matches']), reverse=True)
 
 
+RELATIVE_PEAK_THRESHOLD = 0.05   # a peak counts for a chain only if it is at least 5% of the largest peak
+
+
+def _peak_strength(peak) -> float:
+    """A peak's size: its counts, else its area, else its height, else 0 (a peak without any is rejected)."""
+    return peak.get('counts', peak.get('area', peak.get('height', 0)))
+
+
+def _match_chain_indicators(chain_data, peaks, energy_tolerance, min_counts_threshold):
+    """
+    Check each key indicator isotope of one chain against the peaks.
+
+    Returns (detected_members, required_found, required_missing, total_weight, matched_weight): the matched lines per
+    detected isotope, the required isotopes found and missing, and the summed indicator weights (all, and matched).
+    """
+    detected_members = {}
+    required_isotopes_found = []
+    required_isotopes_missing = []
+    total_weight = 0.0
+    matched_weight = 0.0
+
+    for isotope, indicator_config in chain_data["key_indicators"].items():
+        # dict format (energies / required / weight), or the legacy plain list of energies
+        if isinstance(indicator_config, dict):
+            indicator_energies = indicator_config.get("energies", [])
+            is_required = indicator_config.get("required", False)
+            weight = indicator_config.get("weight", 1.0)
+        else:
+            indicator_energies = indicator_config
+            is_required = False
+            weight = 1.0
+
+        total_weight += weight
+        matched_energies = []
+
+        for expected_energy in indicator_energies:
+            for peak in peaks:
+                energy_diff = abs(peak['energy'] - expected_energy)
+                peak_area = _peak_strength(peak)
+                # within tolerance AND above the relative threshold
+                if energy_diff <= energy_tolerance and peak_area >= min_counts_threshold:
+                    matched_energies.append({
+                        'energy': expected_energy,
+                        'observed': peak['energy'],
+                        'diff': energy_diff,
+                        'peak_area': peak_area
+                    })
+                    break
+
+        if matched_energies:
+            detected_members[isotope] = matched_energies
+            matched_weight += weight
+            if is_required:
+                required_isotopes_found.append(isotope)
+        elif is_required:
+            required_isotopes_missing.append(isotope)
+
+    return detected_members, required_isotopes_found, required_isotopes_missing, total_weight, matched_weight
+
+
+def _chain_confidence_level(num_detected: int) -> str:
+    if num_detected >= 4:
+        return "HIGH"
+    if num_detected >= 3:
+        return "MEDIUM"
+    if num_detected >= 2:
+        return "LOW"
+    return "SINGLE"
+
+
 def identify_decay_chains(peaks, identified_isotopes=None, energy_tolerance=20.0):
     """
     Identify radioactive decay chains based on detected peaks and isotopes.
-    
-    ENHANCED: Uses required isotopes, intensity weighting, min isotope threshold,
-    and exclusion rules for smarter detection.
-    
+
+    Uses required isotopes, intensity weighting, a minimum isotope count and exclusion rules.
+
     Args:
         peaks: List of detected peak dictionaries with 'energy' key
-        identified_isotopes: Optional list from identify_isotopes() (for optimization)
+        identified_isotopes: Optional list from identify_isotopes() (for the exclusion check)
         energy_tolerance: Maximum energy difference for a match (keV)
-    
+
     Returns:
         List of detected decay chains with confidence scores (filtered by min requirements)
     """
     if not peaks:
         return []
-    
-    # === RELATIVE THRESHOLD APPROACH ===
-    # Instead of absolute counts, use % of max peak
-    # This works for both strong spectra (real samples) and weak spectra (short acquisitions)
-    RELATIVE_THRESHOLD = 0.05  # Peak must be at least 5% of max peak height
-    
-    # Find max peak counts in this spectrum
-    max_peak_counts = 0
-    for peak in peaks:
-        peak_counts = peak.get('counts', peak.get('area', peak.get('height', 0)))
-        if peak_counts > max_peak_counts:
-            max_peak_counts = peak_counts
-    
-    min_counts_threshold = max_peak_counts * RELATIVE_THRESHOLD
-    
-    # DEBUG: Log threshold calculation
-    logger.info(f"[DEBUG Chain] max_peak_counts={max_peak_counts}, min_threshold={min_counts_threshold}")
-    logger.info(f"[DEBUG Chain] Peak energies: {[p.get('energy', 0) for p in peaks[:6]]}")
-    logger.info(f"[DEBUG Chain] Peak counts: {[p.get('counts', 0) for p in peaks[:6]]}")
-    
-    # Build set of detected isotope names for exclusion checking
+
+    # Relative rather than absolute threshold (a fraction of the largest peak): works for strong spectra and for
+    # weak ones from short acquisitions
+    max_peak_counts = max([0] + [_peak_strength(p) for p in peaks])
+    min_counts_threshold = max_peak_counts * RELATIVE_PEAK_THRESHOLD
+    logger.debug(f"[Chain] max_peak_counts={max_peak_counts}, min_threshold={min_counts_threshold}, "
+                 f"peak energies={[p.get('energy', 0) for p in peaks[:6]]}")
+
+    # Confidently detected isotope names, for the exclusion check
     detected_isotope_names = set()
     if identified_isotopes:
         for iso in identified_isotopes:
-            if iso.get('confidence', 0) > 30:  # Only count confident detections
+            if iso.get('confidence', 0) > 30:
                 detected_isotope_names.add(iso.get('isotope', ''))
-    
+
     chain_detections = []
-    
+
     for chain_name, chain_data in DECAY_CHAINS.items():
-        detected_members = {}
-        required_isotopes_found = []
-        required_isotopes_missing = []
-        total_weight = 0.0
-        matched_weight = 0.0
-        
-        # Check each key indicator isotope in this chain
-        for isotope, indicator_config in chain_data["key_indicators"].items():
-            # Handle new dict format with energies/required/weight
-            if isinstance(indicator_config, dict):
-                indicator_energies = indicator_config.get("energies", [])
-                is_required = indicator_config.get("required", False)
-                weight = indicator_config.get("weight", 1.0)
-            else:
-                # Legacy format: just list of energies
-                indicator_energies = indicator_config
-                is_required = False
-                weight = 1.0
-            
-            total_weight += weight
-            matched_energies = []
-            
-            # Check if any of this isotope's peaks are detected
-            for expected_energy in indicator_energies:
-                for peak in peaks:
-                    energy_diff = abs(peak['energy'] - expected_energy)
-                    # Use counts as primary metric, fallback to 0 (reject if missing)
-                    peak_area = peak.get('counts', peak.get('area', peak.get('height', 0)))
-                    
-                    # Must be within tolerance AND above relative threshold
-                    if energy_diff <= energy_tolerance and peak_area >= min_counts_threshold:
-                        matched_energies.append({
-                            'energy': expected_energy,
-                            'observed': peak['energy'],
-                            'diff': energy_diff,
-                            'peak_area': peak_area
-                        })
-                        break
-            
-            # If we detected at least one peak from this isotope, mark it as detected
-            if matched_energies:
-                detected_members[isotope] = matched_energies
-                matched_weight += weight
-                if is_required:
-                    required_isotopes_found.append(isotope)
-            elif is_required:
-                required_isotopes_missing.append(isotope)
-        
-        # === EXCLUSION CHECK ===
-        # Some chains have exclusion isotopes (e.g., Ra-226 Refined excludes Th-234)
-        exclusion_violated = False
-        exclusion_isotopes = chain_data.get("exclusion_isotopes", [])
-        for excl_iso in exclusion_isotopes:
-            if excl_iso in detected_isotope_names:
-                exclusion_violated = True
-                break
-        
-        # === MINIMUM REQUIREMENTS CHECK ===
+        (detected_members, required_isotopes_found, required_isotopes_missing,
+         total_weight, matched_weight) = _match_chain_indicators(chain_data, peaks, energy_tolerance, min_counts_threshold)
+
+        # Some chains exclude an isotope (e.g. Ra-226 Refined excludes Th-234)
+        exclusion_violated = any(excl in detected_isotope_names for excl in chain_data.get("exclusion_isotopes", []))
+
+        # Skip chains below the minimum isotope count, with a required isotope missing, or with an exclusion violated
         min_required = chain_data.get("min_isotopes_required", 1)
         num_detected = len(detected_members)
-        
-        # Skip chains that don't meet minimum OR have missing required isotopes OR exclusion violated
-        if num_detected < min_required:
+        if num_detected < min_required or required_isotopes_missing or exclusion_violated:
             continue
-        if required_isotopes_missing:
-            continue
-        if exclusion_violated:
-            continue
-        
-        # === CONFIDENCE SCORING (Weighted) ===
+
+        # Confidence: mean of isotope coverage and weighted coverage, scaled by the chain's abundance weight
         num_key_isotopes = len(chain_data["key_indicators"])
         isotope_coverage = (num_detected / num_key_isotopes) * 100 if num_key_isotopes > 0 else 0
         weight_coverage = (matched_weight / total_weight) * 100 if total_weight > 0 else 0
-        confidence = (isotope_coverage + weight_coverage) / 2
-        
-        # Apply abundance weighting
         abundance_weight = chain_data.get('abundance_weight', 1.0)
-        confidence *= abundance_weight
-        
-        # Confidence level
-        if num_detected >= 4:
-            confidence_level = "HIGH"
-        elif num_detected >= 3:
-            confidence_level = "MEDIUM"
-        elif num_detected >= 2:
-            confidence_level = "LOW"
-        else:
-            confidence_level = "SINGLE"
-        
+        confidence = (isotope_coverage + weight_coverage) / 2 * abundance_weight
+
         chain_detections.append({
             'chain_name': chain_name,
             'parent': chain_data['parent'],
             'confidence': confidence,
-            'confidence_level': confidence_level,
+            'confidence_level': _chain_confidence_level(num_detected),
             'detected_members': detected_members,
             'num_detected': num_detected,
             'num_key_isotopes': num_key_isotopes,
@@ -747,23 +734,11 @@ def identify_decay_chains(peaks, identified_isotopes=None, energy_tolerance=20.0
             'references': chain_data.get('references', []),
             'notes': chain_data.get('notes', '')
         })
-    
-    # === POST-DETECTION SUPPRESSION ===
-    # If natural chains (U-238 or Th-232) are detected, suppress man-made sources
-    # This prevents false positives from Compton continuum matching Cs-137/Co-60
-    natural_chains_detected = any(
-        c['chain_name'] in ['U-238 Chain', 'Th-232 Chain'] 
-        for c in chain_detections
-    )
-    
-    if natural_chains_detected:
-        # Filter out chains marked for suppression when natural is present
-        chain_detections = [
-            c for c in chain_detections 
-            if not c.get('suppress_when_natural', False)
-        ]
-    
-    # Sort by confidence (highest first)
+
+    # With a natural chain (U-238 or Th-232) detected, drop man-made chains marked for suppression: they are
+    # usually Compton continuum matching Cs-137 / Co-60
+    if any(c['chain_name'] in ['U-238 Chain', 'Th-232 Chain'] for c in chain_detections):
+        chain_detections = [c for c in chain_detections if not c.get('suppress_when_natural', False)]
+
     chain_detections.sort(key=lambda x: x['confidence'], reverse=True)
-    
     return chain_detections

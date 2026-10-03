@@ -143,48 +143,28 @@ def get_source_signature(source_id: str) -> Optional[SourceSignature]:
     return SOURCE_SIGNATURES.get(source_id)
 
 
-def identify_source_type(
-    energies: List[float],
-    counts: List[int],
-    detector_name: str,
-    acquisition_time_s: float,
-    min_counts_threshold: int = 50
-) -> Dict:
-    """
-    Identify the likely source type based on spectral signatures.
-    
-    Args:
-        energies: List of energy values (keV)
-        counts: List of counts per channel
-        detector_name: Name of detector for efficiency lookup
-        acquisition_time_s: Acquisition time in seconds
-        min_counts_threshold: Minimum net counts to consider a peak "detected"
-    
-    Returns:
-        Dictionary with identification results
-    """
-    analyzer = ROIAnalyzer(detector_name)
-    
-    # Analyze all relevant isotopes
+# The isotope lines checked in every spectrum: the markers the signatures above are built from
+ISOTOPES_TO_CHECK = [
+    "Th-234 (93 keV)",
+    "Bi-214 (609 keV)",
+    "Pb-214 (352 keV)",
+    "Pa-234m (1001 keV)",
+    "Ac-228 (911 keV)",
+    "Tl-208 (2614 keV)",
+    "Am-241 (60 keV)",
+    "K-40 (1461 keV)",
+    "U-235 (186 keV)",
+    "Cs-137 (662 keV)",
+    "Co-60 (1173 keV)",
+    "Co-60 (1332 keV)",
+]
+
+
+def _measure_isotopes(analyzer: ROIAnalyzer, energies, counts, acquisition_time_s: float):
+    """ROI-analyse every isotope line: (per-isotope results, names of those detected). A failed analysis is recorded, not raised."""
     isotope_results = {}
-    isotopes_to_check = [
-        "Th-234 (93 keV)",
-        "Bi-214 (609 keV)",
-        "Pb-214 (352 keV)",
-        "Pa-234m (1001 keV)",
-        "Ac-228 (911 keV)",
-        "Tl-208 (2614 keV)",
-        "Am-241 (60 keV)",
-        "K-40 (1461 keV)",
-        "U-235 (186 keV)",
-        "Cs-137 (662 keV)",
-        "Co-60 (1173 keV)",
-        "Co-60 (1332 keV)",
-    ]
-    
     detected_isotopes = []
-    
-    for isotope in isotopes_to_check:
+    for isotope in ISOTOPES_TO_CHECK:
         try:
             result = analyzer.analyze(energies, counts, isotope, acquisition_time_s)
             isotope_results[isotope] = {
@@ -205,83 +185,109 @@ def identify_source_type(
                 "confidence": 0,
                 "error": str(e)
             }
-    
-    # Score each source type
-    source_scores = {}
-    
-    for source_id, signature in SOURCE_SIGNATURES.items():
-        score = 0.0
-        matching_required = 0
-        matching_supporting = 0
-        matching_excluding = 0
-        details = []
-        
-        # Check required isotopes (each contributes 0.3)
-        for isotope in signature.required_isotopes:
-            if isotope in detected_isotopes:
-                score += 0.3
-                matching_required += 1
-                details.append(f"✓ Required: {isotope}")
-            else:
-                details.append(f"✗ Missing required: {isotope}")
-        
-        # Normalize required score
-        if len(signature.required_isotopes) > 0:
-            required_fraction = matching_required / len(signature.required_isotopes)
+    return isotope_results, detected_isotopes
+
+
+def _score_source(signature: SourceSignature, detected_isotopes: List[str]) -> Dict:
+    """
+    Score one source signature against the detected isotopes: +0.3 per required isotope found, +0.1 per supporting one,
+    -0.2 per excluded one; zero unless at least half of the required isotopes are present; clamped to 0..1.
+    """
+    score = 0.0
+    matching_required = 0
+    matching_supporting = 0
+    matching_excluding = 0
+    details = []
+
+    for isotope in signature.required_isotopes:
+        if isotope in detected_isotopes:
+            score += 0.3
+            matching_required += 1
+            details.append(f"✓ Required: {isotope}")
         else:
-            required_fraction = 0
-        
-        # Check supporting isotopes (each contributes 0.1)
-        for isotope in signature.supporting_isotopes:
-            if isotope in detected_isotopes:
-                score += 0.1
-                matching_supporting += 1
-                details.append(f"✓ Supporting: {isotope}")
-        
-        # Check excluding isotopes (each deducts 0.2)
-        for isotope in signature.excluding_isotopes:
-            if isotope in detected_isotopes:
-                score -= 0.2
-                matching_excluding += 1
-                details.append(f"✗ Unexpected: {isotope}")
-        
-        # Must have at least 50% of required isotopes to be considered
-        if required_fraction < 0.5:
-            score = 0.0
-        
-        source_scores[source_id] = {
-            "name": signature.name,
-            "description": signature.description,
-            "score": max(0, min(1.0, score)),
-            "required_matched": f"{matching_required}/{len(signature.required_isotopes)}",
-            "supporting_matched": matching_supporting,
-            "excluding_matched": matching_excluding,
-            "details": details,
-            "notes": signature.notes
-        }
-    
-    # Find best match
+            details.append(f"✗ Missing required: {isotope}")
+
+    if len(signature.required_isotopes) > 0:
+        required_fraction = matching_required / len(signature.required_isotopes)
+    else:
+        required_fraction = 0
+
+    for isotope in signature.supporting_isotopes:
+        if isotope in detected_isotopes:
+            score += 0.1
+            matching_supporting += 1
+            details.append(f"✓ Supporting: {isotope}")
+
+    for isotope in signature.excluding_isotopes:
+        if isotope in detected_isotopes:
+            score -= 0.2
+            matching_excluding += 1
+            details.append(f"✗ Unexpected: {isotope}")
+
+    if required_fraction < 0.5:
+        score = 0.0
+
+    return {
+        "name": signature.name,
+        "description": signature.description,
+        "score": max(0, min(1.0, score)),
+        "required_matched": f"{matching_required}/{len(signature.required_isotopes)}",
+        "supporting_matched": matching_supporting,
+        "excluding_matched": matching_excluding,
+        "details": details,
+        "notes": signature.notes
+    }
+
+
+def _confidence_level(best_score: float) -> str:
+    if best_score >= 0.7:
+        return "HIGH"
+    if best_score >= 0.4:
+        return "MEDIUM"
+    if best_score > 0.2:
+        return "LOW"
+    return "NONE"
+
+
+def identify_source_type(
+    energies: List[float],
+    counts: List[int],
+    detector_name: str,
+    acquisition_time_s: float,
+    min_counts_threshold: int = 50
+) -> Dict:
+    """
+    Identify the likely source type based on spectral signatures.
+
+    Args:
+        energies: List of energy values (keV)
+        counts: List of counts per channel
+        detector_name: Name of detector for efficiency lookup
+        acquisition_time_s: Acquisition time in seconds
+        min_counts_threshold: Minimum net counts to consider a peak "detected"
+
+    Returns:
+        Dictionary with identification results
+    """
+    analyzer = ROIAnalyzer(detector_name)
+    isotope_results, detected_isotopes = _measure_isotopes(analyzer, energies, counts, acquisition_time_s)
+
+    source_scores = {source_id: _score_source(signature, detected_isotopes)
+                     for source_id, signature in SOURCE_SIGNATURES.items()}
+
+    # Best match: the highest score (the first one wins a tie)
     best_match = None
     best_score = 0.0
-    
     for source_id, data in source_scores.items():
         if data["score"] > best_score:
             best_score = data["score"]
             best_match = source_id
-    
-    # Determine confidence level
-    if best_score >= 0.7:
-        confidence_level = "HIGH"
-    elif best_score >= 0.4:
-        confidence_level = "MEDIUM"
-    elif best_score > 0.2:
-        confidence_level = "LOW"
-    else:
-        confidence_level = "NONE"
-        best_match = None  # Don't claim a match if score is too low
-    
-    # Build result
-    if best_match and confidence_level != "NONE":
+
+    confidence_level = _confidence_level(best_score)
+    if confidence_level == "NONE":
+        best_match = None   # do not claim a match when the score is too low
+
+    if best_match:
         return {
             "identified_source": best_match,
             "source_name": source_scores[best_match]["name"],
@@ -293,23 +299,23 @@ def identify_source_type(
             "all_scores": source_scores,
             "notes": source_scores[best_match]["notes"]
         }
-    else:
-        # Unknown source - just present the data as-is
-        return {
-            "identified_source": None,
-            "source_name": "Unknown Source",
-            "source_description": (
-                "This spectrum does not match any known source signature in our database. "
-                "The detected isotopes are listed below for manual interpretation."
-            ),
-            "confidence": 0.0,
-            "confidence_level": "NONE",
-            "detected_isotopes": detected_isotopes,
-            "isotope_details": isotope_results,
-            "all_scores": source_scores,
-            "notes": (
-                "No automatic classification possible. "
-                "Review the detected isotopes manually to determine the source type. "
-                f"Detected: {', '.join(detected_isotopes) if detected_isotopes else 'No isotopes above detection threshold'}"
-            )
-        }
+
+    # Unknown source: present the data as it is
+    return {
+        "identified_source": None,
+        "source_name": "Unknown Source",
+        "source_description": (
+            "This spectrum does not match any known source signature in our database. "
+            "The detected isotopes are listed below for manual interpretation."
+        ),
+        "confidence": 0.0,
+        "confidence_level": "NONE",
+        "detected_isotopes": detected_isotopes,
+        "isotope_details": isotope_results,
+        "all_scores": source_scores,
+        "notes": (
+            "No automatic classification possible. "
+            "Review the detected isotopes manually to determine the source type. "
+            f"Detected: {', '.join(detected_isotopes) if detected_isotopes else 'No isotopes above detection threshold'}"
+        )
+    }
