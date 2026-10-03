@@ -636,6 +636,20 @@ Contributions are welcome! Please follow these guidelines:
 3. **Documentation**: Help improve guides, fix typos, add examples
 4. **Testing**: Test with real detector data and report findings
 
+**Running the tests**
+
+```bash
+pip install -r requirements.txt -r backend/requirements-dev.txt
+python -m pytest backend/tests                 # backend suite, no hardware needed
+```
+
+The browser checks (headless Chrome, with the server running) are scripts in `backend/tests/`:
+`ui_smoke.py`, `ui_theme_sweep.py`, `ui_channels_sweep.py`, `ui_a11y_audit.py`. They use `http://localhost:3200`; set
+`ALPHAHOUND_URL=http://127.0.0.1:3201` to run them against a second instance while a device is connected to the first
+(set `PYTHONIOENCODING=utf-8` on Windows). `tests/test_repo_layout.py` keeps the repository tidy: new root files, backup or
+temporary files, large or unreferenced images, broken document links, tracked user data and loose backend modules fail it.
+New backend code goes into `formats/`, `spectroscopy/`, `nuclides/`, `devices/`, `ml/` or `routers/` (see the project structure above).
+
 **Areas for Contribution:**
 - Additional detector support (NaI, HPGe, other scintillators)
 - ML model improvements (real data collection, accuracy tuning)

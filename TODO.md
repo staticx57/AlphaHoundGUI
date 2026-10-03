@@ -13,17 +13,15 @@
 - [x] **Chart Autoscale & Label Stacking**: ✅ Fixed autoscale toggle between peak-focused view and full spectrum, fixed overlapping annotation labels with vertical stacking (2025-12-22)
 - [x] **Documentation Overhaul**: ✅ Major README update with Radiacode, XRF, SNIP, spectrum algebra, server-managed acquisitions (2025-12-22)
 
-### Session handoff (2026-10-02, live RC-110 testing on Windows, branch fix/duplicate-route-registrations)
-Last push: `3a8aa0d`. **Uncommitted** (all tests pass: 159 backend, 23 UI smoke, 34/34 theme sweep after the info-icon colour fix):
+### Live-device session of 2026-10-02 (RC-110 on Windows): what it changed
 - Time fields: Acquisition/Live/Real/count_time were one wall-clock number copied 4x. UI now shows one "Acquisition Time" card (or separate Live/Real cards when they differ) with an ⓘ tooltip; acquisitions add `device_duration_s` (instrument-reported, Radiacode) and `time_notes`.
 - Radiacode UI state: after Disconnect the Connect button still read "Connected"; a connection lost server-side (restart, BLE drop) was never noticed. Now `showRadiacodeDisconnectedUI()` resets both; 3 consecutive 400 "not connected" dose polls trigger it. Covered by ui_smoke section G.
-- Untracked user data (not committed): `backend/data/acquisitions/spectrum_2026-10-02_{09-53-28,11-12-13,11-20-16}.n42` (RC-110 + Takumar lens; 09-53-28 carries the old wrong AlphaHound label).
 Open items:
 - [ ] (Total dose is now also shown next to the live dose rate: `rc-dose-total`.) Verify RC-110 end to end after a fresh connect: Dose row shows "(session)" total; compare with the device screen (device DS_uR register and RareData are not served by firmware 4.14 over BLE: see `/radiacode/diagnostics/dose-sources`).
 - [x] Restore Radiacode UI state on page refresh while the server is still connected (`checkRadiacodeStatus`, ui_smoke section H).
 - [x] Device alarm events: driver logs `Event` records; `GET /radiacode/events?since_id=` and `/radiacode/alarm-limits`; UI toasts new alarms. Verified on the RC-110 (2026-10-02): alarms are edge-triggered (fire when the dose rate crosses a limit, so a source already above the limit at connect gives none); pulling the lens away and back toasts each time. Alarm limits are API-only (no UI yet).
 - [x] PyRIID / AI Identify: PyRIID dropped (pins numpy 1.26 / scipy 1.13 / TF 2.16, and was only an MLP wrapper here). `ml/ml_analysis.py` now uses a scikit-learn MLP on a new physics-based synthesiser, resampling spectra onto the model grid with the device calibration. Real-spectra scorecard: `python backend/tests/ml_benchmark.py` (8/9 consistent; known miss: the weak community uranium-glaze CSV reads Tl-201 at <20%). Classes are named for what the spectrum shows (`Th-232 series`, `U-238 series`, `Ra-226 series`, `Cs-137 + Co-60`, ...), not for objects: a gamma spectrum cannot tell a thoriated lens from a mantle; use source-type analysis for that. Real-data augmentation is opt-in (`ML_USE_REAL_DATA=1`). Old PyRIID module and guides removed/archived.
-- [ ] Tooling notes: servers are restarted with `powershell -File $TEMP/restart.ps1`-style (kill port 3200, start `python main.py` in backend); a restart drops the Radiacode BLE link. Browser tests: `python backend/tests/ui_smoke.py`, `ui_theme_sweep.py` (set PYTHONIOENCODING=utf-8 on Windows); real-spectrum benchmark: `python backend/tests/real_benchmark.py`.
+- Tooling notes: restart the server with `python backend/tools/devctl.py restart` (it reconnects the device; a restart drops the Radiacode BLE link, and a server keeps running the code it was started with, so restart after pulling). Tests: `python -m pytest backend/tests` (641). Browser tests (headless Chrome, `PYTHONIOENCODING=utf-8` on Windows): `python backend/tests/ui_smoke.py`, `ui_theme_sweep.py`, `ui_channels_sweep.py`, `ui_a11y_audit.py`; they use `http://localhost:3200`, or `ALPHAHOUND_URL=http://127.0.0.1:3201` to test a second instance while a device is connected to the first. Real-spectrum benchmark: `python backend/tests/real_benchmark.py`. Test spectra live in `backend/tests/data/`; `backend/data/acquisitions/` is the app's own output and is not tracked.
 ### AlphaHound modernization (2026-10-02 PM, see docs/ALPHAHOUND_SERIAL.md)
 Done and verified on the live AB+G (COM8): `P` polling and CPS parsing, dose stream vs `DB` reply fix, details panel, display replica (Mode 4 compared with RadView's product photos), dose log CSV, `devctl restart` with automatic reconnect.
 - [ ] Compare the replica and the numbers with the physical screen: which unit does the device show, and is `DB` / the `P` dose field really nSv/h (the data say 10x the stream; the unit is inferred, not documented)?
@@ -75,6 +73,9 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [ ] Add background-dominated mixture training
 
 ### Technical Debt
+Structural debt (long functions, overlapping modules, what was cleaned and what is open) is kept in `TECHNICAL_DEBT.md`; the items below are product-facing.
+- [ ] CSV: Becquerel cannot read `.csv`, so the pandas fallback is the only parser that runs and the Becquerel branch in `formats/csv_parser.py` is dead code: remove it or restore a working Becquerel read
+- [ ] ML real-data augmentation (`ML_USE_REAL_DATA=1`, `ml/ml_data_loader.py`) uses unseeded `np.random`, so that model differs on every training; seed it like the synthesiser
 - [x] Light theme XRF section contrast fixed (CSS vars `--xrf-text/--xrf-accent`; confidence badge now follows theme switches)
 - [x] Isotope confidence bars and decay-chain cards now follow theme switches (`getThemeColors()` returns CSS var references; covered by `ui_smoke.py` section E). Note: only valid for CSS contexts, not canvas/Chart.js
 - [ ] Sweep (`backend/tests/ui_theme_sweep.py`) checks only overflow/contrast/JS errors on 17 themes × 2 viewports; extend to the Radiacode tab, modals and the 35 proposed themes
@@ -97,7 +98,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [ ] Browser-check the chain diagram's "or" branch and the ROI notes in the other themes and on a phone width (checked in Dark at desktop width only).
 - [ ] Replace remaining `print` calls in multi-line/other statements and the `[Tag]` message prefixes now duplicated by logger names
 - [x] Split `routers/analysis.py` (1500+ lines) into `analysis.py`, `export.py`, `nuclear.py` (same 37 routes)
-- [ ] Split `static/js/main.js` (3,100 lines) into feature modules *(needs browser to verify)*
+- [ ] Split `static/js/main.js` further (3,286 lines; the toast helpers and the decay tool are out, in `toast.js` and `decay_tool.js`). Next: `setupEventListeners` (about 1,100 lines, one function wiring nearly every control) by panel. The headless-browser checks catch regressions: `ui_smoke.py` passes 160/160.
 - [ ] Add unit tests for frontend JavaScript modules
 - [x] Add unit tests for backend API endpoints ✅ (`backend/tests/test_api_endpoints.py`; 59 tests pass)
 - [ ] Implement TypeScript for type safety
@@ -194,7 +195,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [x] **Security**: Rate limiting with slowapi
 
 ### ML Integration
-- [x] **PyRIID Integration**: MLPClassifier, 90+ isotopes, IAEA intensity data, 2168+ training samples
+- [x] **ML identification**: first built on PyRIID (dropped 2026-10-02), now a scikit-learn MLP on a physics-based synthesiser, 90+ isotopes with IAEA intensity data (see `docs/ML_GUIDE.md`)
 - [x] **Peak Detection Enhancement**: Improved threshold, 20+ peaks detected
 - [x] **U-235/U-238 Prioritization**: Abundance weighting in nuclides/isotope_database.py
 
@@ -219,7 +220,7 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [x] **v2.0 Analysis Robustness**: Dual-mode engine (Strict for live, Robust for uploads)
 
 ### Code Quality
-- [x] **Test Infrastructure**: Fixed broken imports in `backend/tests/` enabling the suite of 20 unit tests to run and pass.
+- [x] **Test Infrastructure**: the backend suite (641 tests on 2026-10-03) plus headless-browser checks (smoke 160, theme and channel sweeps 34 combinations each, accessibility audit); `tests/test_repo_layout.py` guards the repository layout.
 - [x] **Refactoring**: Application layer threshold filtering, CSV parser module, ES6 modules, JSDoc comments
 - [x] **COUNT TIME Fix**: Backend capture + frontend display
 - [x] **Auto-Save CSV**: Automatic saves to `data/acquisitions/`

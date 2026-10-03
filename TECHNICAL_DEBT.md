@@ -1,8 +1,7 @@
 # Technical Debt Report
 
 **Date:** 2026-10-03
-**Branch:** `chore/technical-debt-cleanup`
-**Tests at the time of writing:** 641 backend tests pass; the headless-browser smoke test (`backend/tests/ui_smoke.py`) passes 160/160.
+**Tests at the time of writing:** 641 backend tests pass; the headless-browser checks pass against the refactored server (smoke 160/160, theme and channel sweeps 34 combinations each with no issues, accessibility audit).
 
 This replaces the 2025-12-16 report, whose figures had gone stale (it listed `routers/analysis.py` at 1,464 lines and
 test coverage as unknown).
@@ -28,11 +27,11 @@ test coverage as unknown).
 | Test layout | `test_fitting_engine.py` and `test_multiplet_fitting.py` were outside `tests/` and never ran; they are in `tests/` now. The print-driven `test_becquerel_comparison.py` is `tools/becquerel_comparison.py`. |
 | Install files | `requirements_lightweight.txt` was missing `slowapi` (imported by `main.py`) and listed an unused `pillow`; `install_lightweight.bat` now installs from that file. The app imports cleanly with the optional packages absent. |
 
-## Open: needs a decision
+## Open: waiting on a person
 
 | Item | Detail |
 |------|--------|
-| Dead files | Moved to `TO_BE_DELETED/` (see its README) because the tool could not delete them: root backups and run output, four unused modules, the old `backend/archive/` and the former `archive/` (42 PyRIID-era debug scripts, icon backups, printed results). Nothing references them. Delete with `git rm -r TO_BE_DELETED`. |
+| Dead files | Moved to `TO_BE_DELETED/` (see its README) because the tool could not delete them: root backups and run output, five unused modules, the old `backend/archive/` and the former `archive/` (42 PyRIID-era debug scripts, icon backups, printed results). Nothing references them. Delete with `git rm -r TO_BE_DELETED`. |
 | Kept from the old `archive/` | `legacy/AlphaHound-main/` (upstream GUI, MIT licence), `docs/alphahound_probes/` (raw device captures), `docs/abundance_weighting_research.md`, and two real CSV spectra in `backend/tests/data/real_csv/` with `tests/test_real_csv.py`. |
 
 ## Found while refactoring
@@ -46,7 +45,7 @@ Still open:
 
 - Becquerel cannot read `.csv` ("File type .csv can not be read"), so the pandas fallback is the only CSV parser that ever runs and the Becquerel branch in `_parse_csv_file` (and the `source` label "CSV File (Becquerel)") is dead code. Remove it, or restore a Becquerel read that works.
 - `ml/ml_data_loader.py` augments real spectra with unseeded `np.random` (`uniform`, `poisson`), so a model trained with `ML_USE_REAL_DATA=1` differs on every training; the default synthetic training is fully seeded and reproducible. Pass a `numpy.random.Generator` seeded like the synthesiser if reproducibility matters for that path.
-- `tests/data/radiacode_fisicas/manual_primary_peaks.csv` is the only real CSV in the test data and it is a peak list, not a spectrum, so there is no real-spectrum CSV test.
+- Real CSV coverage is two spectra (`tests/data/real_csv/`, `tests/test_real_csv.py`); more real exports from other tools and devices would harden the parser further.
 
 ## Open: structural
 
@@ -55,12 +54,16 @@ Still open:
 | Oversized functions | 20 functions over 100 lines, e.g. `ROIAnalyzer.analyze_uranium_ratio` (212) and `analyze` (165), `parse_n42` (166), `generate_pdf_report` (151), `upload_file` (145) | Split the same way as `analyze_uranium_ratio`: capture output on a set of synthetic spectra first, refactor, require an identical result. |
 | `setupEventListeners` in `main.js` | about 1,100 lines | One function wires nearly every control and shares module state; split by panel into modules that receive what they need. |
 | `style.css` | 2,909 lines, plus `button-fixes.css` and `device_styles.css` overrides; 350 inline `style=` attributes in `index.html` | |
-| Overlapping modules | `peak_detection` / `peak_detection_enhanced`; `source_analysis` / `source_identification`; `isotope_database` / `isotope_roi_database` / `nuclear_data` / `isotope_validation`; six parsers without a shared interface | The decay modules are deliberately layered (`decay_data` -> `bateman` -> `decay_calculator` -> `decay_engine`, with `curie_*` as an optional engine) and were rebuilt recently; leave them. |
+| Overlapping modules | in `spectroscopy/`: `peak_detection` / `peak_detection_enhanced`, `source_analysis` / `source_identification`; in `nuclides/`: `isotope_database` / `isotope_roi_database` (in `spectroscopy/`) / `nuclear_data` / `isotope_validation`; in `formats/`: six parsers without a shared interface | The packages group them; merging each pair is a separate change with its own before/after check. The decay modules are deliberately layered (`decay_data` -> `bateman` -> `decay_calculator` -> `decay_engine`, with `curie_*` as an optional engine). |
 | Remaining silent handlers | `except Exception: pass` around close/disconnect calls in `radiacode_*`, `curie_compat` | These are cleanup paths where there is nothing to do; left as they are. |
 | `innerHTML` | 68 uses; the untrusted-text sites are escaped, the rest build markup from numbers and constants | Prefer `textContent` / DOM construction for new code. |
 | No authentication | The server binds `0.0.0.0:3200` for LAN access and exposes device control and file endpoints | Deliberate; document it, or add an opt-in token. |
 | Remaining `console.log` filter | `log.js` hides diagnostics by default; nothing yet shows them in the UI | |
 | `ml_analysis` | Module-level `_ml_identifiers` cache; the first AI request after a restart trains the model on a request thread | |
+
+## Documentation
+
+`CHANGELOG.md` (about 800 lines) is history and is left as written; `TODO.md` mixes open items with long completed sections (its handoff notes were refreshed on 2026-10-03). A shorter, open-items-only `TODO.md` with the completed work moved into the CHANGELOG would be easier to keep current.
 
 ## Manual verification backlog
 
@@ -70,5 +73,5 @@ a phone, screen readers). That is verification debt, not code debt, and nothing 
 ## Good practices
 
 - No `import *`; type hints and Pydantic validation on the API; rate limiting; CORS off by default.
-- 611 backend tests plus browser checks (smoke, accessibility, theme sweep, channel sweep).
+- 641 backend tests plus browser checks (smoke, accessibility, theme sweep, channel sweep).
 - Real-spectrum benchmarks (`tests/real_benchmark.py`, `tests/ml_benchmark.py`) guard the analysis numbers.
