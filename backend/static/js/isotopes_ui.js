@@ -1,5 +1,6 @@
 
 import { api } from './api.js';
+import { notifyAuto, confirmDialog } from './dialogs.js';
 
 export const isotopeUI = {
     init() {
@@ -87,31 +88,31 @@ export const isotopeUI = {
         const name = this.inputName.value.trim();
         const energiesStr = this.inputEnergies.value;
 
-        if (!name) return alert("Name required");
+        if (!name) return notifyAuto("Name required");
 
         // Parse energies
         const energies = energiesStr.split(',')
             .map(s => parseFloat(s.trim()))
             .filter(n => !isNaN(n) && n > 0);
 
-        if (energies.length === 0) return alert("At least one valid energy (keV) required");
+        if (energies.length === 0) return notifyAuto("At least one valid energy (keV) required");
 
         try {
             await this.addCustomIsotope(name, energies);
             this.form.reset();
             this.renderList();
         } catch (err) {
-            alert(err.message);
+            notifyAuto(err.message);
         }
     },
 
     async handleDelete(name) {
-        if (!confirm(`Delete custom isotope ${name}?`)) return;
+        if (!(await confirmDialog(`Delete custom isotope ${name}?`, { title: 'Delete isotope', okLabel: 'Delete', danger: true }))) return;
         try {
             await this.deleteCustomIsotope(name);
             this.renderList();
         } catch (err) {
-            alert(err.message);
+            notifyAuto(err.message);
         }
     },
 
@@ -144,7 +145,7 @@ export const isotopeUI = {
             const data = await res.json();
 
             if (data.count === 0) {
-                alert("No custom isotopes to export.");
+                notifyAuto("No custom isotopes to export.");
                 return;
             }
 
@@ -159,7 +160,7 @@ export const isotopeUI = {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch (err) {
-            alert("Export error: " + err.message);
+            notifyAuto("Export error: " + err.message);
         }
     },
 
@@ -186,10 +187,10 @@ export const isotopeUI = {
                 if (!res.ok) throw new Error("Import failed");
 
                 const result = await res.json();
-                alert(`Successfully imported ${result.imported} isotope(s).`);
+                notifyAuto(`Successfully imported ${result.imported} isotope(s).`);
                 this.renderList();
             } catch (err) {
-                alert("Import error: " + err.message);
+                notifyAuto("Import error: " + err.message);
             }
         };
 

@@ -366,6 +366,10 @@ export class AlphaHoundUI {
             let displayKey = keyMap[key] || key.toUpperCase().replaceAll('_', ' ');
             if (key === 'device_duration_s') displayKey = 'Device Duration';
             let displayValue = value || '-';
+            if (key === 'start_time' && typeof value === 'string' && !Number.isNaN(Date.parse(value))) {
+                // ISO text such as 2026-10-02T17:43:30.903564+00:00 wrapped over three lines: show local time
+                displayValue = new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            }
 
             // Handle object values (like calibration coefficients)
             if (value !== null && typeof value === 'object') {
@@ -844,8 +848,14 @@ export class AlphaHoundUI {
     populatePorts(ports) {
         const select = document.getElementById('port-select');
         if (ports && ports.length > 0) {
+            // "COM5 - Standard Serial over Bluetooth link (COM5)" is too long for a phone: shorten it, keep the rest as a tooltip
+            const shorten = (d) => String(d || '')
+                .replace(/\s*\(COM\d+\)\s*$/i, '')
+                .replace(/Standard Serial over Bluetooth link/i, 'Bluetooth serial')
+                .replace(/USB Serial Device/i, 'USB serial')
+                .replace(/Intel\(R\) Active Management Technology - SOL/i, 'Intel AMT');
             const options = ports.map(p =>
-                `<option value="${p.device}">${p.device} - ${p.description}</option>`
+                `<option value="${p.device}" title="${String(p.description || '').replace(/"/g, '&quot;')}">${p.device} \u00b7 ${shorten(p.description)}</option>`
             ).join('');
             select.innerHTML = options;
         } else {

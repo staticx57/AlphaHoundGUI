@@ -1,3 +1,4 @@
+import { notifyAuto } from './dialogs.js';
 /**
  * N42 Metadata Editor UI Module
  * 
@@ -151,11 +152,11 @@ export class N42MetadataEditor {
                         document.getElementById('n42-longitude').value = pos.coords.longitude.toFixed(6);
                     },
                     (err) => {
-                        alert(`Location error: ${err.message}`);
+                        notifyAuto(`Location error: ${err.message}`);
                     }
                 );
             } else {
-                alert('Geolocation not supported by this browser.');
+                notifyAuto('Geolocation not supported by this browser.');
             }
         });
 
@@ -276,14 +277,14 @@ export class N42MetadataEditor {
                     this.onSaveCallback(data.xml_content);
                 }
                 this.hide();
-                alert('Metadata updated successfully!');
+                notifyAuto('Metadata updated successfully!');
             } else {
                 const err = await response.json();
-                alert(`Error: ${err.detail}`);
+                notifyAuto(`Error: ${err.detail}`);
             }
         } catch (err) {
             console.error('[N42 Editor] Save failed:', err);
-            alert('Failed to save metadata.');
+            notifyAuto('Failed to save metadata.');
         }
     }
 }

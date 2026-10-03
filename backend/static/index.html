@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=19">
+    <link rel="stylesheet" href="/static/style.css?v=20">
     <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Chart.js loaded async for performance -->
@@ -105,7 +105,7 @@
                                     <select id="port-select" style="min-width: 150px; width: 250px;">
                                         <option value="">Select Serial Port...</option>
                                     </select>
-                                    <button id="btn-refresh-ports" title="Refresh Ports" style="flex-shrink: 0;">
+                                    <button id="btn-refresh-ports" title="Refresh Ports" aria-label="Refresh serial ports" style="flex-shrink: 0;">
                                         <img src="/static/icons/refresh.svg" class="icon" style="margin:0;">
                                     </button>
                                 </div>
@@ -515,16 +515,17 @@
                                 </button>
 
                                 <!-- Display Mode (AlphaHound only) -->
-                                <div data-device-feature="displayModeToggle"
-                                    style="display: flex; gap: 1px; background: var(--border-color); border-radius: 6px; padding: 1px;">
-                                    <button id="btn-display-prev" class="btn-secondary"
-                                        style="padding: 0.25rem 0.4rem; border: none; border-radius: 4px 0 0 4px;"
+                                <div data-device-feature="displayModeToggle" role="group" aria-label="Device display mode"
+                                    style="display: flex; gap: 1px; background: var(--border-color); border-radius: 6px; padding: 1px; align-items: stretch;">
+                                    <span style="font-size: 0.7rem; padding: 0 0.5rem; display: flex; align-items: center; background: var(--bg-secondary); color: var(--text-secondary); border-radius: 5px 0 0 5px;">Display</span>
+                                    <button id="btn-display-prev" class="btn-secondary" aria-label="Previous display mode"
+                                        style="padding: 0.25rem 0.4rem; border: none; border-radius: 0;"
                                         title="Prev display mode">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M15 18l-6-6 6-6" />
                                         </svg>
                                     </button>
-                                    <button id="btn-display-next" class="btn-secondary"
+                                    <button id="btn-display-next" class="btn-secondary" aria-label="Next display mode"
                                         style="padding: 0.25rem 0.4rem; border: none; border-radius: 0 4px 4px 0;"
                                         title="Next display mode">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">

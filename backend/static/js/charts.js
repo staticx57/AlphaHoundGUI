@@ -1,3 +1,4 @@
+import { roundTicks, formatKeV } from './axis.js';
 export class AlphaHoundChart {
     constructor() {
         this.ctx = document.getElementById('spectrumChart')?.getContext('2d');
@@ -372,9 +373,13 @@ export class AlphaHoundChart {
                             title: { display: true, text: 'Energy (keV)', color: '#94a3b8' },
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             ticks: {
-                                color: '#94a3b8', includeBounds: true,
+                                color: '#94a3b8', includeBounds: false,
                                 // The auto-scale margin can start the axis just below 0 keV; don't label it
                                 callback: (value) => (value < 0 ? '' : Number(value).toLocaleString())
+                            },
+                            // Round positions (100, 200, 300 keV) instead of steps counted from the axis minimum
+                            afterBuildTicks: (scale) => {
+                                scale.ticks = roundTicks(scale.min, scale.max).map((value) => ({ value }));
                             }
                         },
                         y: {
@@ -1052,8 +1057,8 @@ export class AlphaHoundChart {
             this.updateSelectionOverlay(minPercent, maxPercent);
 
             // Update labels
-            if (this.minLabel) this.minLabel.textContent = `${Math.round(minEnergy)} keV`;
-            if (this.maxLabel) this.maxLabel.textContent = `${Math.round(maxEnergy)} keV`;
+            if (this.minLabel) this.minLabel.textContent = formatKeV(minEnergy);
+            if (this.maxLabel) this.maxLabel.textContent = formatKeV(maxEnergy);
         } finally {
             this.isSyncing = false;
         }
@@ -1079,7 +1084,8 @@ export class AlphaHoundChart {
         try {
 
             const xScale = this.chart.options.scales.x;
-            const minEnergy = xScale.min || 0;
+            // the auto-scale margin can put the axis minimum slightly below 0 keV: the zoom bar starts at 0
+            const minEnergy = Math.max(0, xScale.min || 0);
             const maxEnergy = xScale.max || this.fullMaxEnergy;
 
             const minPercent = (minEnergy / this.fullMaxEnergy) * 100;
@@ -1090,8 +1096,8 @@ export class AlphaHoundChart {
 
             this.updateSelectionOverlay(minPercent, maxPercent);
 
-            if (this.minLabel) this.minLabel.textContent = `${Math.round(minEnergy)} keV`;
-            if (this.maxLabel) this.maxLabel.textContent = `${Math.round(maxEnergy)} keV`;
+            if (this.minLabel) this.minLabel.textContent = formatKeV(minEnergy);
+            if (this.maxLabel) this.maxLabel.textContent = formatKeV(maxEnergy);
         } finally {
             this.isSyncing = false;
         }

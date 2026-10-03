@@ -6,8 +6,9 @@ import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
 import { n42MetadataEditor } from './n42_editor.js';
 import { estimatorUI } from './estimator_ui.js';
-import { updateDeviceUI, resetDeviceUI } from './device_features.js';
+import { updateDeviceUI, resetDeviceUI, getActiveDevice } from './device_features.js';
 import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
+import { notify, notifyAuto, confirmDialog, infoDialog, setNotifier } from './dialogs.js';
 
 // Expose chartManager globally for cross-module access (e.g., XRF highlighting from ui.js)
 window.chartManager = chartManager;
@@ -402,10 +403,11 @@ if (btnGetAccumulated) {
         try {
             // The accumulated spectrum spans everything since the device's last accumulation reset.
             // Only identify it if the user measured a single source over that period.
-            const analyze = confirm(
+            const analyze = await confirmDialog(
                 'Analyze the accumulated spectrum for isotopes?\n\n' +
-                'OK: the device was reset and then used on a single source.\n' +
-                'Cancel: just view it (it may mix several locations/sources).');
+                'Analyze: the device was reset and then used on a single source.\n' +
+                'Just view: it may mix several locations or sources.',
+                { title: 'Accumulated spectrum', okLabel: 'Analyze', cancelLabel: 'Just view' });
             showToast('Getting accumulated spectrum...', 'info');
             const data = await api.getAccumulatedSpectrum(analyze);
 
@@ -518,7 +520,8 @@ if (btnSetCalibration) {
 const btnPowerOff = document.getElementById('btn-power-off');
 if (btnPowerOff) {
     btnPowerOff.addEventListener('click', async () => {
-        if (!confirm('Power off the Radiacode device?\n\nYou will need to manually power it back on.')) {
+        if (!(await confirmDialog('Power off the Radiacode device?\n\nYou will need to power it back on by hand.',
+            { title: 'Power off', okLabel: 'Power off', danger: true }))) {
             return;
         }
 
@@ -595,6 +598,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await refreshPorts();
     await checkDeviceStatus();
     await checkRadiacodeStatus();
+    // Nothing connected: hide the controls that only exist for a connected device (Reset Dose on the AlphaHound tab, ...)
+    if (!getActiveDevice()) resetDeviceUI();
     // Duplicate check removed
     setupEventListeners();
     setupAlphaHoundPanelListeners();
@@ -1059,7 +1064,7 @@ function setupEventListeners() {
             window.open(url, '_blank');
             setTimeout(() => window.URL.revokeObjectURL(url), 1000);
         } catch (err) {
-            alert('Error generating PDF: ' + err.message);
+            notifyAuto('Error generating PDF: ' + err.message);
         } finally {
             btn.innerHTML = originalHTML;
             btn.disabled = false;
@@ -1069,7 +1074,7 @@ function setupEventListeners() {
     // N42 Export
     document.getElementById('btn-export-n42').addEventListener('click', async () => {
         if (!currentData) {
-            alert('No spectrum data to export');
+            notifyAuto('No spectrum data to export');
             return;
         }
 
@@ -1109,7 +1114,7 @@ function setupEventListeners() {
             btn.innerHTML = originalHTML;
             btn.disabled = false;
         } catch (err) {
-            alert('Error exporting N42: ' + err.message);
+            notifyAuto('Error exporting N42: ' + err.message);
             btn.innerHTML = originalHTML;
             btn.disabled = false;
         }
@@ -1363,7 +1368,7 @@ function setupEventListeners() {
 
     // Clear Spectrum button
     document.getElementById('btn-clear-spectrum')?.addEventListener('click', async () => {
-        if (!confirm('Clear all accumulated counts on the device?')) return;
+        if (!(await confirmDialog('Clear all accumulated counts on the device?', { title: 'Clear spectrum', okLabel: 'Clear', danger: true }))) return;
         try {
             await api.clearSpectrumUnified();
             showToast('Spectrum cleared', 'success');
@@ -1479,9 +1484,9 @@ function setupEventListeners() {
             try {
                 const info = await api.getRadiacodeExtendedInfo();
                 if (info.configuration) {
-                    alert(`Radiacode Configuration:\n\n${info.configuration}`);
+                    infoDialog('Radiacode configuration', info.configuration);
                 } else {
-                    alert('Configuration data not available');
+                    notifyAuto('Configuration data not available');
                 }
             } catch (err) {
                 console.error('[Radiacode] Failed to get configuration:', err);
@@ -1502,7 +1507,7 @@ function setupEventListeners() {
     document.getElementById('btn-add-file').addEventListener('click', () => {
         // [STABILITY] Memory Cap
         if (overlaySpectra.length >= 8) {
-            alert('Maximum of 8 spectra allowed.');
+            notifyAuto('Maximum of 8 spectra allowed.');
             return;
         }
         document.getElementById('compare-file-input').click();
@@ -1519,7 +1524,7 @@ function setupEventListeners() {
     document.getElementById('bg-file-input').addEventListener('change', handleBackgroundFile);
 
     document.getElementById('btn-set-current-bg').addEventListener('click', () => {
-        if (!currentData) return alert('No data loaded to use as background.');
+        if (!currentData) return notifyAuto('No data loaded to use as background.');
         setBackground(currentData, 'Current Spectrum');
     });
 
@@ -1528,7 +1533,7 @@ function setupEventListeners() {
     // SNIP Auto-Background Removal (Visual Only - preserves original analysis)
     document.getElementById('btn-snip-bg').addEventListener('click', async () => {
         if (!currentData || !currentData.counts) {
-            alert('No spectrum loaded to remove background from.');
+            notifyAuto('No spectrum loaded to remove background from.');
             return;
         }
 
@@ -1682,7 +1687,7 @@ function setupEventListeners() {
 
     // ML Identification
     document.getElementById('btn-ml-identify').addEventListener('click', async () => {
-        if (!currentData || !currentData.counts) return alert('No data loaded');
+        if (!currentData || !currentData.counts) return notifyAuto('No data loaded');
 
         const resultsContainer = document.getElementById('analysis-results');
         resultsContainer.innerHTML = '<p>Running AI identification...</p>';
@@ -1774,7 +1779,7 @@ function setupEventListeners() {
         });
     }
     btnRunML.addEventListener('click', async () => {
-        if (!currentData || !currentData.counts) return alert('No spectrum data loaded');
+        if (!currentData || !currentData.counts) return notifyAuto('No spectrum data loaded');
 
         const mlList = document.getElementById('ml-isotopes-list');
         const btn = document.getElementById('btn-run-ml');
@@ -2392,12 +2397,17 @@ function showToast(message, type = 'info') {
 
     document.body.appendChild(toast);
 
-    // Auto-remove after 3 seconds
+    // Screen readers announce toasts; errors interrupt, the rest wait their turn
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+    // Auto-remove: 3 s, longer for long messages (they were native notifyAuto() text before) and for errors
+    const lifetime = Math.min(12000, Math.max(type === 'error' ? 5000 : 3000, 1500 + message.length * 45));
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease-out';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, lifetime);
 }
+setNotifier(showToast);
 
 // Device Lifecycle
 async function initDevice() {
@@ -2414,7 +2424,7 @@ async function initDevice() {
  */
 async function handleFile(file) {
     if (isAcquiring) {
-        if (!confirm('Recording in progress. Stop?')) return;
+        if (!(await confirmDialog('A recording is in progress. Stop it and load this file?', { title: 'Recording in progress', okLabel: 'Stop recording', danger: true }))) return;
         stopAcquisition();
     }
     ui.showLoading();
@@ -2514,7 +2524,7 @@ async function refreshPorts() {
  */
 async function connectDevice() {
     const port = document.getElementById('port-select').value;
-    if (!port) return alert('Select a port');
+    if (!port) return notifyAuto('Select a port');
     try {
         await api.connectDevice(port);
         ui.setDeviceConnected(true);
@@ -2523,20 +2533,20 @@ async function connectDevice() {
         // Update UI for AlphaHound device capabilities
         updateDeviceUI('alphahound');
     } catch (err) {
-        alert(err.message);
+        notifyAuto(err.message);
     }
 }
 
 // Top Bar connect uses the top select box
 async function connectDeviceTop() {
     const port = document.getElementById('port-select-top').value;
-    if (!port) return alert('Select a port');
+    if (!port) return notifyAuto('Select a port');
     try {
         await api.connectDevice(port);
         ui.setDeviceConnected(true);
         startAlphaHoundMonitoring();
     } catch (err) {
-        alert(err.message);
+        notifyAuto(err.message);
     }
 }
 
@@ -2770,7 +2780,7 @@ function setupAlphaHoundPanelListeners() {
         a.remove();
     });
     document.getElementById('btn-dose-clear')?.addEventListener('click', async () => {
-        if (!confirm('Clear the recorded dose-rate history?')) return;
+        if (!(await confirmDialog('Clear the recorded dose-rate history?', { title: 'Clear dose log', okLabel: 'Clear', danger: true }))) return;
         try {
             const r = await api.clearDoseLog();
             showToast(`Dose log cleared (${r.cleared} readings)`, 'success');
@@ -2965,7 +2975,7 @@ async function startAcquisition() {
         showToast(`Server-managed acquisition started for ${minutes} minutes`, 'info');
 
     } catch (err) {
-        alert(err.message);
+        notifyAuto(err.message);
     }
 }
 
@@ -3122,7 +3132,7 @@ function loadFromHistory(index) {
 
     const item = history[index];
     if (!item.data || !item.data.counts) {
-        alert('This history item is invalid or from an older version (no data stored).');
+        notifyAuto('This history item is invalid or from an older version (no data stored).');
         return;
     }
 
@@ -3186,7 +3196,7 @@ async function handleCompareFile(e) {
         });
         updateOverlayCount();
         chartManager.renderComparison(overlaySpectra, chartManager.getScaleType());
-    } catch (err) { alert(err.message); }
+    } catch (err) { notifyAuto(err.message); }
     e.target.value = '';
 }
 
@@ -3205,7 +3215,7 @@ async function handleBackgroundFile(e) {
     try {
         const data = await api.uploadFile(file);
         setBackground(data, file.name);
-    } catch (err) { alert(err.message); }
+    } catch (err) { notifyAuto(err.message); }
     e.target.value = '';
 }
 
@@ -3259,7 +3269,7 @@ async function refreshChartWithBackground() {
             chartManager.render(currentData.energies, result.net_counts, currentData.peaks, chartManager.getScaleType());
         } catch (e) {
             console.error(e);
-            alert('Background subtraction failed: ' + e.message);
+            notifyAuto('Background subtraction failed: ' + e.message);
         }
     } else {
         chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
@@ -3368,7 +3378,7 @@ async function runDecayPrediction() {
 
     } catch (e) {
         console.error(e);
-        alert("Error running prediction: " + e.message);
+        notifyAuto("Error running prediction: " + e.message);
     }
 }
 

@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { notifyAuto } from './dialogs.js';
 import { ui } from './ui.js';
 import { chartManager } from './charts.js';
 
@@ -64,7 +65,7 @@ export class CalibrationUI {
         // Filter valid points
         const validPoints = this.points.filter(p => p.channel && p.energy);
         if (validPoints.length < 2) {
-            alert("Need at least 2 points to calibrate.");
+            notifyAuto("Need at least 2 points to calibrate.");
             return;
         }
 
@@ -92,7 +93,7 @@ export class CalibrationUI {
             this.elements.btnApply.style.display = 'inline-block';
 
         } catch (e) {
-            alert(e.message);
+            notifyAuto(e.message);
         }
     }
 
@@ -110,7 +111,7 @@ export class CalibrationUI {
         });
         document.dispatchEvent(event);
         this.hide();
-        alert(`Calibration Applied: E = ${this.tempResult.params.slope.toFixed(4)} * Ch + ${this.tempResult.params.intercept.toFixed(4)}`);
+        notifyAuto(`Calibration Applied: E = ${this.tempResult.params.slope.toFixed(4)} * Ch + ${this.tempResult.params.intercept.toFixed(4)}`);
     }
 }
 

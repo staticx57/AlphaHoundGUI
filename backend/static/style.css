@@ -2265,3 +2265,98 @@ select.feature-disabled {
     min-height: 2.5rem;
     white-space: pre-wrap;
 }
+
+/* ---- dialogs (replace the browser's alert/confirm) ---- */
+.app-dialog {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.1rem 1.25rem;
+    width: min(440px, calc(100vw - 2rem));
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.app-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.app-dialog-title {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+}
+
+.app-dialog-body {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    max-height: 50vh;
+    overflow: auto;
+}
+
+pre.app-dialog-body {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.75rem;
+    background: var(--bg-primary);
+    padding: 0.6rem;
+    border-radius: 6px;
+}
+
+.app-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.app-dialog-btn {
+    padding: 0.45rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.app-dialog-ok {
+    background: var(--primary-color);
+    color: #0f172a;
+    border-color: var(--primary-color);
+    font-weight: 600;
+}
+
+.app-dialog-danger {
+    background: var(--error-color);
+    border-color: var(--error-color);
+    color: #fff;
+}
+
+.app-dialog-btn:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+/* ---- nothing connected: collapse the controls that need a device, keep the status line ---- */
+#unified-device-controls.device-disconnected {
+    grid-template-columns: 1fr;
+    gap: 0;
+}
+
+#unified-device-controls.device-disconnected .device-controls-row,
+#unified-device-controls.device-disconnected .device-live-data,
+#unified-device-controls.device-disconnected #acquisition-status {
+    display: none;
+}
+
+/* ---- phones: the device tabs sit side by side instead of stacking ---- */
+@media (max-width: 600px) {
+    #device-type-tabs {
+        flex-direction: row !important;
+        width: 100%;
+        margin-right: 0 !important;
+    }
+
+    #device-type-tabs .device-tab {
+        flex: 1;
+    }
+}

@@ -56,6 +56,8 @@ with sync_playwright() as p:
     page.screenshot(path=os.path.join(OUT, "a_load.png"))
     check("A page loads without JS errors", not errs, "; ".join(errs[:3]))
     check("A disconnected label reads 'Not connected'", page.inner_text("#device-conn-label") == "Not connected")
+    check("A controls that need a device are collapsed while nothing is connected",
+          not page.is_visible("#btn-start-acquire") and not page.is_visible("#btn-reset-dose"))
 
     # C. Radiacode tab
     errs.clear()
@@ -209,7 +211,7 @@ with sync_playwright() as p:
     errs_i = []
     pi.on("pageerror", lambda e: errs_i.append(f"pageerror: {e}"))
     pi.on("console", lambda m: errs_i.append(f"console.error: {m.text}") if m.type == "error" else None)
-    ah = {"connected": False, "disconnect_calls": 0, "next_calls": 0, "details_status": 200}
+    ah = {"connected": False, "disconnect_calls": 0, "next_calls": 0, "details_status": 200, "clear_calls": 0}
 
     def _json_route(pattern, handler):
         pi.route(pattern, lambda route, request: handler(route, request))
@@ -245,7 +247,10 @@ with sync_playwright() as p:
         _ok(r, {"status": "ok", "action": "display_next"})
     _json_route("**/device/display/next", _next)
     _json_route("**/device/probe", lambda r, q: _ok(r, {"command": "P", "lines": ["CPS:270.25,162.53,6.87,770.13"]}))
-    _json_route("**/device/dose/log/clear", lambda r, q: _ok(r, {"status": "ok", "cleared": 42}))
+    def _clear(r, q):
+        ah["clear_calls"] += 1
+        _ok(r, {"status": "ok", "cleared": 42})
+    _json_route("**/device/dose/log/clear", _clear)
 
     def _ws(w):
         def run():
@@ -260,7 +265,7 @@ with sync_playwright() as p:
                     return
         _threading.Thread(target=run, daemon=True).start()
     pi.route_web_socket("**/ws/dose", _ws)
-    pi.once("dialog", lambda d: d.accept())
+    pi.on("dialog", lambda d: (errs_i.append("native dialog: " + d.message), d.dismiss()))   # the page must not use alert()/confirm()
 
     pi.goto(URL, wait_until="networkidle")
     check("I before connecting the AlphaHound panels are hidden",
@@ -342,7 +347,19 @@ with sync_playwright() as p:
     pi.wait_for_function("document.getElementById('ah-probe-output').textContent.includes('CPS:')", timeout=4000)
     check("I probe shows the raw reply", "270.25" in pi.inner_text("#ah-probe-output"))
     pi.click("#btn-dose-clear")
-    pi.wait_for_function("document.querySelector('.toast, #toast-container')?.textContent?.includes('cleared') || true", timeout=2000)
+    pi.wait_for_selector(".app-dialog", state="visible", timeout=4000)
+    check("I Clear dose log asks in an in-page dialog that names the action",
+          "Clear" in pi.inner_text(".app-dialog-title") and pi.is_visible(".app-dialog-danger"))
+    check("I a dangerous action focuses Cancel, so Enter does not confirm it",
+          pi.evaluate("document.activeElement && document.activeElement.classList.contains('app-dialog-cancel')"))
+    pi.keyboard.press("Escape")
+    pi.wait_for_selector(".app-dialog", state="detached", timeout=4000)
+    check("I Esc cancels without clearing", ah["clear_calls"] == 0)
+    pi.click("#btn-dose-clear")
+    pi.wait_for_selector(".app-dialog", state="visible", timeout=4000)
+    pi.click(".app-dialog-ok")
+    pi.wait_for_function("document.querySelector('.toast')?.textContent?.includes('cleared')", timeout=4000)
+    check("I confirming clears the log and shows a toast", ah["clear_calls"] == 1)
     pi.click("#btn-disconnect-alphahound")
     pi.wait_for_function("document.getElementById('device-conn-label').textContent === 'Not connected'", timeout=8000)
     check("I Disconnect calls the server and restores the connect controls",
@@ -373,6 +390,51 @@ with sync_playwright() as p:
     pj.wait_for_function("document.getElementById('device-conn-label').textContent === 'Not connected'", timeout=8000)
     check("J three 'not connected' answers reset the AlphaHound UI", pj.is_visible("#btn-connect-device"))
     ctx_j.close()
+    # K. A spectrum whose calibration starts above zero: round axis ticks, no negative zoom label, readable start time
+    import pathlib as _pl
+    sys.path.insert(0, str(_pl.Path(HERE).parent))
+    from n42_exporter import generate_n42_xml as _gen
+    _offset_file = os.path.join(OUT, "offset_axis.n42")
+    _energies = [5.56 + 2.364 * i + 0.000378 * i * i for i in range(1024)]
+    _counts = [int(2000 * 2.718 ** (-i / 150) + 900 * 2.718 ** (-((i - 255) / 7) ** 2) + 30) for i in range(1024)]
+    open(_offset_file, "w", encoding="utf-8").write(_gen({
+        "counts": _counts, "energies": _energies,
+        "metadata": {"live_time": 600.0, "real_time": 600.0, "start_time": "2026-10-02T17:43:30.903564+00:00"}}))
+    ctx_k = browser.new_context(viewport={"width": 1400, "height": 900})
+    pk = ctx_k.new_page()
+    errs_k = []
+    pk.on("pageerror", lambda e: errs_k.append(f"pageerror: {e}"))
+    pk.on("dialog", lambda d: (errs_k.append("native dialog: " + d.message), d.dismiss()))
+    pk.goto(URL, wait_until="networkidle")
+    pk.set_input_files("#file-input", _offset_file)
+    pk.wait_for_selector("#dashboard", state="visible", timeout=20000)
+    pk.wait_for_function("window.Chart && Chart.getChart(document.getElementById('spectrumChart'))", timeout=10000)
+    pk.wait_for_timeout(800)
+    ticks = pk.evaluate("() => Chart.getChart(document.getElementById('spectrumChart')).scales.x.ticks.map(t => t.value)")
+    step = ticks[1] - ticks[0] if len(ticks) > 1 else 0
+    check("K the energy axis ticks are round numbers (100, 200, ...) not offsets from the axis minimum",
+          len(ticks) >= 4 and step in (10, 20, 25, 50, 100, 200, 250, 500) and all(abs(t / step - round(t / step)) < 1e-9 for t in ticks),
+          str(ticks[:6]))
+    check("K the axis has no negative tick", all(t >= 0 for t in ticks))
+    check("K the zoom bar does not start at a negative energy", not pk.inner_text("#zoom-min-label").strip().startswith("-"),
+          pk.inner_text("#zoom-min-label"))
+    start_card = pk.evaluate("""() => { const c = [...document.querySelectorAll('.stat-card')].find(e => /start time/i.test(e.textContent));
+                                       return c ? c.querySelector('.stat-value').textContent.trim() : null }""")
+    check("K the start time is shown as a readable local time, not ISO text",
+          start_card is not None and "T17" not in start_card and "+00:00" not in start_card and len(start_card) < 28, str(start_card))
+    check("K no native dialogs and no JS errors while loading a spectrum", not errs_k, "; ".join(errs_k[:3]))
+    ctx_k.close()
+
+    # L. Phone width: tabs side by side, no horizontal overflow
+    ctx_l = browser.new_context(viewport={"width": 390, "height": 844})
+    pl = ctx_l.new_page()
+    pl.goto(URL, wait_until="networkidle")
+    tops = pl.evaluate("""() => ['tab-alphahound', 'tab-radiacode'].map(id => Math.round(document.getElementById(id).getBoundingClientRect().top))""")
+    check("L on a phone the device tabs sit side by side", abs(tops[0] - tops[1]) < 4, str(tops))
+    check("L no horizontal overflow at 390px", pl.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    check("L the port list uses short names",
+          all(len(o) < 32 for o in pl.evaluate("[...document.querySelectorAll('#port-select option')].map(o => o.textContent)")))
+    ctx_l.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]
