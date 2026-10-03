@@ -3,7 +3,7 @@ import { formatDoseRate, resolveUnit, getDosePref, UREM_PER_USV } from './units.
 import { describeMetadata } from './metadata_cards.js';
 import {
     summarizeIdentification, compareIdentifications, peakMatches, summaryFacts, formatCount, formatDuration,
-    spectrumSignature, spectrumChange, confidenceLabel, describeSpectrum,
+    spectrumSignature, spectrumChange, confidenceLabel, describeSpectrum, chainLink,
 } from './summary.js';
 
 export class AlphaHoundUI {
@@ -94,6 +94,24 @@ export class AlphaHoundUI {
     }
 
     /** @param {{live?: boolean}} [opts] live: an update of the acquisition in progress (the same spectrum, still growing) */
+    /**
+     * Offer the ROI panel the detector profile of the spectrum now on screen (the server resolves it from the file's
+     * metadata: AlphaHound CsI / BGO, Radiacode 103 / 103G / 110), so efficiency and resolution are those of the instrument
+     * that took it. A live update keeps whatever the user chose.
+     */
+    syncRoiDetector(data) {
+        const select = document.getElementById('roi-detector');
+        const wanted = data?.detector_profile;
+        if (!select || !wanted) return;
+        if (![...select.options].some((o) => o.value === wanted)) {
+            const option = document.createElement('option');
+            option.value = wanted;
+            option.textContent = wanted;
+            select.appendChild(option);
+        }
+        select.value = wanted;
+    }
+
     renderDashboard(data, { live = false } = {}) {
         // Detector lower threshold (keV): auto-scale view starts here and ignores the noise below it
         if (window.chartManager) {
@@ -112,6 +130,7 @@ export class AlphaHoundUI {
             window.chartManager.preserveZoom = live;                 // a live update keeps the window the user chose
             if (!live) window.chartManager.userZoom = null;          // a different spectrum starts from the auto view
         }
+        if (!live) this.syncRoiDetector(data);
         this.renderMetadata(data.metadata);
         this.renderDataQualityWarning(data.data_quality);
         this.renderPeaks(data.peaks, data.isotopes);
@@ -735,24 +754,32 @@ export class AlphaHoundUI {
                     // Get half-life and branching from sequence data
                     const seqInfo = chainSequence[idx] || {};
                     const halfLife = seqInfo.half_life || '';
-                    const branchingToNext = seqInfo.branching_to_next;
 
                     const statusClass = isDetected ? 'detected' : (isStable ? 'stable' : '');
 
-                    // Arrow with branching ratio if < 100%
+                    // Between two entries: an arrow (with the branching share when the decay has alternatives), or, when the next
+                    // entry is the OTHER product of the same parent (Bi-212 -> Po-212 or Tl-208), "or" and its share
                     let arrow = '';
                     if (idx < chainMembers.length - 1) {
-                        const branchLabel = branchingToNext && branchingToNext < 0.99
-                            ? `<div title="Branching Ratio: Probability of this decay mode" style="display:flex; flex-direction:column; align-items:center; cursor: help;">
-                                 <span style="font-size: 0.5rem; color: var(--text-secondary); line-height: 1;">BRANCH</span>
-                                 <span style="font-size: 0.65rem; color: #f59e0b; font-weight:bold;">${(branchingToNext * 100).toFixed(1)}%</span>
-                               </div>`
-                            : '';
-
-                        arrow = `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.2rem; padding: 0 0.25rem; min-width: 24px;">
-                            ${branchLabel}
-                            <img src="/static/icons/arrow-right.svg" class="icon" style="width: 16px; height: 16px;">
-                        </div>`;
+                        const link = chainLink(chainSequence, idx);
+                        const pct = link.percent === null ? '' : link.percent.toFixed(1) + '%';
+                        if (link.kind === 'branch') {
+                            arrow = `<div title="${chainMembers[idx + 1]} is an alternative decay product of ${link.from} (${pct}), not a later step after ${member}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 0.35rem; min-width: 24px; cursor: help;">
+                                <span style="font-size: 0.7rem; color: #f59e0b; font-weight: bold;">or</span>
+                                ${pct ? `<span style="font-size: 0.6rem; color: #f59e0b;">${pct}</span>` : ''}
+                            </div>`;
+                        } else {
+                            const branchLabel = link.percent !== null
+                                ? `<div title="Branching Ratio: Probability of this decay mode" style="display:flex; flex-direction:column; align-items:center; cursor: help;">
+                                     <span style="font-size: 0.5rem; color: var(--text-secondary); line-height: 1;">BRANCH</span>
+                                     <span style="font-size: 0.65rem; color: #f59e0b; font-weight:bold;">${pct}</span>
+                                   </div>`
+                                : '';
+                            arrow = `<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.2rem; padding: 0 0.25rem; min-width: 24px;">
+                                ${branchLabel}
+                                <img src="/static/icons/arrow-right.svg" class="icon" style="width: 16px; height: 16px;">
+                            </div>`;
+                        }
                     }
 
                     return `

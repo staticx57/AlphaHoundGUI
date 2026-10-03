@@ -34,7 +34,7 @@ class N42ExportRequest(BaseModel):
 @router.post("/export/pdf")
 def export_pdf(request: ReportRequest):
     try:
-        pdf_bytes = generate_pdf_report(request.dict())
+        pdf_bytes = generate_pdf_report(request.model_dump())
         filename = f"{request.filename}_report.pdf"
         return Response(
             content=pdf_bytes,
@@ -56,7 +56,7 @@ def export_n42(request: N42ExportRequest):
         from n42_exporter import generate_n42_xml
         
         # Convert Pydantic model to dict for exporter
-        request_dict = request.dict()
+        request_dict = request.model_dump()
         
         logger.info(f"[N42 Export] Generating XML for {len(request.counts)} channels...")
         # Generate N42 XML

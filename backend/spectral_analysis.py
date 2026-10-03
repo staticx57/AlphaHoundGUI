@@ -1,5 +1,6 @@
 
 import numpy as np
+from gauss_area import channel_width_kev
 import scipy.optimize
 from scipy.signal import find_peaks
 
@@ -49,7 +50,7 @@ def fit_gaussian(energies, counts, peak_centers, window_width=10):
             
             amplitude, mean, sigma, bg = popt
             fwhm = 2.355 * sigma
-            net_area = amplitude * sigma * np.sqrt(2 * np.pi)
+            net_area = amplitude * sigma * np.sqrt(2 * np.pi) / channel_width_kev(x_window)    # counts, not counts * keV per channel
             
             # Extract uncertainties from covariance matrix diagonal
             perr = np.sqrt(np.diag(pcov)) if pcov is not None else [0, 0, 0, 0]

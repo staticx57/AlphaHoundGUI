@@ -21,7 +21,7 @@
 | Issue | Location | Lines | Recommendation |
 |-------|----------|-------|----------------|
 | **analysis.py too large** | `backend/routers/analysis.py` | 1,464 | Split into upload, export, ml, roi modules |
-| **roi_analysis.py complex** | `backend/roi_analysis.py` | 788 | Separate analysis logic from utilities |
+| **roi_analysis.py complex** | `backend/roi_analysis.py` | ~1,190 | Separate analysis logic from utilities |
 | **Test coverage unknown** | `backend/test_*` (6 files) | - | Run tests and generate coverage report |
 
 ---

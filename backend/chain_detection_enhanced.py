@@ -15,7 +15,10 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple, Set
 from dataclasses import dataclass
 from functools import lru_cache
+import logging
 import math
+
+logger = logging.getLogger(__name__)
 
 # Import radioactivedecay
 try:
@@ -23,7 +26,7 @@ try:
     HAS_RADIOACTIVEDECAY = True
 except ImportError:
     HAS_RADIOACTIVEDECAY = False
-    print("[Chain Detection] radioactivedecay not installed - using fallback")
+    logger.warning("radioactivedecay not installed - using the built-in chain tables")
 
 # Import IAEA data for gamma line lookup
 try:
@@ -153,14 +156,14 @@ def get_decay_chain_members(parent: str, min_branching: float = 0.01) -> List[st
                         if branch >= min_branching and daughter not in members:
                             members.append(daughter)
                             new_members.append(daughter)
-                except:
-                    pass
+                except Exception as exc:
+                    logger.debug("No decay data for %s: %s", nuclide_name, exc)
             current = new_members
             
         return members
         
     except Exception as e:
-        print(f"[Chain Detection] Error getting chain for {parent}: {e}")
+        logger.warning("Error getting chain for %s: %s", parent, e)
         return [parent]
 
 
@@ -228,7 +231,7 @@ def get_nuclide_info(nuclide: str) -> Dict[str, any]:
         info['branching_fractions'] = fractions
         
     except Exception as e:
-        pass
+        logger.debug("No nuclide info for %s: %s", nuclide, e)
     
     return info
 
@@ -236,60 +239,91 @@ def get_nuclide_info(nuclide: str) -> Dict[str, any]:
 def get_chain_sequence_info(parent: str) -> List[Dict]:
     """
     Get full chain sequence with half-lives and branching ratios.
-    
-    Returns list of dicts: [
-        {'nuclide': 'U-238', 'half_life': '4.47 By', 'branching_to_next': 1.0},
-        {'nuclide': 'Th-234', 'half_life': '24.1 d', 'branching_to_next': 1.0},
-        ...
-    ]
+
+    Members are listed in decay order, but a chain branches (Bi-212 decays to Po-212 64 % and to Tl-208 36 %), so each entry
+    also says which member feeds it:
+        {'nuclide': 'Tl-208', 'half_life': '3.053 m', 'half_life_s': 183.18,
+         'feeder': 'Bi-212', 'branching_from_feeder': 0.3594, 'is_branch': True,   # an alternative to the entry before it
+         'branching_to_next': None}                                                # Tl-208 does not decay to the next entry
+    'branching_to_next' is the share of this nuclide's decays that lead to the entry after it; None when that entry is its
+    sibling (a branch), 1.0 for the last entry.
     """
     members = get_decay_chain_members(parent)
+    infos = {m: get_nuclide_info(m) for m in members}
+
+    def fed_by(member, earlier):
+        """(nuclide, share of its decays) of the nearest earlier member that decays into `member`."""
+        for candidate in reversed(earlier):
+            info = infos[candidate]
+            for progeny, fraction in zip(info.get('progeny', []), info.get('branching_fractions', [])):
+                if progeny == member:
+                    return candidate, float(fraction)
+        return None, 1.0
+
+    feeders = [fed_by(member, members[:i]) if i else (None, 1.0) for i, member in enumerate(members)]
     sequence = []
-    
     for i, member in enumerate(members):
-        info = get_nuclide_info(member)
-        entry = {
+        info = infos[member]
+        feeder, share = feeders[i]
+        if i < len(members) - 1:
+            next_feeder, next_share = feeders[i + 1]
+            to_next = next_share if next_feeder == member else None
+        else:
+            to_next = 1.0
+        sequence.append({
             'nuclide': str(member),
             'half_life': info.get('half_life_readable', 'unknown'),
             'half_life_s': info.get('half_life_s'),
-            'branching_to_next': 1.0  # Default for linear chain
-        }
-        
-        # Find branching ratio to next member
-        if i < len(members) - 1:
-            next_member = members[i + 1]
-            progeny = info.get('progeny', [])
-            fractions = info.get('branching_fractions', [])
-            for p, br in zip(progeny, fractions):
-                if p == next_member:
-                    try:
-                        val = float(br)
-                        if math.isnan(val) or math.isinf(val):
-                            entry['branching_to_next'] = 0.0
-                        else:
-                            entry['branching_to_next'] = val
-                    except:
-                        entry['branching_to_next'] = 0.0
-                    break
-        
-        sequence.append(entry)
-    
+            'branching_to_next': to_next,
+            'feeder': feeder,
+            'branching_from_feeder': share,
+            'is_branch': bool(feeder is not None and i > 0 and feeder != members[i - 1]),
+        })
+
     return sequence
 
 
-def check_secular_equilibrium(detected_members: Dict[str, List[Dict]], parent: str) -> Dict:
+def _peak_strength(peak: Dict) -> float:
+    """Net counts of a detected peak: the net area if the detector pipeline gave one, else its counts."""
+    for key in ('net_area', 'area', 'counts'):
+        value = peak.get(key)
+        if isinstance(value, (int, float)) and math.isfinite(value) and value > 0:
+            return float(value)
+    return 0.0
+
+
+# Two members of a chain whose gamma lines the ROI engine can measure, and whose activities are equal in equilibrium. The ROI
+# database branching ratios are per chain decay, so a branch product (Tl-208, 35.94 % of Bi-212) already counts as the chain.
+#   U-238: the two radon daughters. Equal activities unless radon escaped or arrived after one of them.
+#   Th-232: Ac-228 (follows Ra-228, 5.75 y) and Tl-208 (follows Th-228, 1.9 y): unequal when Ra-228 or Th-228 was separated
+#           (refined thorium, an aged lens).
+GENERIC_EFFICIENCY_DETECTOR = "AlphaHound CsI(Tl)"   # when the detector is not known
+EQUILIBRIUM_ROI_PAIRS = {
+    'U-238': ('Bi-214 (609 keV)', 'Pb-214 (352 keV)'),
+    'Th-232': ('Ac-228 (911 keV)', 'Tl-208 (2614 keV)'),
+}
+EQUILIBRIUM_CONSISTENT = 2.5     # activity ratio within this factor of 1: consistent with equilibrium (generic efficiencies, unresolved lines)
+EQUILIBRIUM_DEPARTED = 6.0       # outside this factor: the chain is clearly not in equilibrium; in between, the data cannot say
+EQUILIBRIUM_MIN_SNR = 5.0
+
+
+def name_of(isotope: str) -> str:
+    """'Bi-214 (609 keV)' -> 'Bi-214'."""
+    return isotope.split(' (')[0]
+
+
+def check_secular_equilibrium(detected_members: Dict[str, List[Dict]], parent: str,
+                              energies=None, counts=None, detector: Optional[str] = None,
+                              live_time_s: float = 0.0) -> Dict:
     """
-    Check if a decay chain appears to be in secular equilibrium.
-    
-    In secular equilibrium, daughter activities equal parent activity.
-    We can check this by comparing measured peak intensity ratios.
-    
-    Args:
-        detected_members: Dict mapping isotope -> list of detected peaks with counts
-        parent: Parent nuclide name (e.g., 'U-238')
-        
-    Returns:
-        Dict with 'in_equilibrium', 'confidence', 'details'
+    Check whether a decay chain appears to be in secular equilibrium (daughters' activities equal the parent's).
+
+    The activities of two members are measured with the ROI engine on the spectrum itself (peak fit, the detector's efficiency
+    and the line's branching ratio), because the peak list is not good enough for this: its areas and its wide matching
+    tolerance can pair a line with the wrong peak. Without a spectrum the answer is "unknown".
+
+    Returns a dict with 'in_equilibrium' (True: consistent; False: clearly not; None: cannot tell), 'confidence',
+    'details' and 'ratio_check' ([{'pair', 'ratio', 'ratio_uncertainty', 'expected_ratio', 'in_range'}]).
     """
     result = {
         'in_equilibrium': None,  # True/False/None (unknown)
@@ -297,58 +331,64 @@ def check_secular_equilibrium(detected_members: Dict[str, List[Dict]], parent: s
         'details': '',
         'ratio_check': None
     }
-    
-    # Define key isotope pairs to check for equilibrium
-    # These pairs should have ~1:1 activity ratio in equilibrium
-    equilibrium_pairs = {
-        'U-238': [
-            ('Bi-214', 'Pb-214'),  # Both in Rn-222 sub-chain
-        ],
-        'Th-232': [
-            ('Ac-228', 'Pb-212'),  # Detectable gamma emitters
-            ('Bi-212', 'Tl-208'),  # Branch products
-        ],
-    }
-    
-    pairs_to_check = equilibrium_pairs.get(parent, [])
-    if not pairs_to_check:
+
+    pair = EQUILIBRIUM_ROI_PAIRS.get(parent)
+    if not pair:
         result['details'] = 'No equilibrium check defined for this chain'
         return result
-    
-    checked_pairs = []
-    for iso1, iso2 in pairs_to_check:
-        if iso1 in detected_members and iso2 in detected_members:
-            # Get strongest peak counts for each
-            counts1 = max((p.get('counts', 0) for p in detected_members[iso1]), default=0)
-            counts2 = max((p.get('counts', 0) for p in detected_members[iso2]), default=0)
-            
-            if counts1 > 100 and counts2 > 100:  # Need significant counts
-                # Account for branching ratios (approximate)
-                # Bi-214/Pb-214 should be ~1:1, Ac-228/Pb-212 ~1:1
-                ratio = counts1 / counts2 if counts2 > 0 else 0
-                # Allow 0.3-3.0 range for "equilibrium" (broad due to efficiency variations)
-                in_range = 0.3 <= ratio <= 3.0
-                checked_pairs.append({
-                    'pair': f'{iso1}/{iso2}',
-                    'ratio': float(ratio),
-                    'in_range': in_range
-                })
-    
-    if not checked_pairs:
+    if energies is None or counts is None or len(energies) < 10:
+        result['details'] = 'Equilibrium needs the spectrum itself'
+        return result
+
+    try:
+        from roi_analysis import ROIAnalyzer
+        analyzer = ROIAnalyzer(detector or GENERIC_EFFICIENCY_DETECTOR)
+        first = analyzer.analyze(list(energies), list(counts), pair[0], max(float(live_time_s or 0.0), 1.0))
+        second = analyzer.analyze(list(energies), list(counts), pair[1], max(float(live_time_s or 0.0), 1.0))
+    except Exception as exc:
+        logger.debug("Equilibrium check for %s not possible: %s", parent, exc)
+        result['details'] = 'Equilibrium could not be measured on this spectrum'
+        return result
+
+    def measured(r):
+        return bool(r.activity_bq and r.snr >= EQUILIBRIUM_MIN_SNR)
+
+    if measured(first) != measured(second):
+        # one member is clear and the other is not: the weak one is at most its detection limit, which may already be far below
+        # the strong one (a daughter lost to radon escape, a separated parent)
+        strong, weak, strong_name, weak_name = (first, second, pair[0], pair[1]) if measured(first) else (second, first, pair[1], pair[0])
+        upper = max(weak.mda_bq or 0.0, (weak.activity_bq or 0.0))
+        if upper > 0 and strong.activity_bq / upper > EQUILIBRIUM_DEPARTED:
+            ratio = strong.activity_bq / upper
+            result['in_equilibrium'] = False
+            result['confidence'] = 'LOW'
+            label = f'{name_of(strong_name)}/{name_of(weak_name)}'
+            result['ratio_check'] = [{'pair': label, 'ratio': float(ratio), 'ratio_uncertainty': None, 'expected_ratio': 1.0,
+                                      'in_range': False, 'lower_limit': True}]
+            result['details'] = (f'{name_of(weak_name)} is not detected while {name_of(strong_name)} is clear: '
+                                 f'at least {ratio:.0f}x weaker, so the chain may not be in equilibrium')
+            return result
+    if not (measured(first) and measured(second)):
         result['details'] = 'Insufficient peak counts for equilibrium check'
         return result
-    
-    # Determine overall equilibrium status
-    all_in_range = all(p['in_range'] for p in checked_pairs)
-    result['in_equilibrium'] = all_in_range
-    result['confidence'] = 'HIGH' if len(checked_pairs) >= 2 else 'MEDIUM'
-    result['ratio_check'] = checked_pairs
-    
-    if all_in_range:
-        result['details'] = 'Peak ratios consistent with secular equilibrium'
+
+    ratio = first.activity_bq / second.activity_bq
+    uncertainty = ratio * math.sqrt((first.uncertainty_sigma / max(first.net_counts, 1e-9)) ** 2
+                                    + (second.uncertainty_sigma / max(second.net_counts, 1e-9)) ** 2)
+    label = f'{name_of(pair[0])}/{name_of(pair[1])}'
+    in_range = bool(1.0 / EQUILIBRIUM_CONSISTENT <= ratio <= EQUILIBRIUM_CONSISTENT)
+    result['ratio_check'] = [{'pair': label, 'ratio': float(ratio), 'ratio_uncertainty': float(uncertainty),
+                              'expected_ratio': 1.0, 'in_range': in_range}]
+    result['confidence'] = 'MEDIUM'
+    if in_range:
+        result['in_equilibrium'] = True
+        result['details'] = f'{label} activities agree within a factor {EQUILIBRIUM_CONSISTENT:g}: consistent with secular equilibrium'
+    elif not (1.0 / EQUILIBRIUM_DEPARTED <= ratio <= EQUILIBRIUM_DEPARTED):
+        result['in_equilibrium'] = False
+        result['details'] = f'{label} activities differ by more than a factor {EQUILIBRIUM_DEPARTED:g}: the chain may not be in equilibrium'
     else:
-        result['details'] = 'Peak ratios suggest chain may not be in equilibrium'
-    
+        result['details'] = f'{label} activities differ by {max(ratio, 1.0 / ratio):.1f}x: too far apart to call equilibrium, too close to call it broken'
+        result['confidence'] = 'LOW'
     return result
 
 
@@ -376,6 +416,66 @@ def get_expected_spectrum(parent: str, intensity_threshold: float = 1.0) -> Dict
     return expected
 
 
+def match_peaks_to_chain_detail(
+    peaks: List[Dict],
+    parent: str,
+    energy_tolerance: float = 15.0,
+    intensity_threshold: float = 1.0
+) -> Tuple[int, int, List[str], Dict[str, List[Dict]]]:
+    """
+    Match detected peaks to expected chain gamma lines, keeping what was matched.
+
+    Each gamma line takes the CLOSEST peak within the tolerance (not the first in list order).
+
+    Returns:
+        (detected_count, expected_count, detected_nuclides, matches) where matches maps a nuclide to
+        [{'energy': peak energy, 'line_energy': gamma line, 'intensity': line intensity %, 'counts': peak net counts}, ...]
+    """
+    expected = get_expected_spectrum(parent, intensity_threshold)
+
+    peak_energies = [p.get('energy', 0) for p in peaks]
+
+    # Dynamic tolerance: use wider tolerance for high-count spectra
+    # because peaks overlap and shift in strong scintillator spectra
+    max_counts = max((p.get('counts', 0) for p in peaks), default=0)
+    if max_counts > 10000:
+        # Strong spectrum: use 60 keV tolerance (matches ~10% resolution at 600 keV)
+        effective_tolerance = max(energy_tolerance, 60.0)
+        logger.debug("High-count spectrum (%.0f), using tolerance=%s", max_counts, effective_tolerance)
+    else:
+        effective_tolerance = energy_tolerance
+
+    detected_nuclides = []
+    matches = {}  # nuclide -> [matched peaks]
+
+    total_expected = 0
+    total_detected = 0
+
+    for nuclide, gamma_lines in expected.items():
+        matched = []
+
+        for gamma_energy, gamma_intensity in gamma_lines:
+            total_expected += 1
+
+            best_index, best_gap = None, None
+            for i, peak_energy in enumerate(peak_energies):
+                gap = abs(peak_energy - gamma_energy)
+                if gap <= effective_tolerance and (best_gap is None or gap < best_gap):
+                    best_index, best_gap = i, gap
+            if best_index is not None:
+                total_detected += 1
+                matched.append({'energy': peak_energies[best_index], 'line_energy': gamma_energy,
+                                'intensity': gamma_intensity, 'counts': _peak_strength(peaks[best_index])})
+
+        if matched:
+            detected_nuclides.append(nuclide)
+            matches[nuclide] = matched
+
+    logger.debug("%s: detected=%s/%s, nuclides=%s", parent, total_detected, total_expected, detected_nuclides)
+
+    return total_detected, total_expected, detected_nuclides, matches
+
+
 def match_peaks_to_chain(
     peaks: List[Dict],
     parent: str,
@@ -384,62 +484,19 @@ def match_peaks_to_chain(
 ) -> Tuple[int, int, List[str], Dict[str, List[float]]]:
     """
     Match detected peaks to expected chain gamma lines.
-    
+
     Args:
         peaks: List of detected peak dictionaries
         parent: Parent nuclide of chain
         energy_tolerance: Matching tolerance (keV)
         intensity_threshold: Minimum gamma intensity (%)
-        
+
     Returns:
-        Tuple of (detected_count, expected_count, detected_nuclides, matches)
+        Tuple of (detected_count, expected_count, detected_nuclides, matches) with matches mapping a nuclide to the energies of
+        its matched peaks (see match_peaks_to_chain_detail for the full record).
     """
-    expected = get_expected_spectrum(parent, intensity_threshold)
-    
-    peak_energies = [p.get('energy', 0) for p in peaks]
-    peak_areas = [p.get('area', p.get('counts', 1)) for p in peaks]
-    
-    # Dynamic tolerance: use wider tolerance for high-count spectra
-    # because peaks overlap and shift in strong scintillator spectra
-    max_counts = max((p.get('counts', 0) for p in peaks), default=0)
-    if max_counts > 10000:
-        # Strong spectrum: use 60 keV tolerance (matches ~10% resolution at 600 keV)
-        effective_tolerance = max(energy_tolerance, 60.0)
-        print(f"[DEBUG Chain Match] High-count spectrum ({max_counts:.0f}), using tolerance={effective_tolerance}")
-    else:
-        effective_tolerance = energy_tolerance
-    
-    detected_nuclides = []
-    matches = {}  # nuclide -> [matched_energies]
-    
-    total_expected = 0
-    total_detected = 0
-    
-    for nuclide, gamma_lines in expected.items():
-        nuclide_matched = False
-        matched_energies = []
-        
-        for gamma_energy, gamma_intensity in gamma_lines:
-            total_expected += 1
-            
-            # Check if any peak matches this gamma line
-            for i, peak_energy in enumerate(peak_energies):
-                if abs(peak_energy - gamma_energy) <= effective_tolerance:
-                    total_detected += 1
-                    nuclide_matched = True
-                    matched_energies.append(peak_energy)
-                    break
-        
-        if nuclide_matched:
-            detected_nuclides.append(nuclide)
-            matches[nuclide] = matched_energies
-    
-    # Debug logging for chain matching
-    if parent in ['Th-232', 'U-238']:
-        print(f"[DEBUG Chain Match] {parent}: detected={total_detected}/{total_expected}, nuclides={detected_nuclides}")
-        print(f"[DEBUG Chain Match] {parent}: Peak energies searched: {peak_energies[:15]}...")
-    
-    return total_detected, total_expected, detected_nuclides, matches
+    detected, expected, nuclides, detail = match_peaks_to_chain_detail(peaks, parent, energy_tolerance, intensity_threshold)
+    return detected, expected, nuclides, {nuclide: [m['energy'] for m in found] for nuclide, found in detail.items()}
 
 
 def calculate_chain_confidence(
@@ -527,7 +584,7 @@ def identify_decay_chains_enhanced(
     # NOTE: include_manmade parameter is now IGNORED - single isotopes are NOT chains
     
     for parent in chains_to_check:
-        detected_count, expected_count, detected_nuclides, matches = match_peaks_to_chain(
+        detected_count, expected_count, detected_nuclides, matches = match_peaks_to_chain_detail(
             peaks, parent, energy_tolerance
         )
         
@@ -549,8 +606,8 @@ def identify_decay_chains_enhanced(
         
         # Build detected_members in original format: {isotope: [peak_dicts]}
         detected_members = {}
-        for nuclide, energies in matches.items():
-            detected_members[nuclide] = [{'energy': e} for e in energies]
+        for nuclide, found in matches.items():
+            detected_members[nuclide] = [{'energy': m['energy'], 'counts': m['counts'], 'intensity': m['intensity']} for m in found]
         
         # Key indicators for this chain
         key_indicators_map = {
@@ -612,25 +669,26 @@ def identify_decay_chains_enhanced(
 def get_chain_summary(chains: List[Dict]) -> str:
     """
     Generate a human-readable summary of detected chains.
-    
+
     Args:
-        chains: List of detected chain dictionaries
-        
+        chains: List of detected chain dictionaries (as returned by identify_decay_chains_enhanced)
+
     Returns:
         Summary string
     """
     if not chains:
         return "No radioactive decay chains detected."
-    
+
     lines = []
     for chain in chains:
-        conf_icon = {'HIGH': '✓', 'MEDIUM': '○', 'LOW': '?'}.get(chain['confidence'], '?')
+        conf_icon = {'HIGH': '\u2713', 'MEDIUM': '\u25cb', 'LOW': '?'}.get(chain['confidence_level'], '?')
+        members = list(chain.get('detected_members', {}))
         lines.append(
-            f"{conf_icon} {chain['name']} ({chain['confidence']}): "
-            f"{chain['detected_count']}/{chain['expected_count']} lines detected "
-            f"[{', '.join(chain['key_indicators'][:3])}]"
+            f"{conf_icon} {chain['chain_name']} ({chain['confidence_level']}): "
+            f"{chain['num_detected']} chain members detected "
+            f"[{', '.join(members[:3])}]"
         )
-    
+
     return "\n".join(lines)
 
 

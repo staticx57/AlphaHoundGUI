@@ -107,34 +107,25 @@ async def scan_for_radiacode_devices(timeout: float = 5.0) -> List[Dict[str, Any
     devices = []
     try:
         logger.info(f"Starting BLE scan for {timeout}s...")
-        discovered = await BleakScanner.discover(timeout=timeout)
-        
-        for device in discovered:
+        # return_adv=True gives {address: (BLEDevice, AdvertisementData)}: the advertisement carries the signal strength and
+        # the service UUIDs. BLEDevice.rssi and BLEDevice.metadata were removed from bleak, so reading them there found
+        # nothing: the signal strength was always None and the search by Radiacode service UUID never matched.
+        discovered = await BleakScanner.discover(timeout=timeout, return_adv=True)
+        service = SERVICE_UUID.lower()
+
+        for _address, (device, advertisement) in discovered.items():
             # Radiacode devices have names like "RadiaCode-103", "RC-103", "RG-103", etc.
-            name = device.name or ""
-            if any(name.startswith(p) for p in ["RC-", "RG-", "RadiaCode-"]):
+            name = device.name or getattr(advertisement, "local_name", None) or ""
+            by_name = any(name.startswith(prefix) for prefix in ["RC-", "RG-", "RadiaCode-"])
+            by_service = service in [str(u).lower() for u in (getattr(advertisement, "service_uuids", None) or [])]
+            if by_name or by_service:
                 devices.append({
-                    "name": name,
+                    "name": name or "Unknown Radiacode",
                     "address": device.address,
-                    "rssi": getattr(device, 'rssi', None)
+                    "rssi": getattr(advertisement, "rssi", None)
                 })
-                logger.info(f"Found Radiacode device: {name} ({device.address})")
-        
-        # Also check for devices advertising the Radiacode service UUID
-        for device in discovered:
-            if device.address not in [d["address"] for d in devices]:
-                # Check if device has the Radiacode service
-                try:
-                    if device.metadata.get("uuids") and SERVICE_UUID.lower() in [u.lower() for u in device.metadata.get("uuids", [])]:
-                        devices.append({
-                            "name": device.name or "Unknown Radiacode",
-                            "address": device.address,
-                            "rssi": getattr(device, 'rssi', None)
-                        })
-                        logger.info(f"Found Radiacode device by UUID: {device.name} ({device.address})")
-                except Exception:
-                    pass
-                    
+                logger.info(f"Found Radiacode device{'' if by_name else ' by service UUID'}: {name or 'unnamed'} ({device.address})")
+
     except Exception as e:
         logger.error(f"BLE scan error: {e}")
     

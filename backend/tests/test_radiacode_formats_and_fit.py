@@ -28,7 +28,8 @@ def test_radiacode_xml_parsed_with_device_calibration():
 def test_radiacode_xml_matches_dataset_manual_peaks():
     """Dataset's hand-fitted channels map to the device-calibrated energies we compute."""
     import csv
-    rows = list(csv.DictReader(open(RC / "manual_primary_peaks.csv", encoding="utf-8")))
+    with open(RC / "manual_primary_peaks.csv", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
     for row in rows:
         r = parse_radiacode_xml((RC / pathlib.Path(row["source_file"]).name).read_text(encoding="utf-8"))
         cal = r["metadata"]["calibration"]

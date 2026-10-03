@@ -1,0 +1,5 @@
+# Test and development dependencies:  pip install -r requirements.txt -r requirements-dev.txt
+pytest>=9
+pytest-timeout>=2.4
+httpx>=0.28          # FastAPI's TestClient (newer Starlette prefers httpx2; httpx still works and only warns)
+playwright>=1.50     # the headless-browser checks in tests/ui_*.py (also needs Google Chrome installed)

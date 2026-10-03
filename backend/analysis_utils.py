@@ -62,6 +62,13 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     energies = result["energies"]
     counts = result["counts"]
 
+    # Which detector profile (efficiency, resolution) describes this spectrum: the ROI panel preselects it
+    try:
+        from source_templates import resolve_detector
+        result["detector_profile"] = resolve_detector(result.get("metadata"))
+    except Exception as e:
+        logger.debug(f"[Analysis] Detector profile not resolved: {e}")
+
     # Lower display limit: the detector's specified threshold (channels below it hold
     # electronic noise, e.g. the large pile in a RadiaCode's first channels).
     if is_calibrated:
@@ -182,7 +189,18 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
                 fit, decay_chains, isotopes, current_settings.get("isotope_min_confidence", 30.0), peaks)
     except Exception as e:
         logger.warning(f"[Analysis] Source template fit failed: {e}")
-    
+
+    # Secular equilibrium of each reported series, measured on the spectrum with the ROI engine (the peak list is too coarse)
+    try:
+        from chain_detection_enhanced import check_secular_equilibrium
+        from source_templates import resolve_detector
+        detector = resolve_detector(result.get("metadata"))
+        for chain in decay_chains:
+            chain["equilibrium_status"] = check_secular_equilibrium(
+                chain.get("detected_members", {}), chain.get("parent"), energies, counts, detector, live_time)
+    except Exception as e:
+        logger.warning(f"[Analysis] Equilibrium check failed: {e}")
+
     if current_settings.get("mode") == "simple":
         isotopes = sorted(isotopes, key=lambda i: i.get("confidence", 0), reverse=True)[:current_settings.get("max_isotopes", 999)]
 

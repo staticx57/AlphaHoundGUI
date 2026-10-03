@@ -9,6 +9,7 @@ This provides more robust peak detection than simple prominence-based methods.
 """
 
 import numpy as np
+from gauss_area import channel_width_kev
 from typing import List, Dict, Optional, Tuple
 from scipy.signal import find_peaks, find_peaks_cwt, savgol_filter
 from scipy.optimize import curve_fit
@@ -82,12 +83,15 @@ def fit_single_peak(
         resolution = (fwhm / center) * 100 if center > 0 else 0
         
         # Calculate net area (integral of Gaussian only)
-        net_area = amplitude * sigma * np.sqrt(2 * np.pi)
+        # in counts: sigma is in keV and amplitude in counts per channel, so divide by the channel width
+        net_area = amplitude * sigma * np.sqrt(2 * np.pi) / channel_width_kev(x)
         
         # Estimate uncertainty (sqrt of gross counts in peak region)
         gross_counts = np.sum(y)
         bg_counts = np.sum(gaussian_with_baseline(x, 0, center, sigma, bg_slope, bg_intercept))
-        uncertainty = np.sqrt(gross_counts + bg_counts)
+        # the fitted baseline can dip below zero across the window (a negative slope, unbounded): a variance cannot, and
+        # sqrt of a negative made the uncertainty NaN (which is not valid JSON in an API response)
+        uncertainty = np.sqrt(max(float(gross_counts), 0.0) + max(float(bg_counts), 0.0))
         
         return {
             'energy': float(center),

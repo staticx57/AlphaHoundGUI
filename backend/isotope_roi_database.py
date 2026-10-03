@@ -26,6 +26,8 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (140, 165),  # Changed: below peak for proper Compton baseline
         "background_method": "compton",
         "related_peaks": ["Ra-226 (186.2 keV)"],  # Potential interference
+        "neighbor_peaks_keV": [143.8, 163.4, 205.3],   # other lines that can fall in the window or a background band
+        "companion_lines": [(143.8, 0.1094), (163.4, 0.0508), (205.3, 0.0501)],   # (keV, emission probability) of the same nuclide; blended into the peak when the detector cannot resolve them
         "notes": "Primary U-235 gamma. Overlaps with Ra-226 at 186.2 keV.",
         "source": "NNDC ENSDF"
     },
@@ -38,6 +40,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (55, 75),
         "background_method": "compton",
         "related_peaks": ["Pa-234m (98.4 keV)"],
+        "neighbor_peaks_keV": [63.3, 98.4],   # other lines that can fall in the window or a background band
         "notes": "U-238 daughter. Used for uranium ratio analysis.",
         "source": "IAEA NDS"
     },
@@ -50,6 +53,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (1030, 1080),
         "background_method": "compton",
         "related_peaks": [],
+        "neighbor_peaks_keV": [766.4, 1120.3],   # other lines that can fall in the window or a background band
         "notes": "High-energy U-238 daughter peak. Clean signature.",
         "source": "NNDC ENSDF"
     },
@@ -64,6 +68,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (2660, 2720),
         "background_method": "linear",
         "related_peaks": [],
+        "neighbor_peaks_keV": [2447.9],   # other lines that can fall in the window or a background band
         "notes": "Diagnostic peak for Th-232 series. Highest natural gamma.",
         "source": "NNDC ENSDF"
     },
@@ -76,6 +81,8 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (940, 990),
         "background_method": "compton",
         "related_peaks": ["Ac-228 (969 keV)"],
+        "neighbor_peaks_keV": [795.0, 835.7, 964.8, 969.0],   # other lines that can fall in the window or a background band
+        "companion_lines": [(964.8, 0.0499), (969.0, 0.158)],   # (keV, emission probability) of the same nuclide; blended into the peak when the detector cannot resolve them
         "notes": "Strong Th-232 series indicator.",
         "source": "NNDC ENSDF"
     },
@@ -90,6 +97,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (700, 750),
         "background_method": "compton",
         "related_peaks": [],
+        "neighbor_peaks_keV": [609.3],   # other lines that can fall in the window or a background band
         "notes": "Standard calibration source. Long half-life.",
         "source": "NNDC ENSDF"
     },
@@ -102,6 +110,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (1210, 1260),
         "background_method": "linear",
         "related_peaks": ["Co-60 (1332 keV)"],
+        "neighbor_peaks_keV": [1332.5],   # other lines that can fall in the window or a background band
         "notes": "First Co-60 gamma. Always paired with 1332 keV.",
         "source": "NNDC ENSDF"
     },
@@ -114,6 +123,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (1370, 1420),
         "background_method": "linear",
         "related_peaks": ["Co-60 (1173 keV)"],
+        "neighbor_peaks_keV": [1173.2, 1460.8],   # other lines that can fall in the window or a background band
         "notes": "Second Co-60 gamma. Always paired with 1173 keV.",
         "source": "NNDC ENSDF"
     },
@@ -126,6 +136,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (70, 85),
         "background_method": "compton",
         "related_peaks": [],
+        "neighbor_peaks_keV": [26.3],   # other lines that can fall in the window or a background band
         "notes": "Low-energy calibration source. Common in smoke detectors.",
         "source": "NNDC ENSDF"
     },
@@ -140,6 +151,7 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (1500, 1550),
         "background_method": "linear",
         "related_peaks": [],
+        "neighbor_peaks_keV": [1408.0, 1509.2],   # other lines that can fall in the window or a background band
         "notes": "Natural potassium. Present in all living tissue.",
         "source": "IAEA NDS"
     },
@@ -154,6 +166,8 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (640, 690),
         "background_method": "compton",
         "related_peaks": ["Bi-214 (1120 keV)", "Bi-214 (1764 keV)"],
+        "neighbor_peaks_keV": [583.2, 665.5, 768.4],   # other lines that can fall in the window or a background band
+        "companion_lines": [(665.5, 0.0153), (768.4, 0.0489)],   # (keV, emission probability) of the same nuclide; blended into the peak when the detector cannot resolve them
         "notes": "Strongest U-238 chain indicator.",
         "source": "NNDC ENSDF"
     },
@@ -166,6 +180,8 @@ ISOTOPE_ROI_DATABASE = {
         "background_region": (375, 410),
         "background_method": "compton",
         "related_peaks": ["Pb-214 (295 keV)"],
+        "neighbor_peaks_keV": [241.9, 295.2, 338.3],   # other lines that can fall in the window or a background band
+        "companion_lines": [(295.2, 0.184), (242.0, 0.0727)],   # (keV, emission probability) of the same nuclide; blended into the peak when the detector cannot resolve them
         "notes": "U-238 series marker.",
         "source": "NNDC ENSDF"
     },

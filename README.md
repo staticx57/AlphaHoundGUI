@@ -67,8 +67,8 @@
 
 #### Decay Chain Detection & Prediction
 - **Automatic Chain Recognition**: U-238, Th-232, U-235 decay chains with confidence scoring
-- **Graphical Flow Diagrams**: Visual parent → daughter → stable sequences with detection status
-- **Secular Equilibrium Checks**: Validates daughter product equilibrium ratios
+- **Graphical Flow Diagrams**: Visual parent → daughter → stable sequences with detection status; branches are drawn as alternatives (Bi-212 → Po-212 64 % *or* Tl-208 36 %)
+- **Secular Equilibrium Checks**: Bi-214/Pb-214 (U-238) and Ac-228/Tl-208 (Th-232) activities measured with the ROI engine; answers consistent, not in equilibrium, or unknown
 - **Natural Abundance Weighting**: U-238 correctly ranks above U-235 in natural samples
 - **Authoritative References**: Direct NNDC, IAEA, LBNL, USGS, NRC links for each chain
 - **Interactive Decay Prediction**:
@@ -214,6 +214,10 @@
 - **MDA Calculation**: Minimum Detectable Activity based on Poisson statistics
 - **Gamma Dose Rate**: Estimates μSv/h from activity and distance (inverse square law)
 - **Auto-Population**: Acquisition time pulled from N42/CSV metadata
+- **How the net counts are found** (`roi_analysis.py`): a window of ±1 FWHM at the detector's resolution with a background band on each side of the peak; where a neighbouring line makes that unreliable, a Gaussian fit with a sloped baseline that gives each neighbour its own amplitude. The result says which method was used, and shows the limits (neighbouring lines it cannot separate, a one-sided background). Uncertainties include the counting error, the fit quality and, for a one-sided background, the continuum slope.
+- **Lines of the same nuclide that blend into the peak** (Ac-228 911/965/969 keV, U-235 164/186/205 keV) are counted in the emission probability, so the activity is not overstated.
+- **Both device families**: the ROI panel preselects the detector profile from the loaded file (AlphaHound CsI(Tl) / BGO, Radiacode 103 / 103G / 110), including Radiacode's non-linear energy axis.
+- **Accuracy**: tested on spectra with known peak areas; a very strong, curved continuum can leave the fitted area 1-4 % low (up to ~8 % for BGO at 1 MeV), well inside the uncertainty of the generic efficiencies. Treat Bq values as indicative; calibrate with a known source for accurate ones.
 
 #### Uranium Enrichment Analysis
 - **186 keV / 93 keV Ratio**: Classifies Natural/Depleted/Enriched Uranium
@@ -300,6 +304,7 @@
    ```bash
    pip install -r requirements.txt
    ```
+   (`requirements.txt` includes `backend/requirements.txt`; for running the tests also `pip install -r backend/requirements-dev.txt`.)
 
    > [!WARNING]
    > **Curie Database Issue (Import Error)**  
@@ -503,7 +508,8 @@ AlphaHoundGUI/
 ### Machine Learning (Optional - for AI Identification)
 - `scikit-learn` - MLP classifier for AI identification (PyRIID was dropped: its numpy/scipy/TensorFlow pins conflict with the rest of the app)
 - `pandas` - Data structures for ML training
-- `curie` (nuclear-curie) - Authoritative nuclear decay data
+- `curie` (nuclear-curie) - Authoritative nuclear decay data (ENSDF)
+- `radioactivedecay` - ICRP-107 decay data and chains
 
 ### Device Integration
 - `pyserial` - Serial communication with AlphaHound device

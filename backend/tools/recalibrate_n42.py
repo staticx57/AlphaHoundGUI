@@ -22,7 +22,8 @@ CHANNEL_ENERGIES = re.compile(r"(<ChannelEnergies>)([^<]*)(</ChannelEnergies>)")
 
 
 def load_axis(csv_path):
-    rows = [r for r in csv.reader(open(csv_path, encoding="utf-8")) if r]
+    with open(csv_path, encoding="utf-8") as handle:
+        rows = [r for r in csv.reader(handle) if r]
     axis = [float(r[0]) for r in rows[1:]]
     if len(axis) < 2 or any(b <= a for a, b in zip(axis, axis[1:])):
         raise ValueError(f"{csv_path}: first column is not a strictly increasing energy axis")

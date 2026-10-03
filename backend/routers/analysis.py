@@ -516,7 +516,7 @@ def analyze_roi_endpoint(request: ROIAnalysisRequest):
         
         result = analyze_roi(
             energies=request.energies,
-            counts=[int(c) for c in request.counts],
+            counts=[float(c) for c in request.counts],
             isotope_name=request.isotope,
             detector_name=request.detector,
             acquisition_time_s=request.acquisition_time_s,
@@ -567,7 +567,7 @@ def analyze_uranium_ratio_endpoint(request: UraniumRatioRequest):
         
         result = analyze_uranium_enrichment(
             energies=request.energies,
-            counts=[int(c) for c in request.counts],
+            counts=[float(c) for c in request.counts],
             detector_name=request.detector,
             acquisition_time_s=request.acquisition_time_s,
             source_type=source_type
@@ -622,7 +622,7 @@ def identify_source_endpoint(request: UraniumRatioRequest):
         
         result = identify_source_type(
             energies=request.energies,
-            counts=[int(c) for c in request.counts],
+            counts=[float(c) for c in request.counts],
             detector_name=request.detector,
             acquisition_time_s=request.acquisition_time_s
         )
@@ -1018,7 +1018,7 @@ def estimate_acquisition_time_endpoint(request: TimeEstimatorRequest):
     try:
         from time_estimator import estimate_time_from_spectrum
         result = estimate_time_from_spectrum(
-            counts=[int(c) for c in request.counts],
+            counts=[float(c) for c in request.counts],
             source_type=request.source_type
         )
         return result

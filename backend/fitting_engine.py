@@ -2,6 +2,8 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.special import voigt_profile
 from dataclasses import dataclass
+
+from gauss_area import channel_width_kev
 from typing import Tuple, List, Optional, Dict
 
 @dataclass
@@ -223,15 +225,15 @@ class AdvancedFittingEngine:
             
             # Peak 1
             fwhm1 = 2.355 * sig1
-            net_area1 = amp1 * sig1 * sqrt2pi
+            net_area1 = amp1 * sig1 * sqrt2pi / channel_width_kev(x_roi)    # counts, not counts * keV per channel
             
             # Peak 2
             fwhm2 = 2.355 * sig2
-            net_area2 = amp2 * sig2 * sqrt2pi
+            net_area2 = amp2 * sig2 * sqrt2pi / channel_width_kev(x_roi)
             
             # Background
             bg_curve = b0 + b1 * x_roi
-            bg_area = np.trapz(bg_curve, x_roi)
+            bg_area = float(np.sum(bg_curve))          # counts under both peaks: the baseline summed over the channels
             
             # R-squared
             fit_curve = self.double_gaussian_linear(x_roi, *popt)
@@ -322,7 +324,10 @@ class AdvancedFittingEngine:
             # Analytical Area of Gaussian = Amp * Sigma * sqrt(2*pi)
             # This is the "Net Area" (excluding background)
             sqrt2pi = np.sqrt(2 * np.pi)
-            net_area = amp_fit * sigma_fit * sqrt2pi
+            # Net area in COUNTS: the Gaussian summed over the channels is A * sigma * sqrt(2 pi) / channel width (sigma in keV,
+            # A in counts per channel); without the division every area was too large by the channel width, about 2-3x
+            width = channel_width_kev(x_roi)
+            net_area = amp_fit * sigma_fit * sqrt2pi / width
             
             # --- Uncertainty Propagation ---
             # Area N = A * s * sqrt(2pi)
@@ -334,13 +339,13 @@ class AdvancedFittingEngine:
             var_s = pcov[2,2]
             cov_As = pcov[0,2]
             
-            dN_dA = sigma_fit * sqrt2pi
-            dN_ds = amp_fit * sqrt2pi
+            dN_dA = sigma_fit * sqrt2pi / width
+            dN_ds = amp_fit * sqrt2pi / width
             
             var_N = (dN_dA**2 * var_A) + (dN_ds**2 * var_s) + (2 * dN_dA * dN_ds * cov_As)
             area_uncertainty = np.sqrt(var_N)
             
-            background_area = np.trapz(bg_curve, x_roi)
+            background_area = float(np.sum(bg_curve))        # counts under the fit window, like net_area
 
             # R-Squared
             residuals = y_roi - fit_curve
@@ -435,7 +440,8 @@ class AdvancedFittingEngine:
             r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
             
             bg_curve = bg_coeffs[1] * x_roi + bg_coeffs[0]
-            background_area_total = np.trapz(bg_curve, x_roi)
+            background_area_total = float(np.sum(bg_curve))
+            width = channel_width_kev(x_roi)       # areas in counts (see fit_single_peak)
             
             sqrt2pi = np.sqrt(2 * np.pi)
 
@@ -445,15 +451,15 @@ class AdvancedFittingEngine:
                 
                 fwhm = 2.355 * sigma
                 resolution = (fwhm / cen) * 100.0
-                net_area = amp * sigma * sqrt2pi
+                net_area = amp * sigma * sqrt2pi / width
                 
                 # Uncertainty Propagation
                 var_A = pcov[idx, idx]
                 var_s = pcov[idx+2, idx+2]
                 cov_As = pcov[idx, idx+2]
                 
-                dN_dA = sigma * sqrt2pi
-                dN_ds = amp * sqrt2pi
+                dN_dA = sigma * sqrt2pi / width
+                dN_ds = amp * sqrt2pi / width
                 
                 var_N = (dN_dA**2 * var_A) + (dN_ds**2 * var_s) + (2 * dN_dA * dN_ds * cov_As)
                 area_uncertainty = np.sqrt(var_N)

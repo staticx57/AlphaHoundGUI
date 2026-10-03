@@ -138,3 +138,19 @@ export function spectrumChange(previous, current) {
 export function spectrumSignature(counts) {
     return { length: Array.isArray(counts) ? counts.length : 0, total: totalCounts(counts) };
 }
+
+/**
+ * What to draw between entry `index` and the next one of a decay-chain sequence (see get_chain_sequence_info on the server):
+ * 'decay' (an arrow, with the branching share when the decay has alternatives), or 'branch' (the next entry is an
+ * ALTERNATIVE product of the same parent, not a later step: Bi-212 gives Po-212 64 % or Tl-208 36 %).
+ */
+export function chainLink(sequence, index) {
+    const next = Array.isArray(sequence) ? sequence[index + 1] : null;
+    if (!next) return { kind: 'none', percent: null, from: null };
+    if (next.is_branch) {
+        const share = Number(next.branching_from_feeder);
+        return { kind: 'branch', percent: Number.isFinite(share) ? share * 100 : null, from: next.feeder || null };
+    }
+    const share = Number(sequence[index].branching_to_next);
+    return { kind: 'decay', percent: Number.isFinite(share) && share < 0.99 ? share * 100 : null, from: sequence[index].nuclide };
+}

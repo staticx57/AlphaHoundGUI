@@ -118,3 +118,25 @@ def test_spectrum_change(tmp_path):
     assert out["sig"] == {"length": 3, "total": 6} and out["bad"] == {"length": 0, "total": 0}
     assert out["first"] == "new" and out["same"] == "same" and out["grown"] == "grown"
     assert out["fewer"] == "new" and out["channels"] == "new"
+
+
+def test_chain_link_distinguishes_a_decay_step_from_a_branch(tmp_path):
+    """Bi-212 -> Po-212 (64 %) ... Tl-208 is the OTHER product of Bi-212 (36 %), so no arrow from Po-212 to it."""
+    out = run_js(tmp_path, """
+        const seq = [
+          {nuclide: 'Pb-212', branching_to_next: 1.0, is_branch: false, feeder: 'Po-216', branching_from_feeder: 1.0},
+          {nuclide: 'Bi-212', branching_to_next: 0.6406, is_branch: false, feeder: 'Pb-212', branching_from_feeder: 1.0},
+          {nuclide: 'Po-212', branching_to_next: null, is_branch: false, feeder: 'Bi-212', branching_from_feeder: 0.6406},
+          {nuclide: 'Tl-208', branching_to_next: 1.0, is_branch: true, feeder: 'Bi-212', branching_from_feeder: 0.3594},
+          {nuclide: 'Pb-208', branching_to_next: 1.0, is_branch: false, feeder: 'Tl-208', branching_from_feeder: 1.0},
+        ];
+        out.links = [0, 1, 2, 3, 4].map((i) => m.chainLink(seq, i));
+        out.empty = [m.chainLink(null, 0), m.chainLink([], 0)];
+    """)
+    pb212, bi212, po212, tl208, pb208 = out["links"]
+    assert pb212 == {"kind": "decay", "percent": None, "from": "Pb-212"}
+    assert bi212["kind"] == "decay" and bi212["percent"] == pytest.approx(64.06)
+    assert po212["kind"] == "branch" and po212["percent"] == pytest.approx(35.94) and po212["from"] == "Bi-212"
+    assert tl208 == {"kind": "decay", "percent": None, "from": "Tl-208"}
+    assert pb208["kind"] == "none"
+    assert out["empty"] == [{"kind": "none", "percent": None, "from": None}] * 2

@@ -380,7 +380,7 @@ def test_temperature_and_comp_factor_arrive_without_anyone_asking_for_a_spectrum
     start(dev, FakeSerial(default_reply))
     assert wait_for(lambda: dev.get_temperature() is not None, timeout=4)
     assert dev.get_temperature() == pytest.approx(28.62) and dev.get_comp_factor() == pytest.approx(0.95)
-    assert len(dev.get_spectrum()) == 1024
+    assert wait_for(lambda: len(dev.get_spectrum()) == 1024, timeout=4)      # the spectrum follows in the same polling pass
 
 
 def test_an_unanswered_spectrum_request_does_not_stall_polling_forever(dev):

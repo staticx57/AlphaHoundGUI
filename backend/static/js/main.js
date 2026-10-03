@@ -2029,6 +2029,9 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
         }
 
         htmlOutput += `<div>Activity: ${activityStr}</div>`;
+        if (data.detection_status) {
+            htmlOutput += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.15rem;">${data.detection_status}${data.snr ? ` (SNR ${data.snr})` : ''}</div>`;
+        }
 
         // Confidence Bar
         if (data.confidence !== undefined) {
@@ -2102,7 +2105,8 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
                     --- Calculation Parameters ---<br>
                     Detector: ${data.detector}<br>
                     Window: ${data.roi_window[0]}-${data.roi_window[1]} keV | Efficiency: ${data.efficiency_percent.toFixed(2)}%<br>
-                    Branching Ratio: ${(data.branching_ratio * 100).toFixed(1)}%
+                    Branching Ratio: ${(data.branching_ratio * 100).toFixed(1)}%${data.effective_branching_ratio > data.branching_ratio + 1e-6 ? ` (${(data.effective_branching_ratio * 100).toFixed(1)}% with the lines blended into this peak)` : ''}<br>
+                    Background: ${data.background_method || 'n/a'}
                 </div>
             `;
 
@@ -2125,6 +2129,20 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
 
         resultsDiv.innerHTML = htmlOutput;
 
+        // What limits the result (neighbouring peaks, how the background was found, ...): as text, never as markup
+        const notes = [...(data.limiting_factors || []), ...(data.warnings || [])];
+        if (notes.length) {
+            const list = document.createElement('ul');
+            list.id = 'roi-notes';
+            list.style.cssText = 'margin: 0.6rem 0 0 1.2rem; padding: 0; font-size: 0.78rem; color: var(--text-secondary);';
+            notes.forEach((note) => {
+                const item = document.createElement('li');
+                item.textContent = note;
+                list.appendChild(item);
+            });
+            resultsDiv.appendChild(list);
+        }
+
         // Store last ROI for highlighting and Decay Tool
         window.lastROI = data.roi_window;
         window.lastROIResult = data;
@@ -2144,6 +2162,8 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
     // Input is in minutes, convert to seconds for API
     const acqTimeMinutes = parseFloat(document.getElementById('roi-acq-time').value) || 10;
     const acqTime = acqTimeMinutes * 60;
+    // the source type decides whether the Ra-226 share of the 186 keV peak is subtracted (uranium glass / Takumar)
+    const ratioSourceType = document.getElementById('roi-source-type')?.value || 'unknown';
 
     const resultsDiv = document.getElementById('roi-results');
     resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing uranium ratio...</p>';
@@ -2156,7 +2176,8 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
                 energies: currentData.energies,
                 counts: currentData.counts,
                 detector: detector,
-                acquisition_time_s: acqTime
+                acquisition_time_s: acqTime,
+                source_type: ratioSourceType
             })
         });
 
@@ -2189,6 +2210,18 @@ document.getElementById('btn-uranium-ratio')?.addEventListener('click', async ()
                     Th-234 (93 keV): ${data.th234_net_counts.toFixed(0)} ± ${data.th234_uncertainty.toFixed(1)} counts
                 </div>
             `;
+
+        if (Array.isArray(data.warnings) && data.warnings.length) {
+            const list = document.createElement('ul');
+            list.id = 'roi-notes';
+            list.style.cssText = 'margin: 0.6rem 0 0 1.2rem; padding: 0; font-size: 0.78rem; color: var(--text-secondary);';
+            data.warnings.forEach((note) => {
+                const item = document.createElement('li');
+                item.textContent = note;
+                list.appendChild(item);
+            });
+            resultsDiv.appendChild(list);
+        }
 
     } catch (err) {
         resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;

@@ -18,6 +18,7 @@ from slowapi.errors import RateLimitExceeded
 import asyncio
 import threading
 import time
+from contextlib import asynccontextmanager
 from alphahound_serial import device as alphahound_device
 from routers import device, analysis, isotopes, device_radiacode, nuclear, export
 
@@ -39,7 +40,15 @@ KEEP_CONNECTED = AUTORECONNECT or os.environ.get("ALPHAHOUND_KEEP_CONNECTED", ""
 
 # Rate limiter: 60 requests per minute per IP
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(_app):
+    """Startup work (on_event handlers are deprecated). The functions are defined below; they are looked up when the server starts."""
+    await _startup_dose_log()
+    await _startup_autoconnect()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -135,14 +144,12 @@ def autoconnect_alphahound(port: str, attempts: int = 15, delay_s: float = 2.0) 
 DOSE_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dose_log.jsonl")
 
 
-@app.on_event("startup")
 async def _startup_dose_log():
     # Keep the AlphaHound dose history across restarts (ALPHAHOUND_DOSE_LOG=off to keep it in memory only)
     if os.environ.get("ALPHAHOUND_DOSE_LOG", "").strip().lower() != "off":
         alphahound_device.enable_log_persistence(DOSE_LOG_FILE)
 
 
-@app.on_event("startup")
 async def _startup_autoconnect():
     port = os.environ.get("ALPHAHOUND_AUTOCONNECT_PORT", "").strip()
     if port:

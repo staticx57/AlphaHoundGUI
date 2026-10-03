@@ -11,6 +11,7 @@ Key use cases:
 """
 
 import numpy as np
+from gauss_area import channel_width_kev
 from typing import List, Dict, Optional, Tuple
 from scipy.optimize import curve_fit, minimize
 from scipy.integrate import quad
@@ -194,6 +195,7 @@ def fit_multiplet(
         bg_slope, bg_intercept = popt[0], popt[1]
         peaks = []
         total_area = 0
+        width_kev = channel_width_kev(x)       # areas are counts: Gaussian integral over keV / keV per channel
         
         n_peaks = (len(popt) - 2) // 3
         for i in range(n_peaks):
@@ -203,7 +205,7 @@ def fit_multiplet(
             sigma = popt[base_idx + 2]
             
             # Calculate area (integral of Gaussian)
-            area = amp * sigma * np.sqrt(2 * np.pi)
+            area = amp * sigma * np.sqrt(2 * np.pi) / width_kev
             total_area += area
             
             # Calculate FWHM and resolution
@@ -214,7 +216,7 @@ def fit_multiplet(
             # Diagonal of covariance matrix for amplitude
             try:
                 amp_var = pcov[base_idx, base_idx]
-                area_uncertainty = np.sqrt(amp_var) * sigma * np.sqrt(2 * np.pi)
+                area_uncertainty = np.sqrt(amp_var) * sigma * np.sqrt(2 * np.pi) / width_kev
             except:
                 area_uncertainty = np.sqrt(area)  # Poisson fallback
             

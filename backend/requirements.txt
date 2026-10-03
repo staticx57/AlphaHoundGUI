@@ -1,16 +1,36 @@
-fastapi
-uvicorn
-python-multipart
-numpy
-becquerel
-uncertainties>=3.1
-scipy
-matplotlib
-pyserial
-websockets
-reportlab
-scikit-learn
-pandas
-slowapi
-radiacode>=0.4.0
-libusb-package  # Required for Windows USB support
+# AlphaHound GUI - runtime dependencies (the single source of truth: the root requirements.txt includes this file)
+#
+# Lower bounds are the oldest versions the test suite was run against; the newest releases (numpy 2.5, pandas 3, scipy 1.18,
+# starlette 1.x, reportlab 5, bleak 3, curie 0.3) were also run against it (2026-10-03). No upper bounds: pin in your own
+# environment if you need a frozen install.
+
+# Web server
+fastapi>=0.126
+uvicorn>=0.37
+python-multipart>=0.0.21
+websockets>=15
+slowapi>=0.1.9
+
+# Numerics, spectra, reports
+numpy>=2.2
+scipy>=1.16
+pandas>=2.3
+matplotlib>=3.10
+reportlab>=4.4
+becquerel>=0.7.0
+uncertainties>=3.2
+scikit-learn>=1.8
+
+# Nuclear data (decay chains, decay prediction) and spectrum file formats
+radioactivedecay>=0.6.1
+curie>=0.0.33
+SandiaSpecUtils>=0.0.9
+
+# Devices
+pyserial>=3.5               # AlphaHound
+radiacode>=0.4.0            # Radiacode (USB and Bluetooth)
+bleak>=2.0                  # Radiacode over Bluetooth LE
+libusb-package              # Radiacode over USB on Windows
+
+# Optional: export the trained ML model to ONNX
+# skl2onnx
