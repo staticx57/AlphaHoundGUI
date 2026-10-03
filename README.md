@@ -643,6 +643,9 @@ pip install -r requirements.txt -r backend/requirements-dev.txt
 python -m pytest backend/tests                 # backend suite, no hardware needed
 ```
 
+CI also runs a frontend scope check (`npx eslint` with only the `no-undef` rule over `backend/static/js`), which catches a name used
+outside the block that declares it, such as a `const` declared in a `try` and read in its `catch`.
+
 The browser checks (headless Chrome, with the server running) are scripts in `backend/tests/`:
 `ui_smoke.py`, `ui_theme_sweep.py`, `ui_channels_sweep.py`, `ui_a11y_audit.py`. They use `http://localhost:3200`; set
 `ALPHAHOUND_URL=http://127.0.0.1:3201` to run them against a second instance while a device is connected to the first

@@ -897,6 +897,28 @@ with sync_playwright() as p:
     ps.wait_for_function("getComputedStyle(document.getElementById('decay-modal')).display === 'none'", timeout=3000)
     check("S no JS errors or native dialogs in the decay modal", not errs_s, "; ".join(errs_s[:3]))
     ctx_s.close()
+
+    # T. Edit N42 Metadata: when the template request fails, the button comes back (the catch used to throw a ReferenceError
+    #    because the saved label was declared inside the try, leaving the button disabled and "Generating...")
+    ctx_t = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pt = ctx_t.new_page()
+    errs_t = []
+    pt.on("pageerror", lambda e: errs_t.append(f"pageerror: {e}"))
+    pt.on("dialog", lambda d: (errs_t.append("native dialog: " + d.message), d.dismiss()))
+    pt.route("**/export/n42", lambda route, request: route.abort())
+    pt.goto(URL, wait_until="networkidle")
+    rows = "\n".join(f"{3.0 + 7.4 * i:.2f},{30 + (400 if 80 < i < 90 else 0)}" for i in range(128))
+    pt.set_input_files("#file-input", files=[{"name": "edit_me.csv", "mimeType": "text/csv", "buffer": ("Energy (keV),Counts\n" + rows + "\n").encode()}])
+    pt.wait_for_selector("#result-summary", state="visible", timeout=20000)
+    label_before = pt.evaluate("document.getElementById('btn-edit-n42').innerHTML")
+    pt.evaluate("document.getElementById('btn-edit-n42').click()")      # a CSV has no raw XML, so the template is requested
+    pt.wait_for_timeout(1500)
+    after = pt.evaluate("""() => { const b = document.getElementById('btn-edit-n42');
+        return { disabled: b.disabled, html: b.innerHTML, opacity: b.style.opacity } }""")
+    check("T a failed metadata-template request gives the Edit button back",
+          not after["disabled"] and after["html"] == label_before and after["opacity"] in ("", "1"), str(after)[:200])
+    check("T and raises no uncaught error", not any("not defined" in e for e in errs_t), "; ".join(errs_t[:3]))
+    ctx_t.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

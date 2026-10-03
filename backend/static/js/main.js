@@ -706,6 +706,21 @@ function loadSettings() {
 }
 
 function setupEventListeners() {
+    setupFileUpload();
+    setupUiModeListener();
+    setupDeviceTabs();
+    setupRadiacodeConnection();
+    setupExports();
+    setupSettingsAndHistory();
+    setupThemeAndChartControls();
+    setupDeviceControls();
+    setupComparisonAndBackground();
+    setupSnipAndCalibration();
+    setupAnalysisPanels();
+}
+
+/** Drag and drop, the upload button and the file input. */
+function setupFileUpload() {
     // File Upload & Drag-and-Drop
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -764,7 +779,10 @@ function setupEventListeners() {
         a.click();
         URL.revokeObjectURL(url);
     });
+}
 
+/** The simple / advanced / expert mode change. */
+function setupUiModeListener() {
     // UI Complexity Mode change listener
     document.querySelectorAll('input[name="ui-mode"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
@@ -773,7 +791,10 @@ function setupEventListeners() {
             debug(`[Settings] UI Mode changed to: ${newMode}`);
         });
     });
+}
 
+/** Switching between the AlphaHound and Radiacode connection rows. */
+function setupDeviceTabs() {
     // ============================================================
     // Device Type Tab Switching (AlphaHound / Radiacode)
     // Now toggles connection rows, not entire panels
@@ -815,9 +836,10 @@ function setupEventListeners() {
             if (deviceTitle) deviceTitle.textContent = 'Radiacode Device';
         });
     }
+}
 
-
-
+/** Radiacode connection mode, BLE scan, connect, disconnect, spectrum, clear and dose reset. */
+function setupRadiacodeConnection() {
     // Radiacode connection mode toggle (show/hide BLE controls)
     document.querySelectorAll('input[name="rc-conn-mode"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
@@ -1059,7 +1081,10 @@ function setupEventListeners() {
         a.click();
         URL.revokeObjectURL(url);
     });
+}
 
+/** PDF and N42 export and the N42 metadata editor. */
+function setupExports() {
     // PDF Export
     document.getElementById('btn-export-pdf').addEventListener('click', async () => {
         if (!currentData) return;
@@ -1172,9 +1197,10 @@ function setupEventListeners() {
             toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);';
             document.body.appendChild(toast);
 
+            // declared before the try: the catch below restores the button from it too
+            const originalHtml = btnEditN42.innerHTML;
             try {
                 // Set loading state
-                const originalHtml = btnEditN42.innerHTML;
                 btnEditN42.disabled = true;
                 btnEditN42.style.opacity = '0.7';
                 btnEditN42.innerHTML = '<span class="spinner-inline"></span> Generating...';
@@ -1217,8 +1243,10 @@ function setupEventListeners() {
             ui.showError('Could not initialize N42 editor');
         }
     });
+}
 
-
+/** The settings modal (mode, sliders, apply, reset) and the history modal. */
+function setupSettingsAndHistory() {
     // Settings Modal
     document.getElementById('btn-settings').addEventListener('click', () => {
         document.getElementById('settings-modal').style.display = 'flex';
@@ -1341,7 +1369,10 @@ function setupEventListeners() {
     });
 
     // NOTE: Background subtraction listeners registered below with full set (btn-load-bg, btn-set-current-bg, btn-clear-bg)
+}
 
+/** Theme dropdown, chart controls and the auto-scale toggle. */
+function setupThemeAndChartControls() {
     // Theme Dropdown
     const themeSelect = document.getElementById('theme-select');
     if (themeSelect) {
@@ -1394,7 +1425,10 @@ function setupEventListeners() {
         }
         showToast(isAutoScale ? 'Auto-scale enabled (zoom to data)' : 'Full spectrum view enabled', 'info');
     });
+}
 
+/** The unified device buttons and the Radiacode device settings. */
+function setupDeviceControls() {
     // Device Controls
     document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
     document.getElementById('btn-connect-device').addEventListener('click', connectDevice);
@@ -1533,7 +1567,10 @@ function setupEventListeners() {
 
     document.getElementById('btn-start-acquire').addEventListener('click', startAcquisition);
     document.getElementById('btn-stop-acquire').addEventListener('click', stopAcquisition);
+}
 
+/** Sidebar toggles, spectrum comparison and background subtraction. */
+function setupComparisonAndBackground() {
     // Sidebar Toggles (Mobile/Top Bar)
     if (document.getElementById('btn-refresh-ports-top')) document.getElementById('btn-refresh-ports-top').addEventListener('click', refreshPorts);
     if (document.getElementById('btn-connect-top')) document.getElementById('btn-connect-top').addEventListener('click', connectDeviceTop);
@@ -1565,7 +1602,10 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-clear-bg').addEventListener('click', clearBackground);
+}
 
+/** SNIP background removal and calibration. */
+function setupSnipAndCalibration() {
     // SNIP Auto-Background Removal (Visual Only - preserves original analysis)
     document.getElementById('btn-snip-bg').addEventListener('click', async () => {
         if (!currentData || !currentData.counts) {
@@ -1650,7 +1690,10 @@ function setupEventListeners() {
 
     // NOTE: Scale toggle, reset zoom, and compare mode listeners are already registered above (lines 347-398)
     // Duplicate registrations removed to prevent double-execution
+}
 
+/** The analysis panel, peak fitting, AI identification and the peaks toggle. */
+function setupAnalysisPanels() {
     // Analysis Panel Toggle
     document.getElementById('btn-analysis').addEventListener('click', () => {
         const panel = document.getElementById('analysis-panel');

@@ -97,7 +97,7 @@ Structural debt (long functions, overlapping modules, what was cleaned and what 
 - [ ] Browser-check the chain diagram's "or" branch and the ROI notes in the other themes and on a phone width (checked in Dark at desktop width only).
 - [ ] Replace remaining `print` calls in multi-line/other statements and the `[Tag]` message prefixes now duplicated by logger names
 - [x] Split `routers/analysis.py` (1500+ lines) into `analysis.py`, `export.py`, `nuclear.py` (same 37 routes)
-- [ ] Split `static/js/main.js` further (3,286 lines; the toast helpers and the decay tool are out, in `toast.js` and `decay_tool.js`). Next: `setupEventListeners` (about 1,100 lines, one function wiring nearly every control) by panel. The headless-browser checks catch regressions: `ui_smoke.py` passes 160/160.
+- [ ] `static/js/main.js` is still about 3,300 lines in one module (toast and decay tool are out; `setupEventListeners` is now 11 named functions). Next: move those section functions into their own modules, passing in the state they use (`currentData`, `isAcquiring`, ...). The browser checks (162) and the frontend scope check guard it.
 - [ ] Add unit tests for frontend JavaScript modules
 - [x] Add unit tests for backend API endpoints ✅ (`backend/tests/test_api_endpoints.py`; 59 tests pass)
 - [ ] Implement TypeScript for type safety

@@ -30,5 +30,14 @@ jobs:
       - name: Backend tests (includes the repository layout rules)
         run: python -m pytest backend/tests -q -p no:cacheprovider
 
+      # A name used outside the block that declares it (a const in a try, read in the catch) only fails when that path
+      # runs; this finds it without running the page.
+      - name: Frontend scope check (no undefined names in backend/static/js)
+        shell: bash
+        run: >
+          npx --yes eslint@8.57.0 --no-eslintrc --env browser,es2022 --global Chart,Hammer
+          --parser-options=ecmaVersion:2022 --parser-options=sourceType:module
+          --rule '{"no-undef":"error"}' backend/static/js/*.js
+
       # The headless-browser checks (backend/tests/ui_*.py) need Chrome and a running server; run them locally with
       # ALPHAHOUND_URL pointing at a second instance (see README, "Running the tests").
