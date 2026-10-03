@@ -1,0 +1,19 @@
+# Line endings: text files are stored with LF in the repository and checked out with the platform's endings.
+# (Without this, git on Windows warns "LF will be replaced by CRLF" on nearly every commit and leaves it to each
+# person's core.autocrlf.)
+* text=auto
+
+# Windows batch files must be CRLF wherever they are checked out
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never touch binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.xlsx binary
+*.zip binary
