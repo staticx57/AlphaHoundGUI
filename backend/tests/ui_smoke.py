@@ -539,6 +539,14 @@ with sync_playwright() as p:
     pm.set_viewport_size({"width": 390, "height": 844})
     pm.wait_for_timeout(300)
     check("M no horizontal overflow with a result on a phone", pm.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    phone = pm.evaluate("""() => { const q = (x) => document.querySelector(x); const cards = [...document.querySelectorAll('#metadata-panel .stat-card')];
+        const tops = new Set(cards.map((c) => Math.round(c.getBoundingClientRect().top)));
+        const area = q('#peaks-scroll-area'); const table = q('#peaks-table');
+        return { chartH: Math.round(q('#spectrumChart').getBoundingClientRect().height), rows: tops.size, cards: cards.length,
+                 tableFits: table.scrollWidth <= area.clientWidth + 2 } }""")
+    check("M on a phone the spectrum is tall enough to read", phone["chartH"] >= 200, str(phone))
+    check("M on a phone the metadata cards sit two per row", phone["rows"] <= (phone["cards"] + 1) // 2, str(phone))
+    check("M on a phone the peaks table fits without sideways scrolling", phone["tableFits"], str(phone))
     check("M no JS errors or native dialogs", not errs_m, "; ".join(errs_m[:3]))
     ctx_m.close()
 

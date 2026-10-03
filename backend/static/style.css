@@ -2877,3 +2877,18 @@ input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
         scroll-behavior: auto !important;
     }
 }
+
+/* ================= Phones: a usable spectrum, a compact result ================= */
+@media (max-width: 600px) {
+    .chart-container { height: auto; padding: 0.8rem; }
+    .chart-canvas-wrap { height: 300px; flex: none !important; }   /* a fixed height: Chart.js keeps growing inside an auto-height box */
+    .chart-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    .chart-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .chart-actions button { margin-right: 0 !important; }
+    .metadata-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat-card { padding: 0.55rem 0.7rem; }
+    .stat-value { font-size: 0.9rem; overflow-wrap: anywhere; }
+    #peaks-container, #isotopes-container { padding: 1rem; }
+    #peaks-table th, #peaks-table td { padding: 0.4rem 0.35rem; font-size: 0.8rem; }
+    .peak-match { font-size: 0.7rem; padding: 0 4px; }
+}
