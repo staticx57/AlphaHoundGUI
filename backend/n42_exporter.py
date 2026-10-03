@@ -44,6 +44,9 @@ def instrument_from_metadata(metadata: dict) -> dict:
             model = 'RadiaCode'
     if model and 'radiacode' in str(model).lower():
         return {'manufacturer': 'RadiaCode', 'model': model, 'serial_number': serial}
+    if model and 'alphahound' in str(model).lower():
+        return {'manufacturer': metadata.get('instrument_manufacturer', 'RadView Detection'), 'model': model,
+                'serial_number': serial}
     if model:
         return {'manufacturer': metadata.get('instrument_manufacturer', 'Unknown'), 'model': model,
                 'serial_number': serial}

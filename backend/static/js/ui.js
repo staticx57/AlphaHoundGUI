@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { formatDoseRate, resolveUnit, getDosePref, UREM_PER_USV } from './units.js';
+import { describeMetadata } from './metadata_cards.js';
 import {
     summarizeIdentification, compareIdentifications, peakMatches, summaryFacts, formatCount, formatDuration,
     spectrumSignature, spectrumChange, confidenceLabel, describeSpectrum,
@@ -107,6 +108,10 @@ export class AlphaHoundUI {
             this._selectedPeak = null;
         }
         this._sig = signature;
+        if (window.chartManager) {
+            window.chartManager.preserveZoom = live;                 // a live update keeps the window the user chose
+            if (!live) window.chartManager.userZoom = null;          // a different spectrum starts from the auto view
+        }
         this.renderMetadata(data.metadata);
         this.renderDataQualityWarning(data.data_quality);
         this.renderPeaks(data.peaks, data.isotopes);
@@ -319,113 +324,42 @@ export class AlphaHoundUI {
     }
 
     renderMetadata(metadata) {
-        const keyMap = {
-            'count_time_minutes': 'Collection Time',
-            'start_time': 'Start Time',
-            'live_time_s': 'Live Time',
-            'real_time_s': 'Real Time',
-            'energy_calibration_slope': 'Cal Slope',
-            'energy_calibration_offset': 'Cal Offset',
-            'calibration': 'Calibration',
-            'duration_s': 'Duration',
-            'exposure_during_acquisition': 'Exposure (this acquisition)',
-            'mean_cps_gamma': 'Mean Gamma CPS',
-            'mean_cps_beta': 'Mean Beta CPS',
-            'mean_cps_alpha': 'Mean Alpha CPS',
-            'max_cps_total': 'Peak Total CPS'
+        this._metadata = metadata;
+        const cards = describeMetadata(metadata, { doseUnit: resolveUnit(getDosePref(), 'uSv') });
+        const el = (tag, className, text) => {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
         };
-
-        // Explanations shown as tooltips so every field says what it means
-        const explain = {
-            'count_time_minutes': 'Time since the acquisition started (wall clock), in minutes.',
-            'acquisition_time': 'Time since the acquisition started (wall clock).',
-            'live_time': 'Time the detector was able to count (real time minus dead time).',
-            'real_time': 'Elapsed wall-clock time of the measurement.',
-            'live_time_s': 'Time the detector was able to count (real time minus dead time).',
-            'real_time_s': 'Elapsed wall-clock time of the measurement.',
-            'device_duration_s': 'Accumulation time reported by the instrument itself (independent of this app\u2019s clock).',
-            'duration_s': 'Accumulation time reported by the instrument.',
-            'mean_cps_gamma': 'Mean gamma count rate during the acquisition, in counts per second (AlphaHound).',
-            'mean_cps_beta': 'Mean beta count rate during the acquisition, in counts per second (AlphaHound).',
-            'mean_cps_alpha': 'Mean alpha count rate during the acquisition, in counts per second (AlphaHound).',
-            'max_cps_total': 'Highest gamma + beta + alpha count rate seen during the acquisition.',
-        };
-
-        // Several time fields often carry the same number (neither supported device reports dead time,
-        // so live = real = acquisition time). Show one explained card instead of four unexplained ones.
-        const md = { ...(metadata || {}) };
-        const timeNotes = md.time_notes; delete md.time_notes;
-        const secs = (k) => (typeof md[k] === 'number') ? md[k] : null;
-        const same = (a, b) => a !== null && b !== null && Math.abs(a - b) < 0.5;
-        const acq = secs('acquisition_time'), live = secs('live_time'), real = secs('real_time');
-        const cmin = (typeof md.count_time_minutes === 'number') ? md.count_time_minutes * 60 : null;
-        const merged = [];
-        if (acq !== null && same(acq, live) && same(acq, real) && (cmin === null || same(acq, cmin))) {
-            ['acquisition_time', 'live_time', 'real_time', 'count_time_minutes'].forEach(k => delete md[k]);
-            merged.push({
-                label: 'Acquisition Time',
-                value: acq,
-                title: (timeNotes || 'Live time and real time are identical here: neither device reports dead time, '
-                    + 'so live time is taken to equal real time (= elapsed time since the acquisition started).')
-            });
-        } else if (live !== null && real !== null && same(live, real) && acq === null) {
-            ['live_time', 'real_time'].forEach(k => delete md[k]);
-            merged.push({
-                label: 'Live = Real Time', value: live,
-                title: 'Live and real time are identical in this file (no dead time recorded).'
-            });
-        }
-        const fmtSecs = (v) => v >= 3600 ? `${Math.floor(v / 3600)}h ${Math.floor((v % 3600) / 60)}m`
-            : (v >= 60 ? `${(v / 60).toFixed(1)} min (${v.toFixed(0)} s)` : `${v.toFixed(1)}s`);
-        const mergedHtml = merged.map(m => `
-            <div class="stat-card">
-                <div class="stat-label">${m.label} <span class="info-tip" tabindex="0" role="img" aria-label="${m.title}" title="${m.title}">ⓘ</span></div>
-                <div class="stat-value" title="${m.title}">${fmtSecs(m.value)}</div>
-            </div>`).join('');
-
-        const metaHtml = mergedHtml + Object.entries(md).map(([key, value]) => {
-            let displayKey = keyMap[key] || key.toUpperCase().replaceAll('_', ' ');
-            if (key === 'device_duration_s') displayKey = 'Device Duration';
-            let displayValue = value || '-';
-            if (key === 'start_time' && typeof value === 'string' && !Number.isNaN(Date.parse(value))) {
-                // ISO text such as 2026-10-02T17:43:30.903564+00:00 wrapped over three lines: show local time
-                displayValue = new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        this.elements.metadataPanel.replaceChildren(...cards.map((card) => {
+            const box = el('div', 'stat-card');
+            box.dataset.key = card.key;
+            const label = el('div', 'stat-label', card.label);
+            if (card.tip) {
+                const tip = el('span', 'info-tip', '\u24d8');
+                tip.tabIndex = 0;
+                tip.setAttribute('role', 'img');
+                tip.setAttribute('aria-label', card.title);
+                tip.title = card.title;
+                label.append(' ', tip);
             }
-
-            // Handle object values (like calibration coefficients)
-            if (value !== null && typeof value === 'object') {
-                if (key === 'calibration' && value.a0 !== undefined) {
-                    // Format calibration as readable string
-                    displayValue = `${value.a1?.toFixed(2) || '?'} keV/ch`;
-                } else {
-                    // Generic object handling
-                    displayValue = JSON.stringify(value);
-                }
-            } else if (key === 'count_time_minutes' && value > 0) {
-                displayValue = `${parseFloat(value).toFixed(2)} min`;
-            } else if ((key === 'duration_s' || key === 'device_duration_s') && typeof value === 'number') {
-                // Format duration - convert seconds to readable format
-                if (value >= 3600) {
-                    const hrs = Math.floor(value / 3600);
-                    const mins = Math.floor((value % 3600) / 60);
-                    displayValue = `${hrs}h ${mins}m`;
-                } else if (value >= 60) {
-                    displayValue = `${(value / 60).toFixed(1)} min`;
-                } else {
-                    displayValue = `${value.toFixed(1)}s`;
-                }
-            } else if (key.includes('time') && !isNaN(value) && typeof value === 'number') {
-                displayValue = `${value.toFixed(1)}s`;
+            const value = el('div', 'stat-value', card.value);
+            if (card.title) value.title = card.title;
+            box.append(label, value);
+            if (card.rows && card.rows.length) {
+                const list = el('dl', 'stat-rows');
+                for (const row of card.rows) list.append(el('dt', '', row.k), el('dd', '', row.v));
+                box.append(list);
             }
+            if (card.detail) box.append(el('div', 'stat-detail', card.detail));
+            return box;
+        }));
+    }
 
-            return `
-                <div class="stat-card">
-                    <div class="stat-label">${displayKey}${explain[key] ? ` <span class="info-tip" tabindex="0" role="img" aria-label="${explain[key]}" title="${explain[key]}">ⓘ</span>` : ''}</div>
-                    <div class="stat-value" title="${explain[key] || (typeof value === 'object' ? JSON.stringify(value) : value)}">${displayValue}</div>
-                </div>
-            `;
-        }).join('');
-        this.elements.metadataPanel.innerHTML = metaHtml;
+    /** Redraw the cards (the dose unit preference changed). */
+    refreshMetadata() {
+        if (this._metadata) this.renderMetadata(this._metadata);
     }
 
     renderPeaks(peaks, isotopes) {

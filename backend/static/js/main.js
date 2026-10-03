@@ -2601,6 +2601,7 @@ function setupDoseAndAlertSettings() {
         setDosePref(unitSel.value);
         showLimit();
         alertCenter.reload();
+        ui.refreshMetadata();
         showToast('Dose unit updated; readouts change with their next reading.', 'info');
     });
     ['pref-alert-dose', 'pref-alert-dose-value', 'pref-alert-cps', 'pref-alert-cps-value', 'pref-alert-sound'].forEach((id) => {
@@ -2623,6 +2624,7 @@ function setupDoseAndAlertSettings() {
         setDosePref('auto');
         load();
         alertCenter.reload();
+        ui.refreshMetadata();
     });
     $('btn-settings')?.addEventListener('click', load);
     load();

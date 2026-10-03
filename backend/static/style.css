@@ -1825,7 +1825,7 @@ input[type="text"]:focus {
     background: var(--bg-secondary);
     border-radius: 4px;
     overflow: hidden;
-    border: 1px solid var(--border-color);
+    box-shadow: inset 0 0 0 1px var(--border-color);   /* not a border: the bar and the handle row must be the same width */
 }
 
 .scrubber-preview {
@@ -1851,11 +1851,12 @@ input[type="text"]:focus {
 .zoom-scrubber-controls {
     position: relative;
     height: 24px;
-    margin-top: 4px;
+    margin: 4px -8px 0;   /* a range handle's centre travels between half a handle from each end: widen the row by half a handle (16 px wide) per side so value v sits exactly at v % of the bar, where the selection box edge and the chart range are */
 }
 
 /* Range slider styling */
 .zoom-handle {
+    margin: 0;                /* the browser's default 2px margin on range inputs shifted the handles off the bar */
     position: absolute;
     width: 100%;
     height: 20px;
@@ -2892,3 +2893,15 @@ input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
     #peaks-table th, #peaks-table td { padding: 0.4rem 0.35rem; font-size: 0.8rem; }
     .peak-match { font-size: 0.7rem; padding: 0 4px; }
 }
+
+/* ================= Metadata cards with rows and a detail line ================= */
+.stat-rows {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.1rem 0.8rem;
+    margin: 0.1rem 0 0;
+    font-size: 0.85rem;
+}
+.stat-rows dt { color: var(--text-secondary); }
+.stat-rows dd { margin: 0; font-family: var(--ch-font); font-weight: 600; color: var(--text-primary); text-align: right; }
+.stat-detail { margin-top: 0.3rem; font-size: 0.74rem; line-height: 1.35; color: var(--text-secondary); }

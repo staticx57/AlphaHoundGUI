@@ -290,3 +290,16 @@ def test_channel_statistics_round_trip_through_n42():
     parsed = parse_n42(xml)['metadata']
     assert parsed['mean_cps_gamma'] == 110.25 and parsed['mean_cps_beta'] == 60.5
     assert parsed['mean_cps_alpha'] == 3.125 and parsed['max_cps_total'] == 194.0
+
+
+def test_alphahound_instrument_names_its_manufacturer():
+    """An AlphaHound named in the metadata is a RadView Detection instrument, not 'Unknown'."""
+    from n42_exporter import instrument_from_metadata
+    info = instrument_from_metadata({"instrument_model": "AlphaHound"})
+    assert info["manufacturer"] == "RadView Detection" and info["model"] == "AlphaHound"
+    assert instrument_from_metadata({"instrument_model": "AlphaHound AB+G", "instrument_manufacturer": "Acme"})["manufacturer"] == "Acme"
+    assert instrument_from_metadata({"instrument_model": "SomethingElse"})["manufacturer"] == "Unknown"
+    assert instrument_from_metadata({}) == {}                                # the exporter's own AlphaHound defaults apply
+    xml = generate_n42_xml({"counts": [1, 2, 3, 4], "energies": [0, 1, 2, 3], "metadata": {"instrument_model": "AlphaHound"}})
+    parsed = parse_n42(xml)
+    assert parsed["metadata"]["manufacturer"] == "RadView Detection"

@@ -11,6 +11,9 @@ export class AlphaHoundChart {
         this.isSyncing = false; // Unified guard for all chart updates and event reactions
         this.annotations = {}; // Master state for annotations (source of truth)
         this.labelOffsets = {}; // Track vertical offsets for label stacking { xValue: offset }
+        this.userZoom = null;        // the energy window the user chose (scrubber, wheel, pan); kept across live updates
+        this.preserveZoom = false;   // true while a live acquisition re-renders the same spectrum
+        this._programmatic = false;  // true while our own code moves the axis (not a user action)
     }
 
     /**
@@ -305,17 +308,35 @@ export class AlphaHoundChart {
                 this.chart.update('none');
             }
 
-            if (this.autoScale) {
-                console.log(`[Chart] AutoScale: setting x=[${minEnergy}, ${maxEnergy}], y=[0, ${maxY}]`);
-                // Use zoom plugin's zoomScale for programmatic zoom
-                this.chart.zoomScale('x', { min: minEnergy, max: maxEnergy }, 'none');
-                this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: maxY }, 'none');
-            } else {
-                // Full spectrum mode - reset to full scale
-                const fullYMax = (dataPoints.length > 0 ? Math.max(...dataPoints) : 100) * 1.15;
-                console.log(`[Chart] FullSpectrum: setting x=[0, ${fullMaxEnergy}], y=[0, ${fullYMax}]`);
-                this.chart.zoomScale('x', { min: 0, max: fullMaxEnergy }, 'none');
-                this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: fullYMax }, 'none');
+            // A window the user chose (scrubber, wheel, pan) survives live updates of the same spectrum: without this every
+            // refresh of a running acquisition snapped the chart back to the auto range while the scrubber showed the user's pick.
+            const keepWindow = this.preserveZoom && this.userZoom && this.userZoom.axis === `${labels.length}:${fullMaxEnergy}`;
+            this._programmatic = true;
+            try {
+                if (keepWindow) {
+                    const lowLimit = (typeof this.displayMinKeV === 'number') ? this.displayMinKeV : -Infinity;
+                    let top = 0;
+                    for (let i = 0; i < dataPoints.length; i++) {
+                        const e = parseFloat(labels[i]);
+                        if (e >= Math.max(this.userZoom.min, lowLimit) && e <= this.userZoom.max && dataPoints[i] > top) top = dataPoints[i];
+                    }
+                    const yTop = (top > 0 ? top : 1) * 1.15;
+                    this.chart.zoomScale('x', { min: this.userZoom.min, max: this.userZoom.max }, 'none');
+                    this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: yTop }, 'none');
+                } else if (this.autoScale) {
+                    console.log(`[Chart] AutoScale: setting x=[${minEnergy}, ${maxEnergy}], y=[0, ${maxY}]`);
+                    // Use zoom plugin's zoomScale for programmatic zoom
+                    this.chart.zoomScale('x', { min: minEnergy, max: maxEnergy }, 'none');
+                    this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: maxY }, 'none');
+                } else {
+                    // Full spectrum mode - reset to full scale
+                    const fullYMax = (dataPoints.length > 0 ? Math.max(...dataPoints) : 100) * 1.15;
+                    console.log(`[Chart] FullSpectrum: setting x=[0, ${fullMaxEnergy}], y=[0, ${fullYMax}]`);
+                    this.chart.zoomScale('x', { min: 0, max: fullMaxEnergy }, 'none');
+                    this.chart.zoomScale('y', { min: scaleType === 'logarithmic' ? 1 : 0, max: fullYMax }, 'none');
+                }
+            } finally {
+                this._programmatic = false;
             }
 
             this.chart.options.scales.y.type = scaleType;
@@ -435,12 +456,12 @@ export class AlphaHoundChart {
                                 wheel: { enabled: true },
                                 pinch: { enabled: true },
                                 mode: 'xy',
-                                onZoom: () => this.updateScrubberFromChart()
+                                onZoom: () => this._userMoved()
                             },
                             pan: {
                                 enabled: true,
                                 mode: 'xy',
-                                onPan: () => this.updateScrubberFromChart()
+                                onPan: () => this._userMoved()
                             },
                             limits: {
                                 y: { min: scaleType === 'logarithmic' ? 1 : 0 }
@@ -462,6 +483,7 @@ export class AlphaHoundChart {
 
     toggleAutoScale() {
         this.autoScale = !this.autoScale;
+        this.userZoom = null;
         // Note: render() will call resetZoom on mode switch, no need to do it here
         return this.autoScale;
     }
@@ -525,12 +547,12 @@ export class AlphaHoundChart {
                             wheel: { enabled: true },
                             pinch: { enabled: true },
                             mode: 'xy',
-                            onZoom: () => this.updateScrubberFromChart()
+                            onZoom: () => this._userMoved()
                         },
                         pan: {
                             enabled: true,
                             mode: 'xy',
-                            onPan: () => this.updateScrubberFromChart()
+                            onPan: () => this._userMoved()
                         },
                         limits: {
                             y: { min: 0 }
@@ -551,6 +573,7 @@ export class AlphaHoundChart {
     }
 
     resetZoom() {
+        this.userZoom = null;
         if (this.chart) {
             this.autoScale = false;
             this._lastRenderMode = false;
@@ -974,20 +997,18 @@ export class AlphaHoundChart {
 
         if (!this.scrubberContainer || !this.zoomMinSlider) return;
 
-        // Bind event listeners
-        this.zoomMinSlider.addEventListener('input', () => this.onScrubberChange());
-        this.zoomMaxSlider.addEventListener('input', () => this.onScrubberChange());
-
-        // Prevent min > max
+        // One handler per slider: keep the handles apart FIRST, then move the chart (the other order showed the
+        // chart a position the handle was about to be pushed back from)
+        const GAP = 2;   // percent
         this.zoomMinSlider.addEventListener('input', () => {
-            if (parseFloat(this.zoomMinSlider.value) >= parseFloat(this.zoomMaxSlider.value) - 2) {
-                this.zoomMinSlider.value = parseFloat(this.zoomMaxSlider.value) - 2;
-            }
+            const hi = parseFloat(this.zoomMaxSlider.value);
+            if (parseFloat(this.zoomMinSlider.value) > hi - GAP) this.zoomMinSlider.value = hi - GAP;
+            this.onScrubberChange();
         });
         this.zoomMaxSlider.addEventListener('input', () => {
-            if (parseFloat(this.zoomMaxSlider.value) <= parseFloat(this.zoomMinSlider.value) + 2) {
-                this.zoomMaxSlider.value = parseFloat(this.zoomMinSlider.value) + 2;
-            }
+            const lo = parseFloat(this.zoomMinSlider.value);
+            if (parseFloat(this.zoomMaxSlider.value) < lo + GAP) this.zoomMaxSlider.value = lo + GAP;
+            this.onScrubberChange();
         });
 
         console.log('[Scrubber] Initialized');
@@ -1022,46 +1043,60 @@ export class AlphaHoundChart {
 
     /**
      * Draw mini spectrum preview on scrubber canvas.
+     *
+     * The sliders and the chart both work in energy (a slider position is a fraction of the highest energy), so the preview
+     * must too: drawing it by channel number put every peak in the wrong place whenever the calibration has an offset or a
+     * quadratic term (a real Radiacode spectrum: the 236 keV peak at 9.4 % of the bar instead of 8.4 %), and the user
+     * placed the handles on peaks that the chart then did not show. Each pixel column takes the largest count among the
+     * channels that land in it, so narrow peaks survive the downsampling.
      */
     drawMiniPreview() {
-        if (!this.previewCanvas || !this.fullCounts) return;
+        if (!this.previewCanvas || !this.fullCounts || !this.fullEnergies || !(this.fullMaxEnergy > 0)) return;
 
         const ctx = this.previewCanvas.getContext('2d');
         const width = this.previewCanvas.clientWidth;
         const height = this.previewCanvas.clientHeight;
+        if (!(width > 0) || !(height > 0)) return;
 
         this.previewCanvas.width = width;
         this.previewCanvas.height = height;
-
         ctx.clearRect(0, 0, width, height);
 
-        const maxCount = Math.max(...this.fullCounts);
-        const step = Math.max(1, Math.floor(this.fullCounts.length / width));
+        const energies = this.fullEnergies;
+        const counts = this.fullCounts;
+        // channels below the detector threshold are a noise pile that would flatten everything else
+        const lowCut = (typeof this.displayMinKeV === 'number') ? this.displayMinKeV : -Infinity;
+        const cols = new Array(width).fill(null);
+        let maxCount = 0;
+        for (let i = 0; i < counts.length; i++) {
+            const e = Number(energies[i]);
+            if (!(e >= lowCut) || !(e >= 0)) continue;
+            const x = Math.min(width - 1, Math.floor((e / this.fullMaxEnergy) * width));
+            const v = Number(counts[i]) || 0;
+            if (cols[x] === null || v > cols[x]) cols[x] = v;
+            if (v > maxCount) maxCount = v;
+        }
+        if (maxCount <= 0) maxCount = 1;
 
-        // Get accent color
+        // columns between two channels (fewer channels than pixels) are interpolated
+        const known = [];
+        for (let x = 0; x < width; x++) if (cols[x] !== null) known.push(x);
+        if (!known.length) return;
+        const yOf = (v) => height - (v / maxCount) * height * 0.9;
+
         const styles = getComputedStyle(document.documentElement);
         const lineColor = styles.getPropertyValue('--primary-color').trim() || '#38bdf8';
-
         ctx.strokeStyle = lineColor;
         ctx.lineWidth = 1;
         ctx.beginPath();
-
-        for (let i = 0; i < width; i++) {
-            const dataIdx = Math.floor(i * this.fullCounts.length / width);
-            const val = this.fullCounts[dataIdx] || 0;
-            const y = height - (val / maxCount) * height * 0.9;
-
-            if (i === 0) {
-                ctx.moveTo(i, y);
-            } else {
-                ctx.lineTo(i, y);
-            }
-        }
+        known.forEach((x, k) => {
+            if (k === 0) ctx.moveTo(x, yOf(cols[x])); else ctx.lineTo(x, yOf(cols[x]));
+        });
         ctx.stroke();
 
         // Fill with 12% opacity of line color
-        ctx.lineTo(width, height);
-        ctx.lineTo(0, height);
+        ctx.lineTo(known[known.length - 1], height);
+        ctx.lineTo(known[0], height);
         ctx.closePath();
         ctx.fillStyle = this.hexToRgba(lineColor, 0.12);
         ctx.fill();
@@ -1086,6 +1121,7 @@ export class AlphaHoundChart {
             this.chart.options.scales.x.min = minEnergy;
             this.chart.options.scales.x.max = maxEnergy;
             this.chart.update('none');
+            this._rememberWindow(minEnergy, maxEnergy);
 
             // Update selection overlay
             this.updateSelectionOverlay(minPercent, maxPercent);
@@ -1096,6 +1132,22 @@ export class AlphaHoundChart {
         } finally {
             this.isSyncing = false;
         }
+    }
+
+    /** Keep the window the user picked, tagged with the axis it applies to (a different spectrum drops it). */
+    _rememberWindow(min, max) {
+        const n = this.fullEnergies ? this.fullEnergies.length : 0;
+        this.userZoom = { min, max, axis: `${n}:${this.fullMaxEnergy}` };
+    }
+
+    /** The user zoomed or panned the chart with the mouse / fingers. */
+    _userMoved() {
+        if (this._programmatic) return;
+        if (this.chart && this.fullMaxEnergy) {
+            const xs = this.chart.scales.x;
+            this._rememberWindow(xs.min, xs.max);
+        }
+        this.updateScrubberFromChart();
     }
 
     /**

@@ -10,6 +10,10 @@ dose WebSocket, so no hardware is required. Screenshots go to tests/ui_smoke_out
 import json, os, re as _re, sys
 from playwright.sync_api import sync_playwright
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # card text contains symbols the Windows console codepage cannot print
+except Exception:
+    pass
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "ui_smoke_out")
 os.makedirs(OUT, exist_ok=True)
@@ -716,6 +720,119 @@ with sync_playwright() as p:
     check("P the AlphaHound is still shown as connected", pp.inner_text("#device-conn-label") == "Connected")
     check("P no JS errors", not errs_p, "; ".join(errs_p[:3]))
     ctx_p.close()
+
+    # Q. Metadata cards: readable labels, units in the values, related numbers in one card (was "MEAN DOSE RATE USV H", "0.123456")
+    sys.path.insert(0, os.path.join(HERE, ".."))
+    from n42_exporter import generate_n42_xml as _gen_n42
+    _meta = {"source": "AlphaHound AB+G", "instrument_model": "AlphaHound", "start_time": "2026-10-02T17:43:30.903564+00:00",
+             "live_time": 300.0, "real_time": 300.0, "acquisition_time": 300.0, "device_duration_s": 298.4,
+             "exposure_uSv": 0.123456, "mean_dose_rate_uSv_h": 1.482912, "max_dose_rate_uSv_h": 3.250001, "exposure_covered_s": 299.7,
+             "exposure_method": "integrated instrument dose rate", "exposure_during_acquisition": "123.5 nSv (mean 1.483, max 3.250 \u00b5Sv/h)",
+             "mean_cps_gamma": 271.456789, "mean_cps_beta": 150.5, "mean_cps_alpha": 6.25, "max_cps_total": 480.0}
+    _counts = [int(30 * 2.718 ** (-i / 200) + (400 if 300 < i < 330 else 0)) for i in range(1024)]
+    _meta_file = os.path.join(OUT, "acquisition_metadata.n42")
+    with open(_meta_file, "w", encoding="utf-8") as fh:
+        fh.write(_gen_n42({"counts": _counts, "energies": [i * 2.0 for i in range(1024)], "metadata": _meta, "filename": "acq.n42", "is_calibrated": True}))
+    ctx_q = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pq = ctx_q.new_page()
+    errs_q = []
+    pq.on("pageerror", lambda e: errs_q.append(f"pageerror: {e}"))
+    pq.goto(URL, wait_until="networkidle")
+    pq.set_input_files("#file-input", _meta_file)
+    pq.wait_for_selector("#metadata-panel .stat-card", state="visible", timeout=20000)
+    cards = pq.evaluate("""() => [...document.querySelectorAll('#metadata-panel .stat-card')].map(c => ({
+        label: c.querySelector('.stat-label').textContent.replace('\u24d8', '').trim(), text: c.innerText.replace(/\s+/g, ' ') }))""")
+    labels = [c["label"] for c in cards]
+    alltext = " ".join(c["text"] for c in cards)
+    check("Q no card label shows a raw key or a mangled unit", not any(("_" in l) or l.upper().endswith((" USV H", " USV", " S")) for l in labels), str(labels))
+    check("Q the dose figure is one card with mean and max rates in readable units",
+          any(c["label"] == "Dose this acquisition" and "123.5 nSv" in c["text"] and "1.48 \u00b5Sv/h" in c["text"] and "3.25 \u00b5Sv/h" in c["text"] for c in cards),
+          alltext[:300])
+    check("Q the count rates are one card with the three channels", any(c["label"].startswith("Mean count rate") and "271.5" in c["text"] and "150.5" in c["text"] and "6.25" in c["text"] for c in cards))
+    check("Q numbers are rounded (no 6-digit decimals)", not any(len(tok.split(".")[-1]) >= 5 for tok in alltext.replace(",", " ").split() if "." in tok and tok.replace(".", "").isdigit()), alltext[:200])
+    check("Q the manufacturer is named instead of Unknown", "RadView Detection" in alltext and "Unknown" not in alltext, alltext[:200])
+    check("Q the card count dropped from 15 to a handful", len(cards) <= 8, str(len(cards)))
+    pq.click("#btn-settings")
+    pq.select_option("#pref-dose-unit", "uRem")
+    pq.wait_for_function("document.querySelector('#metadata-panel .stat-card[data-key=exposure]').innerText.includes('Rem')", timeout=4000)
+    check("Q the dose unit preference redraws the cards", "\u00b5Rem/h" in pq.inner_text("#metadata-panel .stat-card[data-key=exposure]"),
+          pq.inner_text("#metadata-panel .stat-card[data-key=exposure]"))
+    check("Q no JS errors", not errs_q, "; ".join(errs_q[:3]))
+    ctx_q.close()
+
+    # R. The zoom bar and the chart agree: the preview is drawn in energy (a real calibration is not linear), handles sit on the
+    # selection edges, the chart shows exactly the selected window, and a live update keeps the window the user chose
+    _quad = [5.5 + 2.4 * i + 0.0004 * i * i for i in range(1024)]            # offset and a quadratic term, like a real Radiacode calibration
+    _peak_ch = 300
+    _quad_counts = [int(20 + 60 * 2.718 ** (-i / 150) + (900 if abs(i - _peak_ch) < 6 else 0) + (500 if abs(i - 700) < 8 else 0)) for i in range(1024)]
+    _quad_file = os.path.join(OUT, "quadratic_calibration.n42")
+    with open(_quad_file, "w", encoding="utf-8") as fh:
+        fh.write(_gen_n42({"counts": _quad_counts, "energies": _quad, "metadata": {"source": "synthetic", "live_time": 600.0, "real_time": 600.0},
+                           "filename": "quad.n42", "is_calibrated": True}))
+    ctx_r = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pr = ctx_r.new_page()
+    errs_r = []
+    pr.on("pageerror", lambda e: errs_r.append(f"pageerror: {e}"))
+    pr.goto(URL, wait_until="networkidle")
+    pr.set_input_files("#file-input", _quad_file)
+    pr.wait_for_selector("#zoom-scrubber", state="visible", timeout=20000)
+    pr.wait_for_timeout(1500)
+    geo = pr.evaluate("""() => { const cm = window.chartManager; const e = cm.fullEnergies, c = cm.fullCounts;
+        const cv = document.getElementById('scrubber-preview'); const W = cv.width, H = cv.height;
+        const img = cv.getContext('2d').getImageData(0, 0, W, H).data;
+        const top = new Array(W).fill(H);
+        for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { if (img[(y * W + x) * 4 + 3] > 200) { top[x] = y; break; } }
+        const peaks = [300, 700].map((ch) => { let bx = -1, best = H;
+            const lo = Math.floor(e[ch - 20] / cm.fullMaxEnergy * W), hi = Math.ceil(e[ch + 20] / cm.fullMaxEnergy * W);
+            for (let x = lo; x <= hi; x++) if (top[x] < best) { best = top[x]; bx = x; }
+            const flat = []; for (let x = lo; x <= hi; x++) if (top[x] <= best + 1) flat.push(x);   // a peak is a plateau of columns: use its middle
+            bx = flat.length ? Math.round((flat[0] + flat[flat.length - 1]) / 2) : bx;
+            return { seen: bx, byEnergy: Math.round(e[ch] / cm.fullMaxEnergy * W), byChannel: Math.round(ch / c.length * W) }; });
+        return { W, peaks } }""")
+    check("R the zoom bar preview draws each peak where its ENERGY is (not its channel number)",
+          all(abs(pk["seen"] - pk["byEnergy"]) <= 8 and abs(pk["seen"] - pk["byEnergy"]) < abs(pk["seen"] - pk["byChannel"]) for pk in geo["peaks"])
+          and all(abs(pk["byChannel"] - pk["byEnergy"]) > 20 for pk in geo["peaks"]), str(geo))   # a peak is a plateau of columns: a few px of slack
+    pr.evaluate("""() => { const lo = document.getElementById('zoom-min'), hi = document.getElementById('zoom-max');
+        lo.value = 20; lo.dispatchEvent(new Event('input')); hi.value = 60; hi.dispatchEvent(new Event('input')); }""")
+    pr.wait_for_timeout(300)
+    sync = pr.evaluate("""() => { const cm = window.chartManager; const x = cm.chart.scales.x;
+        const sel = document.getElementById('scrubber-selection').getBoundingClientRect(); const bar = document.getElementById('scrubber-preview').getBoundingClientRect();
+        const row = document.getElementById('zoom-min').getBoundingClientRect(); const centre = (v) => row.left + 8 + v / 100 * (row.width - 16) - bar.left;
+        return { chartMin: x.min, chartMax: x.max, wantMin: 0.2 * cm.fullMaxEnergy, wantMax: 0.6 * cm.fullMaxEnergy,
+                 selLeft: sel.left - bar.left, selRight: sel.right - bar.left, handleMin: centre(20), handleMax: centre(60) } }""")
+    check("R the chart shows exactly the window the handles select", abs(sync["chartMin"] - sync["wantMin"]) < 1 and abs(sync["chartMax"] - sync["wantMax"]) < 1, str(sync))
+    check("R the handles sit on the selection edges", abs(sync["selLeft"] - sync["handleMin"]) <= 1.5 and abs(sync["selRight"] - sync["handleMax"]) <= 1.5, str(sync))
+    # a live update (same spectrum, more counts) keeps the chosen window; a new spectrum starts from the auto view
+    kept = pr.evaluate("""() => { const cm = window.chartManager; const x = cm.chart.scales.x; const before = [x.min, x.max];
+        const more = cm.fullCounts.map((v) => v + 5);
+        cm.preserveZoom = true; cm.render(cm.fullEnergies, more, []); cm.showScrubber(cm.fullEnergies, more);
+        const after = [cm.chart.scales.x.min, cm.chart.scales.x.max];
+        const sliders = [parseFloat(document.getElementById('zoom-min').value), parseFloat(document.getElementById('zoom-max').value)];
+        return { before, after, sliders, want: [20, 60] } }""")
+    check("R a live update keeps the window the user chose (chart and handles)",
+          abs(kept["after"][0] - kept["before"][0]) < 1 and abs(kept["after"][1] - kept["before"][1]) < 1
+          and abs(kept["sliders"][0] - 20) < 0.5 and abs(kept["sliders"][1] - 60) < 0.5, str(kept))
+    fresh = pr.evaluate("""() => { const cm = window.chartManager; const before = [cm.chart.scales.x.min, cm.chart.scales.x.max];
+        cm.preserveZoom = false; cm.userZoom = null; cm.render(cm.fullEnergies, cm.fullCounts, []);
+        return { before, after: [cm.chart.scales.x.min, cm.chart.scales.x.max] } }""")
+    check("R without a live update the chart returns to its auto view", abs(fresh["after"][1] - fresh["before"][1]) > 50, str(fresh))
+    # a real mouse drag of the left handle: chart and handle agree, and the handles cannot cross
+    pr.locator("#zoom-min").scroll_into_view_if_needed()
+    pr.wait_for_timeout(300)
+    box = pr.locator("#zoom-min").bounding_box()
+    bar = pr.locator("#scrubber-preview").bounding_box()
+    y = box["y"] + box["height"] / 2
+    pr.mouse.move(box["x"] + 8 + 0.0 * (box["width"] - 16), y)
+    pr.mouse.down()
+    pr.mouse.move(bar["x"] + bar["width"] * 0.9, y, steps=10)      # far past the right handle
+    pr.mouse.up()
+    pr.wait_for_timeout(300)
+    drag = pr.evaluate("""() => { const cm = window.chartManager; const lo = parseFloat(document.getElementById('zoom-min').value), hi = parseFloat(document.getElementById('zoom-max').value);
+        return { lo, hi, chartMin: cm.chart.scales.x.min, chartMax: cm.chart.scales.x.max, wantMin: lo / 100 * cm.fullMaxEnergy, wantMax: hi / 100 * cm.fullMaxEnergy } }""")
+    check("R dragging the left handle past the right one is stopped, and the chart matches the handles",
+          drag["lo"] <= drag["hi"] - 1.99 and abs(drag["chartMin"] - drag["wantMin"]) < 1 and abs(drag["chartMax"] - drag["wantMax"]) < 1, str(drag))
+    check("R no JS errors in the zoom bar flows", not errs_r, "; ".join(errs_r[:3]))
+    ctx_r.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]
