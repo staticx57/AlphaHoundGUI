@@ -53,10 +53,90 @@ def instrument_from_metadata(metadata: dict) -> dict:
     return {}  # fall back to the AlphaHound defaults (this app's native device)
 
 
+N42_NAMESPACE = "http://physics.nist.gov/N42/2006/N42"
+
+
+def _prepare_export(spectrum_data: Dict) -> Dict:
+    """Validate the input and resolve everything the XML needs: arrays, times (with their defaults) and instrument identity."""
+    if 'counts' not in spectrum_data or 'energies' not in spectrum_data:
+        raise ValueError("Missing required fields: 'counts' and 'energies'")
+
+    counts = spectrum_data['counts']
+    energies = spectrum_data['energies']
+    metadata = spectrum_data.get('metadata', {})
+
+    if len(counts) != len(energies):
+        raise ValueError(f"Counts ({len(counts)}) and energies ({len(energies)}) arrays must have same length")
+
+    live_time = metadata.get('live_time', 1.0)
+    real_time = metadata.get('real_time', live_time)
+    start_time = metadata.get('start_time') or datetime.now().isoformat()
+
+    # Explicit instrument_info wins, otherwise derive it from the spectrum's metadata
+    # (a RadiaCode spectrum must not be saved as an AlphaHound)
+    instrument_info = spectrum_data.get('instrument_info') or instrument_from_metadata(metadata)
+    return {
+        'counts': counts,
+        'energies': energies,
+        'metadata': metadata,
+        'live_time': live_time,
+        'real_time': real_time,
+        'start_time': start_time,
+        'manufacturer': instrument_info.get('manufacturer', 'RadView Detection'),
+        'model': instrument_info.get('model', 'AlphaHound'),
+        'serial_number': instrument_info.get('serial_number', 'UNKNOWN'),
+    }
+
+
+def _build_tree(prepared: Dict, spectrum_data: Dict) -> ET.Element:
+    """The N42 element tree: measurement times, the spectrum with its calibration, the instrument and the optional extension."""
+    ET.register_namespace('', N42_NAMESPACE)
+    root = ET.Element('RadInstrumentData', {'xmlns': N42_NAMESPACE})
+    rad_measurement = ET.SubElement(root, "RadMeasurement")
+
+    ET.SubElement(rad_measurement, "MeasurementClassCode").text = "Foreground"
+    ET.SubElement(rad_measurement, "StartTime").text = str(prepared['start_time'])
+    ET.SubElement(rad_measurement, "RealTime").text = f"PT{prepared['real_time']:.3f}S"   # ISO 8601 duration
+
+    spectrum = ET.SubElement(rad_measurement, "Spectrum")
+    ET.SubElement(spectrum, "LiveTime").text = f"PT{prepared['live_time']:.3f}S"
+
+    energy_cal = ET.SubElement(spectrum, "EnergyCalibration")
+    ET.SubElement(energy_cal, "CalibrationEquation").text = "List"   # full channel-to-energy mapping
+    ET.SubElement(energy_cal, "ChannelEnergies").text = " ".join(f"{e:.5f}" for e in prepared['energies'])
+
+    channel_data = ET.SubElement(spectrum, "ChannelData", NumberOfChannels=str(len(prepared['counts'])))
+    channel_data.text = " ".join(str(int(c)) for c in prepared['counts'])
+    ET.SubElement(spectrum, "SpectrumType").text = "PHA"   # pulse height analysis
+
+    instrument = ET.SubElement(spectrum, "InstrumentInformation")
+    ET.SubElement(instrument, "Manufacturer").text = str(prepared['manufacturer'])
+    ET.SubElement(instrument, "Model").text = str(prepared['model'])
+    ET.SubElement(instrument, "SerialNumber").text = str(prepared['serial_number'])
+
+    # Optional extension data: acquisition details and isotope identification results
+    metadata = prepared['metadata']
+    isotopes = spectrum_data.get('isotopes') or []
+    acquisition = {k: metadata[k] for k in ACQUISITION_FIELDS if metadata.get(k) not in (None, '')}
+    if isotopes or acquisition:
+        extension = ET.SubElement(spectrum, "SpectrumExtension")
+        if acquisition:
+            _add_acquisition_info(extension, acquisition)
+        if isotopes:
+            _add_isotope_identification(extension, isotopes)
+    return root
+
+
+def _pretty_print(root: ET.Element) -> str:
+    """Indented XML without the blank lines minidom adds."""
+    pretty_xml = minidom.parseString(ET.tostring(root, encoding='unicode')).toprettyxml(indent="  ")
+    return '\n'.join(line for line in pretty_xml.split('\n') if line.strip())
+
+
 def generate_n42_xml(spectrum_data: Dict) -> str:
     """
     Generate N42-compliant XML from spectrum data.
-    
+
     Args:
         spectrum_data: Dictionary containing:
             - counts: list[int] - Channel counts
@@ -73,112 +153,15 @@ def generate_n42_xml(spectrum_data: Dict) -> str:
                 - manufacturer: str
                 - model: str
                 - serial_number: str
-    
+
     Returns:
         str: Formatted N42 XML string
-    
+
     Raises:
         ValueError: If required fields are missing
     """
-    # Validate required fields
-    if 'counts' not in spectrum_data or 'energies' not in spectrum_data:
-        raise ValueError("Missing required fields: 'counts' and 'energies'")
-    
-    counts = spectrum_data['counts']
-    energies = spectrum_data['energies']
-    metadata = spectrum_data.get('metadata', {})
-    
-    if len(counts) != len(energies):
-        raise ValueError(f"Counts ({len(counts)}) and energies ({len(energies)}) arrays must have same length")
-    
-    n_channels = len(counts)
-    
-    # Extract metadata with defaults
-    live_time = metadata.get('live_time', 1.0)
-    real_time = metadata.get('real_time', live_time)
-    start_time = metadata.get('start_time') or datetime.now().isoformat()
-    
-    # Instrument information: explicit instrument_info wins, otherwise derive it from the
-    # spectrum's metadata (a RadiaCode spectrum must not be saved as an AlphaHound)
-    instrument_info = spectrum_data.get('instrument_info') or instrument_from_metadata(metadata)
-    manufacturer = instrument_info.get('manufacturer', 'RadView Detection')
-    model = instrument_info.get('model', 'AlphaHound')
-    serial_number = instrument_info.get('serial_number', 'UNKNOWN')
-    
-    # Create XML structure with namespace
-    ns = "http://physics.nist.gov/N42/2006/N42"
-    ET.register_namespace('', ns)
-    
-    # Root element (standards-compliant)
-    root = ET.Element('RadInstrumentData', {'xmlns': ns})
-    
-    # RadMeasurement container
-    rad_measurement = ET.SubElement(root, "RadMeasurement")
-    
-    # Measurement metadata
-    meas_class = ET.SubElement(rad_measurement, "MeasurementClassCode")
-    meas_class.text = "Foreground"
-    
-    start_time_elem = ET.SubElement(rad_measurement, "StartTime")
-    start_time_elem.text = str(start_time)
-    
-    real_time_elem = ET.SubElement(rad_measurement, "RealTime")
-    real_time_elem.text = f"PT{real_time:.3f}S"  # ISO 8601 duration format
-    
-    # Spectrum element
-    spectrum = ET.SubElement(rad_measurement, "Spectrum")
-    
-    # LiveTime
-    live_time_elem = ET.SubElement(spectrum, "LiveTime")
-    live_time_elem.text = f"PT{live_time:.3f}S"
-    
-    # Energy Calibration
-    energy_cal = ET.SubElement(spectrum, "EnergyCalibration")
-    cal_equation = ET.SubElement(energy_cal, "CalibrationEquation")
-    cal_equation.text = "List"  # Full channel-to-energy mapping
-    
-    channel_energies = ET.SubElement(energy_cal, "ChannelEnergies")
-    channel_energies.text = " ".join(f"{e:.5f}" for e in energies)
-    
-    # Channel Data
-    channel_data = ET.SubElement(spectrum, "ChannelData", 
-                                 NumberOfChannels=str(n_channels))
-    channel_data.text = " ".join(str(int(c)) for c in counts)
-    
-    # Spectrum Type
-    spectrum_type = ET.SubElement(spectrum, "SpectrumType")
-    spectrum_type.text = "PHA"  # Pulse Height Analysis
-    
-    # Instrument Information
-    instrument = ET.SubElement(spectrum, "InstrumentInformation")
-    
-    manuf = ET.SubElement(instrument, "Manufacturer")
-    manuf.text = str(manufacturer)
-    
-    model_elem = ET.SubElement(instrument, "Model")
-    model_elem.text = str(model)
-    
-    serial = ET.SubElement(instrument, "SerialNumber")
-    serial.text = str(serial_number)
-    
-    # Optional extension data: acquisition details and isotope identification results
-    isotopes = spectrum_data.get('isotopes') or []
-    acquisition = {k: metadata[k] for k in ACQUISITION_FIELDS if metadata.get(k) not in (None, '')}
-    if isotopes or acquisition:
-        extension = ET.SubElement(spectrum, "SpectrumExtension")
-        if acquisition:
-            _add_acquisition_info(extension, acquisition)
-        if isotopes:
-            _add_isotope_identification(extension, isotopes)
-    
-    # Format XML with pretty printing
-    xml_string = ET.tostring(root, encoding='unicode')
-    dom = minidom.parseString(xml_string)
-    pretty_xml = dom.toprettyxml(indent="  ")
-    
-    # Remove extra blank lines (minidom adds them)
-    lines = [line for line in pretty_xml.split('\n') if line.strip()]
-    return '\n'.join(lines)
+    prepared = _prepare_export(spectrum_data)
+    return _pretty_print(_build_tree(prepared, spectrum_data))
 
 
 def _add_acquisition_info(extension: ET.Element, values: Dict):
