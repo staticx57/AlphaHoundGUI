@@ -12,7 +12,8 @@ Comparison areas:
 3. Background subtraction (SNIP algorithm)
 4. Uncertainty propagation
 
-Run with: python tools/becquerel_comparison.py (from backend/)
+Run with: python tools/becquerel_comparison.py (from backend/). Needs `pip install becquerel`, which the
+application itself no longer uses.
 """
 
 import sys

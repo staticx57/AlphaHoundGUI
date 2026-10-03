@@ -184,7 +184,7 @@ AlphaHoundGUI/
 │   │   └── isotopes.py         # Custom isotope CRUD
 │   ├── formats/                # File formats: parsers, N42 export and editor, PDF report
 │   │   ├── n42_parser.py             # N42/XML file parser (multi-namespace)
-│   │   ├── csv_parser.py             # CSV file parser with Becquerel support
+│   │   ├── csv_parser.py             # CSV file parser (pandas)
 │   │   ├── chn_spe_parser.py         # Ortec CHN and Maestro SPE parser
 │   │   ├── iaea_parser.py            # IAEA LiveChart gamma data parser
 │   │   ├── radiacode_xml_parser.py   # Radiacode XML spectrum parser

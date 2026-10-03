@@ -74,3 +74,12 @@ def test_excel_byte_order_mark_is_ignored():
 def test_undecodable_bytes_are_rejected_with_a_clear_error():
     with pytest.raises(ValueError):
         parse(b"energy,counts\n\xff\xfe,5\n1,6\n")
+
+
+def test_unreadable_csv_says_why_and_needs_no_third_party_reader():
+    """The parser is pandas only: an unreadable file is explained by the real cause (it used to be wrapped in a message about a
+    spectrum library that cannot read CSV files, and the whole upload was refused when that library was not installed)."""
+    with pytest.raises(ValueError) as caught:
+        parse(b"")
+    message = str(caught.value)
+    assert "Becquerel" not in message and "No columns to parse" in message

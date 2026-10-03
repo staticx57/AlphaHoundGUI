@@ -3,13 +3,6 @@ import io
 import os
 import tempfile
 
-# Try to import becquerel
-try:
-    import becquerel as bq
-    HAS_BECQUEREL = True
-except ImportError:
-    HAS_BECQUEREL = False
-
 import logging
 logger = logging.getLogger(__name__)
 
@@ -76,7 +69,7 @@ def _delimiter(text: str) -> str:
 
 def _manual_columns(tmp_path: str):
     """
-    Fallback when Becquerel cannot read the file: find the counts and energy columns with pandas (delimiter inferred,
+    Find the counts and energy columns with pandas (delimiter inferred,
     columns identified by name, then by position). Returns (counts, energies); energies may be empty.
     """
     import pandas as pd
@@ -159,17 +152,14 @@ def _resolve_energies(energies: list, counts: list, tmp_path: str, comment_meta:
 
 def parse_csv_spectrum(content: bytes, filename: str) -> dict:
     """
-    Parse a CSV spectrum file using Becquerel, with a pandas fallback.
+    Parse a CSV spectrum file (pandas: delimiter, header and column names are worked out from the content).
     Returns a dictionary result with counts, energies, peaks, isotopes, and metadata.
     """
-    if not HAS_BECQUEREL:
-        raise ImportError("Becquerel library not installed on server.")
-
     # Some exporters (e.g. RadiaCode tools) prefix '# key,value' metadata lines; strip them
     # so the tabular parser sees only the header + data, but keep what they tell us.
     content, comment_meta = _split_comment_metadata(content)
 
-    # Becquerel needs a file path, so the content goes to a temp file, removed whatever happens next
+    # The header-calibration scan reads the file again, so the content goes to a temp file, removed whatever happens next
     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
         tmp_path = tmp.name
         try:
@@ -189,21 +179,12 @@ def parse_csv_spectrum(content: bytes, filename: str) -> dict:
 
 def _parse_csv_file(tmp_path: str, filename: str, comment_meta: dict) -> dict:
     try:
-        spec = bq.Spectrum.from_file(tmp_path)
-        counts = spec.counts.tolist() if spec.counts is not None else []
-        energies = spec.energies.tolist() if spec.energies is not None else []
-        live_time = spec.live_time
-        real_time = spec.real_time
-        source = "CSV File (Becquerel)"
-    except Exception as bq_error:
-        logger.error(f"[WARNING] Becquerel parsing failed: {str(bq_error)}. Attempting manual fallback.")
-        try:
-            counts, energies = _manual_columns(tmp_path)
-        except Exception as manual_error:
-            raise ValueError(f"Failed to parse CSV with both Becquerel ({str(bq_error)}) and Manual fallback ({str(manual_error)})")
-        live_time = None
-        real_time = None
-        source = "CSV File"
+        counts, energies = _manual_columns(tmp_path)
+    except Exception as e:
+        raise ValueError(f"Could not read this file as a CSV spectrum: {e}")
+    live_time = None
+    real_time = None
+    source = "CSV File"
 
     counts = _numeric_list(counts, "counts")
     energies = _numeric_list(energies, "energy") if energies else energies

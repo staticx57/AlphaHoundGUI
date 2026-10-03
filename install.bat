@@ -8,7 +8,7 @@ echo AI identification uses scikit-learn (small download)
 echo.
 echo Installing core packages...
 python -m pip install --upgrade pip
-python -m pip install fastapi uvicorn python-multipart pyserial websockets matplotlib reportlab numpy scipy pillow pandas becquerel slowapi
+python -m pip install fastapi uvicorn python-multipart pyserial websockets matplotlib reportlab numpy scipy pillow pandas slowapi
 
 echo.
 echo Installing scikit-learn (AI identification)...

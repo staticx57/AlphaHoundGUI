@@ -12,4 +12,3 @@ scipy
 pandas
 matplotlib
 reportlab
-becquerel
