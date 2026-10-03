@@ -157,152 +157,164 @@ def analyze_mda(request: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Upload and analyze a spectrum file (N42/XML/CSV)."""
-    # Validate file extension
-    filename = file.filename.lower()
+def _check_extension(filename: str):
+    """400 for a file type the server does not read (filename is already lower-cased)."""
     ext = '.' + filename.split('.')[-1] if '.' in filename else ''
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
-            status_code=400, 
-            detail=f"Unsupported file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            status_code=400,
+            detail=f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
         )
-    
-    # Read and validate file size
+
+
+def _analyze_n42_upload(content: bytes) -> dict:
+    """N42 and XML uploads (a RadiaCode/BecqMoni export is .xml but not N42)."""
+    try:
+        content_str = content.decode('utf-8')
+        result = parse_radiacode_xml(content_str) if is_radiacode_xml(content_str) else parse_n42(content_str)
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        # Use common analysis pipeline
+        is_calibrated = result.get("is_calibrated", True)
+        live_time = float(result.get("metadata", {}).get("live_time", 0))
+        return analyze_spectrum_peaks(result, is_calibrated, live_time)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing N42: {str(e)}")
+
+
+def _analyze_csv_upload(content: bytes, filename: str) -> dict:
+    try:
+        result = parse_csv_spectrum(content, filename)
+        logger.info(f"[CSV Upload] Parsed: {len(result.get('counts', []))} counts, {len(result.get('energies', []))} energies")
+        logger.info(f"[CSV Upload] is_calibrated: {result.get('is_calibrated', False)}")
+
+        # Use common analysis pipeline
+        is_calibrated = result.get("is_calibrated", False)
+        result = analyze_spectrum_peaks(result, is_calibrated)
+
+        logger.info(f"[CSV Upload] After analysis: peaks={len(result.get('peaks', []))}, isotopes={len(result.get('isotopes', []))}")
+        if result.get('peaks'):
+            peak_energies = [p.get('energy', 0) for p in result['peaks'][:5]]
+            logger.info(f"[CSV Upload] First 5 peak energies: {peak_energies}")
+        return result
+    except ValueError as e:
+        # Unparseable CSV is a client error, not a server fault
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"[CSV Upload] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _analyze_chn_spe_upload(content: bytes, filename: str, original_filename: str) -> dict:
+    """Ortec CHN (binary) and Maestro SPE (text) uploads; the parsers read a path, so the bytes go to a temp file."""
+    try:
+        import tempfile
+        import os
+        ext = '.chn' if filename.endswith('.chn') else '.spe'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            if filename.endswith('.chn'):
+                result = parse_chn_file(tmp_path)
+            else:
+                result = parse_spe_file(tmp_path)
+
+            result['filename'] = original_filename
+            result['source'] = 'CHN File' if filename.endswith('.chn') else 'SPE File'
+            result['is_calibrated'] = result.get('calibration') is not None
+
+            # Use common analysis pipeline
+            is_calibrated = result.get('is_calibrated', False)
+            return analyze_spectrum_peaks(result, is_calibrated)
+        finally:
+            os.unlink(tmp_path)
+    except Exception as e:
+        # a file we cannot read is the client's problem (400), not a server fault
+        raise HTTPException(status_code=400, detail=f"Error parsing CHN/SPE: {str(e)}")
+
+
+def _analyze_generic_upload(content: bytes, filename: str, original_filename: str) -> dict:
+    """Every other allowed format, through SandiaSpecUtils (which also wants a file path)."""
+    try:
+        from formats.specutils_parser import parse_spectrum_generic
+        import tempfile
+        import os
+
+        ext = os.path.splitext(filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            result = parse_spectrum_generic(tmp_path)
+
+            if not result or not result.get("counts"):
+                raise ValueError("Could not parse file structure or empty counts")
+
+            result['filename'] = original_filename
+            result['source'] = 'Generic Spectrum'
+
+            # Determine calibration status
+            cal = result.get('energy_calibration', {})
+            is_calibrated = (cal.get('slope', 1) != 1) or (cal.get('intercept', 0) != 0)
+            result['is_calibrated'] = is_calibrated
+
+            # Expand energies if not present but calibration exists
+            if is_calibrated and not result.get('energies'):
+                result['energies'] = []
+                slope = cal.get('slope', 1)
+                intercept = cal.get('intercept', 0)
+                quad = cal.get('quadratic', 0)
+                for i in range(len(result['counts'])):
+                    # E = A + B*x + C*x^2
+                    e = intercept + slope * i + quad * (i**2)
+                    result['energies'].append(e)
+            elif not result.get('energies'):
+                # Default linear 1 keV/ch
+                result['energies'] = list(range(len(result['counts'])))
+
+            # Use common analysis pipeline
+            live_time = result.get('live_time', 0.0)
+            return analyze_spectrum_peaks(result, is_calibrated, live_time)
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    except ImportError:
+        raise HTTPException(status_code=501, detail="SandiaSpecUtils support not available (module missing)")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read this file as a spectrum: {str(e)}")
+
+
+@router.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Upload and analyze a spectrum file (N42/XML/CSV/CHN/SPE and the formats SandiaSpecUtils reads)."""
+    filename = file.filename.lower()
+    _check_extension(filename)
+
     content = await file.read()
     if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
         raise HTTPException(
             status_code=400,
             detail=f"File too large. Maximum size: {MAX_FILE_SIZE_MB}MB"
         )
-    
+
     if filename.endswith('.n42') or filename.endswith('.xml'):
-        try:
-            content_str = content.decode('utf-8')
-            # RadiaCode/BecqMoni exports are .xml but not N42
-            result = parse_radiacode_xml(content_str) if is_radiacode_xml(content_str) else parse_n42(content_str)
-            if "error" in result: 
-                raise HTTPException(status_code=400, detail=result["error"])
-            
-            # Use common analysis pipeline
-            is_calibrated = result.get("is_calibrated", True)
-            live_time = float(result.get("metadata", {}).get("live_time", 0))
-            result = analyze_spectrum_peaks(result, is_calibrated, live_time)
-            return result
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error parsing N42: {str(e)}")
+        return _analyze_n42_upload(content)
+    if filename.endswith('.csv'):
+        return _analyze_csv_upload(content, filename)
+    if filename.endswith('.chn') or filename.endswith('.spe'):
+        return _analyze_chn_spe_upload(content, filename, file.filename)
+    return _analyze_generic_upload(content, filename, file.filename)
 
-
-    elif filename.endswith('.csv'):
-        try:
-            result = parse_csv_spectrum(content, filename)
-            logger.info(f"[CSV Upload] Parsed: {len(result.get('counts', []))} counts, {len(result.get('energies', []))} energies")
-            logger.info(f"[CSV Upload] is_calibrated: {result.get('is_calibrated', False)}")
-            
-            # Use common analysis pipeline
-            is_calibrated = result.get("is_calibrated", False)
-            result = analyze_spectrum_peaks(result, is_calibrated)
-            
-            logger.info(f"[CSV Upload] After analysis: peaks={len(result.get('peaks', []))}, isotopes={len(result.get('isotopes', []))}")
-            if result.get('peaks'):
-                peak_energies = [p.get('energy', 0) for p in result['peaks'][:5]]
-                logger.info(f"[CSV Upload] First 5 peak energies: {peak_energies}")
-            return result
-        except ValueError as e:
-            # Unparseable CSV is a client error, not a server fault
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            logger.error(f"[CSV Upload] Error: {e}")
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(e))
-    elif filename.endswith('.chn') or filename.endswith('.spe'):
-        try:
-            # Save temp file for binary parsing
-            import tempfile
-            import os
-            ext = '.chn' if filename.endswith('.chn') else '.spe'
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
-            
-            try:
-                if filename.endswith('.chn'):
-                    result = parse_chn_file(tmp_path)
-                else:
-                    result = parse_spe_file(tmp_path)
-                
-                result['filename'] = file.filename
-                result['source'] = 'CHN File' if filename.endswith('.chn') else 'SPE File'
-                result['is_calibrated'] = result.get('calibration') is not None
-                
-                # Use common analysis pipeline
-                is_calibrated = result.get('is_calibrated', False)
-                result = analyze_spectrum_peaks(result, is_calibrated)
-                return result
-            finally:
-                os.unlink(tmp_path)
-        except Exception as e:
-            # a file we cannot read is the client's problem (400), not a server fault
-            raise HTTPException(status_code=400, detail=f"Error parsing CHN/SPE: {str(e)}")
-            
-    else:
-        # Try generic parser (SandiaSpecUtils) for all other allowed extensions
-        try:
-            from formats.specutils_parser import parse_spectrum_generic
-            import tempfile
-            import os
-            
-            # SpecUtils often requires a file path
-            ext = os.path.splitext(filename)[1]
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
-                
-            try:
-                result = parse_spectrum_generic(tmp_path)
-                
-                if not result or not result.get("counts"):
-                    raise ValueError("Could not parse file structure or empty counts")
-                
-                result['filename'] = file.filename
-                result['source'] = 'Generic Spectrum'
-                
-                # Determine calibration status
-                cal = result.get('energy_calibration', {})
-                is_calibrated = (cal.get('slope', 1) != 1) or (cal.get('intercept', 0) != 0)
-                result['is_calibrated'] = is_calibrated
-                
-                # Expand energies if not present but calibration exists
-                if is_calibrated and not result.get('energies'):
-                    result['energies'] = []
-                    slope = cal.get('slope', 1)
-                    intercept = cal.get('intercept', 0)
-                    quad = cal.get('quadratic', 0)
-                    for i in range(len(result['counts'])):
-                        # E = A + B*x + C*x^2
-                        e = intercept + slope * i + quad * (i**2)
-                        result['energies'].append(e)
-                elif not result.get('energies'):
-                    # Default linear 1 keV/ch
-                     result['energies'] = list(range(len(result['counts'])))
-
-                # Use common analysis pipeline
-                live_time = result.get('live_time', 0.0)
-                result = analyze_spectrum_peaks(result, is_calibrated, live_time)
-                return result
-                
-            finally:
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
-                    
-        except ImportError:
-            raise HTTPException(status_code=501, detail="SandiaSpecUtils support not available (module missing)")
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not read this file as a spectrum: {str(e)}")
 
 @router.post("/analyze/fit-peaks")
 def analyze_fit_peaks(request: AnalysisRequest):

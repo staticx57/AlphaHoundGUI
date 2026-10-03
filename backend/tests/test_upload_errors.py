@@ -51,3 +51,11 @@ def test_numeric_csv_variants_still_parse(client, body):
     data = response.json()
     assert data["counts"] and all(isinstance(c, (int, float)) for c in data["counts"])
     assert all(isinstance(e, (int, float)) for e in data["energies"])
+
+
+def test_unsupported_type_lists_the_allowed_extensions_in_a_stable_order(client):
+    """The list used to come out of a set, so its order changed from one server process to the next."""
+    response = client.post("/upload", files={"file": ("program.exe", b"MZ", "application/octet-stream")})
+    assert response.status_code == 400
+    listed = response.json()["detail"].split("Allowed: ")[1].split(", ")
+    assert listed == sorted(listed) and ".csv" in listed and ".n42" in listed and len(listed) == len(set(listed))
