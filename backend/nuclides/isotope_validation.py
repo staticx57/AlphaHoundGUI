@@ -11,7 +11,7 @@ Rules are physics-based and consider:
 4. Known problematic isotopes (special overrides)
 """
 
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 
 # =======================================================================================
 # DETECTOR PROFILES - Energy thresholds based on detector type

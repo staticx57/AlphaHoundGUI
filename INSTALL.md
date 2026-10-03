@@ -20,7 +20,7 @@ run_lightweight.bat
 ⏱️ Longer installation time
 
 ```bash
-install.bat
+install_deps.bat
 run.bat
 ```
 

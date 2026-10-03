@@ -171,7 +171,6 @@ export class AlphaHoundChart {
             x: l,
             y: (lowCut !== null && parseFloat(l) < lowCut) ? null : dataPoints[i]
         })); this.labelOffsets = {};
-        const peakData = (peaks || []).map(p => ({ x: p.energy, y: p.counts || p.count || 0 }));
 
         // Get theme colors for peaks and chart line
         const styles = getComputedStyle(document.documentElement);
@@ -295,8 +294,6 @@ export class AlphaHoundChart {
             }
 
             // Scale Management: Detect mode switch to snap view
-            const xScale = this.chart.options.scales.x;
-            const yScale = this.chart.options.scales.y;
             const modeSwitched = this._lastRenderMode !== this.autoScale;
             debug(`[Chart] autoScale=${this.autoScale}, lastRenderMode=${this._lastRenderMode}, modeSwitched=${modeSwitched}, fullMaxEnergy=${fullMaxEnergy}`);
             this._lastRenderMode = this.autoScale;
@@ -762,10 +759,6 @@ export class AlphaHoundChart {
             console.warn('[XRF Highlight] Blocked recursive call');
             return;
         }
-
-        // Get themed color from CSS variable or use fallback
-        const styles = getComputedStyle(document.documentElement);
-        const themedColor = color || styles.getPropertyValue('--secondary-color').trim() || 'rgba(129, 140, 248, 0.9)';
 
         debug('[XRF Highlight] Called with peaks:', peaks);
 

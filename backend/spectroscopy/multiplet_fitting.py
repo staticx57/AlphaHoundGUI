@@ -13,8 +13,7 @@ Key use cases:
 import numpy as np
 from spectroscopy.gauss_area import channel_width_kev
 from typing import List, Dict, Optional, Tuple
-from scipy.optimize import curve_fit, minimize
-from scipy.integrate import quad
+from scipy.optimize import curve_fit
 from dataclasses import dataclass
 import warnings
 

@@ -19,8 +19,8 @@ import numpy as np
 from dataclasses import dataclass
 
 from spectroscopy.detector_efficiency import get_detector, interpolate_efficiency
-from spectroscopy.isotope_roi_database import get_roi_isotope, get_roi_window, get_background_region
-from spectroscopy.activity_calculator import calculate_activity_bq, bq_to_uci, calculate_mda_bq
+from spectroscopy.isotope_roi_database import get_roi_isotope
+from spectroscopy.activity_calculator import calculate_activity_bq, bq_to_uci
 
 import logging
 logger = logging.getLogger(__name__)
@@ -824,8 +824,8 @@ class ROIAnalyzer:
                 ac228_result = self.analyze(energies, counts, "Ac-228 (911 keV)", acquisition_time_s)
                 if ac228_result.detected:
                     warnings.append(
-                        f"Strong Thorium signature (Ac-228) confirmed. "
-                        f"Uranium detection may be due to mixed source composition or Compton scattering."
+                        "Strong Thorium signature (Ac-228) confirmed. "
+                        "Uranium detection may be due to mixed source composition or Compton scattering."
                     )
             except Exception:
                 logger.debug('Th-232 signature cross-check skipped', exc_info=True)
@@ -1023,7 +1023,7 @@ class ROIAnalyzer:
             confidence_factors.append(f"Ra-226 interference: {interference_penalty:.2f}")
         else:
             confidence += 0.2
-            confidence_factors.append(f"No Ra-226 interference: +0.20")
+            confidence_factors.append("No Ra-226 interference: +0.20")
 
         # Factor 4: statistical precision (0-0.2)
         if ratio > 0 and ratio_uncertainty > 0:
@@ -1076,10 +1076,10 @@ class ROIAnalyzer:
             description = f"U-235 enriched above natural (>{0.72}% U-235)"
         elif ratio >= 30:
             category = "Natural Uranium"
-            description = f"Natural isotopic composition (~0.72% U-235)"
+            description = "Natural isotopic composition (~0.72% U-235)"
         elif ratio > 0:
             category = "Depleted Uranium"
-            description = f"U-235 depleted below natural (<0.3% U-235)"
+            description = "U-235 depleted below natural (<0.3% U-235)"
         else:
             category = "Unable to Determine"
             description = "Insufficient data for enrichment determination"

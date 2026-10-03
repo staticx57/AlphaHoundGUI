@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 # This provides intensity weights for better peak matching
 
 try:
-    from formats.iaea_parser import load_all_isotopes, get_isotope_gammas
+    from formats.iaea_parser import load_all_isotopes
     IAEA_DATA = load_all_isotopes(min_intensity=0.5, top_n=15)
     HAS_IAEA_DATA = True
     logger.info(f"[Isotope Database] Loaded IAEA data for {len(IAEA_DATA)} isotopes")

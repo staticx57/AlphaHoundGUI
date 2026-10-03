@@ -1,16 +1,5 @@
 /* Device panel - ADD TO END OF style.css */
 
-.device-panel {
-    margin-top: 1rem;
-}
-
-.device-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
 .btn-primary {
     background: var(--primary-color);
     color: #0f172a;
@@ -50,12 +39,6 @@ select {
 
 .device-tab.active {
     background: var(--accent-color);
-    color: #0f172a;
-}
-
-/* Radiacode-specific accent - uses secondary color for differentiation */
-.device-tab.radiacode-active {
-    background: var(--secondary-color);
     color: #0f172a;
 }
 

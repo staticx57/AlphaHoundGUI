@@ -39,7 +39,6 @@ window.chartManager = chartManager;
 let currentData = null;
 let isAcquiring = false;
 let acquisitionInterval = null;
-let acquisitionStartTime = null;
 let overlaySpectra = [];
 let compareMode = false;
 let backgroundData = null; // New background state
@@ -53,8 +52,6 @@ const alertCenter = new AlertCenter(document, safeStorage(), (key, active) => {
     if (key === 'dose') document.getElementById('rc-dose-display')?.classList.toggle('dose-alert', active);
 });
 let channelPanel = null; // AlphaHound gamma / beta / alpha channel panel (cards, meter, share bar, history chart)
-let lastCheckpointTime = 0; // Checkpoint save tracking
-const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between checkpoints
 let radiacodeDoseInterval = null;  // Radiacode dose rate polling interval
 
 // Multi-line chart colors - hardcoded for visual distinction across different data series
@@ -1058,13 +1055,6 @@ document.getElementById('btn-clear-highlight')?.addEventListener('click', () => 
 
 setNotifier(showToast);
 
-// Device Lifecycle
-async function initDevice() {
-    // This function seems to be a placeholder or incomplete based on the provided snippet.
-    // The original instruction had `initDevice() {file) {` which was syntactically incorrect.
-    // Assuming it should be an empty function or a function that takes no arguments for now.
-}
-
 /**
  * Handles file upload and processing.
  * Uploads file to server, processes response, and renders dashboard.
@@ -1517,7 +1507,6 @@ async function startAcquisition() {
         }
 
         isAcquiring = true;
-        acquisitionStartTime = Date.now();
 
         document.getElementById('btn-start-acquire').style.display = 'none';
         document.getElementById('btn-stop-acquire').style.display = 'block';

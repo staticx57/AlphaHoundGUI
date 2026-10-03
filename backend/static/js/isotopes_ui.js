@@ -1,6 +1,5 @@
 
 import { escapeHtml } from './html.js';
-import { api } from './api.js';
 import { notifyAuto, confirmDialog } from './dialogs.js';
 
 export const isotopeUI = {

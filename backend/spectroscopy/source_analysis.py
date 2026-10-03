@@ -13,7 +13,6 @@ displayed alongside the standard ROI analysis output.
 
 from typing import Dict, Any, Optional
 from datetime import datetime
-import math
 
 # Physical constants
 RA226_SPECIFIC_ACTIVITY = 3.66e10  # Bq/g

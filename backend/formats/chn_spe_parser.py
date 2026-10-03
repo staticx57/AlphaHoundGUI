@@ -7,7 +7,6 @@ These are common formats from commercial MCA (Multi-Channel Analyzer) systems.
 
 import struct
 import os
-from datetime import datetime
 
 import logging
 logger = logging.getLogger(__name__)

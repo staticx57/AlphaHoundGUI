@@ -1,5 +1,4 @@
 import { escapeHtml } from './html.js';
-import { api } from './api.js';
 import { formatDoseRate, resolveUnit, getDosePref, UREM_PER_USV } from './units.js';
 import { describeMetadata } from './metadata_cards.js';
 import {
@@ -685,7 +684,6 @@ export class AlphaHoundUI {
                 if (!iso) return;
 
                 const isoName = iso.isotope;
-                const safeKey = isoName.replace(/[^a-zA-Z0-9]/g, '_');
                 const chart = window.chartManager?.chart;
 
                 if (!chart) {
@@ -747,7 +745,6 @@ export class AlphaHoundUI {
 
                 const chainGraphic = chainMembers.map((member, idx) => {
                     const isDetected = detectedSet.has(member);
-                    const isParent = idx === 0;
                     const isStable = idx === chainMembers.length - 1;
 
                     // Get half-life and branching from sequence data

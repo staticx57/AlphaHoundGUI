@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 import xml.etree.ElementTree as ET
 import re
-import struct
 
 import logging
 logger = logging.getLogger(__name__)
@@ -46,10 +45,6 @@ class RealSpectrumLoader:
             root = tree.getroot()
             
             # Handle namespace if present
-            ns = ''
-            if root.tag.startswith('{'):
-                ns = root.tag.split('}')[0] + '}'
-            
             # Find ChannelData element
             channel_data = None
             for elem in root.iter():

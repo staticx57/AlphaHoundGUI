@@ -10,7 +10,6 @@ by incorporating:
 5. Half-life plausibility (short-lived isotopes penalized)
 """
 
-import numpy as np
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 import math

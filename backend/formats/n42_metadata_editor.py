@@ -8,8 +8,7 @@ Handles timestamps, sample info, operator details, and other standard N42.42 fie
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
-from typing import Dict, Optional, List
-import copy
+from typing import Dict, List
 
 
 class N42MetadataEditor:

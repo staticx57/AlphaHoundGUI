@@ -18,7 +18,7 @@ Usage:
 import logging
 logger = logging.getLogger(__name__)
 import numpy as np
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
 import functools
 

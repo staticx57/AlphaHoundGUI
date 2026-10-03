@@ -213,7 +213,6 @@
 }
 
 /* Cyberpunk neon glow effects */
-[data-theme="cyberpunk"] .card-bg,
 [data-theme="cyberpunk"] .upload-container,
 [data-theme="cyberpunk"] .chart-container,
 [data-theme="cyberpunk"] .ch-card,
@@ -266,7 +265,6 @@
         repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.03) 2px, rgba(0, 0, 0, 0.03) 4px);
 }
 
-[data-theme="eberline"] .card-bg,
 [data-theme="eberline"] .upload-container,
 [data-theme="eberline"] .chart-container,
 [data-theme="eberline"] .ch-card,
@@ -310,7 +308,6 @@
         linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, transparent 50%);
 }
 
-[data-theme="fluke"] .card-bg,
 [data-theme="fluke"] .upload-container,
 [data-theme="fluke"] .chart-container,
 [data-theme="fluke"] .ch-card,
@@ -363,7 +360,6 @@
         repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(51, 255, 102, 0.02) 1px, rgba(51, 255, 102, 0.02) 2px);
 }
 
-[data-theme="oscilloscope"] .card-bg,
 [data-theme="oscilloscope"] .upload-container,
 [data-theme="oscilloscope"] .chart-container,
 [data-theme="oscilloscope"] .ch-card,
@@ -431,7 +427,6 @@
         radial-gradient(ellipse at 70% 80%, rgba(255, 149, 0, 0.08) 0%, transparent 50%);
 }
 
-[data-theme="nixie"] .card-bg,
 [data-theme="nixie"] .upload-container,
 [data-theme="nixie"] .chart-container,
 [data-theme="nixie"] .ch-card,
@@ -471,7 +466,6 @@
         repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255, 208, 0, 0.03) 20px, rgba(255, 208, 0, 0.03) 40px);
 }
 
-[data-theme="civildefense"] .card-bg,
 [data-theme="civildefense"] .upload-container,
 [data-theme="civildefense"] .chart-container,
 [data-theme="civildefense"] .ch-card,
@@ -507,7 +501,6 @@
         linear-gradient(180deg, rgba(212, 165, 116, 0.06) 0%, transparent 40%);
 }
 
-[data-theme="hp"] .card-bg,
 [data-theme="hp"] .upload-container,
 [data-theme="hp"] .chart-container,
 [data-theme="hp"] .ch-card,
@@ -551,7 +544,6 @@
         linear-gradient(180deg, rgba(0, 162, 232, 0.05) 0%, transparent 30%);
 }
 
-[data-theme="tektronix"] .card-bg,
 [data-theme="tektronix"] .upload-container,
 [data-theme="tektronix"] .chart-container,
 [data-theme="tektronix"] .ch-card,
@@ -595,7 +587,6 @@
         linear-gradient(135deg, rgba(74, 144, 217, 0.03) 0%, transparent 50%);
 }
 
-[data-theme="keithley"] .card-bg,
 [data-theme="keithley"] .upload-container,
 [data-theme="keithley"] .chart-container,
 [data-theme="keithley"] .ch-card,
@@ -639,7 +630,6 @@
         linear-gradient(180deg, rgba(212, 145, 92, 0.08) 0%, transparent 40%);
 }
 
-[data-theme="ludlum"] .card-bg,
 [data-theme="ludlum"] .upload-container,
 [data-theme="ludlum"] .chart-container,
 [data-theme="ludlum"] .ch-card,
@@ -672,7 +662,6 @@
         linear-gradient(180deg, rgba(124, 182, 138, 0.05) 0%, transparent 35%);
 }
 
-[data-theme="victoreen"] .card-bg,
 [data-theme="victoreen"] .upload-container,
 [data-theme="victoreen"] .chart-container,
 [data-theme="victoreen"] .ch-card,
@@ -705,7 +694,6 @@
         linear-gradient(135deg, rgba(38, 166, 154, 0.04) 0%, transparent 50%);
 }
 
-[data-theme="canberra"] .card-bg,
 [data-theme="canberra"] .upload-container,
 [data-theme="canberra"] .chart-container,
 [data-theme="canberra"] .ch-card,
@@ -716,7 +704,6 @@
 }
 
 /* Sci-Fi glassmorphism - ENHANCED */
-[data-theme="scifi"] .card-bg,
 [data-theme="scifi"] .upload-container,
 [data-theme="scifi"] .chart-container,
 [data-theme="scifi"] .ch-card,
@@ -1191,13 +1178,6 @@ tbody tr:hover {
     gap: 0.75rem;
 }
 
-.device-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
 .device-controls-row {
     display: flex;
     gap: 0.75rem;
@@ -1317,15 +1297,13 @@ select option {
     filter: none;
 }
 
-button .icon,
-.icon-btn {
+button .icon {
     margin-right: 6px;
     /* Add subtle drop shadow, keeping the invert */
     filter: invert(1) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
-[data-theme="light"] button .icon,
-[data-theme="light"] .icon-btn {
+[data-theme="light"] button .icon {
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
 }
 
@@ -1336,11 +1314,6 @@ button {
 }
 
 /* Specific icon adjustments */
-.icon-lg {
-    width: 24px;
-    height: 24px;
-}
-
 .icon-xl {
     width: 32px;
     height: 32px;
@@ -1450,10 +1423,6 @@ input[type="text"]:focus {
 
 .text-right {
     text-align: right !important;
-}
-
-.text-center {
-    text-align: center !important;
 }
 
 /* Custom Scrollbar for scrollable area */
@@ -1956,33 +1925,6 @@ button.feature-disabled,
 input.feature-disabled,
 select.feature-disabled {
     pointer-events: none;
-}
-
-/* Wrapper for disabled elements that need tooltip */
-.feature-disabled-wrapper {
-    position: relative;
-    display: inline-block;
-}
-
-.feature-disabled-wrapper>.feature-disabled {
-    pointer-events: none;
-}
-
-/* Keep wrapper interactive for hover effects */
-.feature-disabled-wrapper:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    z-index: 1000;
-    border: 1px solid var(--border-color);
 }
 
 #device-title {

@@ -18,6 +18,6 @@ echo.
 echo To run the app: run_lightweight.bat
 echo.
 echo Note: ML identification will not be available.
-echo To enable ML, run: install.bat
+echo To enable ML, run: install_deps.bat
 echo.
 pause

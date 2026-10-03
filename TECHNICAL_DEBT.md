@@ -80,6 +80,19 @@ requirements list against real imports. Each category states how sure the findin
 
 ### A. Remove: verified, mechanical, easy to undo with git
 
+**Done.** Verified before and after: 662 backend tests, 13 analysis/export snapshots byte-identical, computed style of all
+939 elements x 17 themes x 24 properties identical (and the same check shows 153 differences for a deliberate 1 px change), ESLint
+`no-undef` clean apart from the vendor `Chart` global, browser suites (169 smoke, 34 + 34 sweeps, 16 a11y) and a read-only run
+against the live AlphaHound. Differences from the plan below:
+
+- `.high-confidence`, `.medium-confidence`, `.low-confidence` were **kept**: `ui.js` builds the name at run time
+  (`confidence_level.toLowerCase() + '-confidence'`), so the audit was wrong about them. 24 selectors were removed, not 27.
+- The four locals in `formats/chn_spe_parser.py` (`format_id`, `start_ch`, `end_ch`, `num_coeffs`) stay: reading them validates the file.
+- `calculate_mda` was a real bug, not just unused locals: `confidence_level` was echoed but never applied (every request got the
+  95 % limit). It now uses Currie's L_D = k^2 + 2*sqrt(2)*k*sqrt(B); 95 % keeps the familiar 2.71 + 4.65*sqrt(B). No caller passes a
+  level, so the app's output is unchanged. Covered by `tests/test_mda.py`.
+- Removed `install.bat` and 5 icons with `git rm`; `pydantic>=2` is declared; `uncertainties` is gone.
+
 | Item | Detail |
 |------|--------|
 | 50 unused Python imports | pyflakes; none is re-exported (no other file imports the name from that module). 4 of them are the `try:` block in `routers/analysis.py` that sets `HAS_ENHANCED_ANALYSIS`, which nothing in that file reads (the real probe is in `analysis_utils`): delete the whole block. |

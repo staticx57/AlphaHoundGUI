@@ -11,8 +11,7 @@ Key improvements:
 4. Half-life filtering (excludes prompt gammas)
 """
 
-import numpy as np
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from functools import lru_cache
 import logging

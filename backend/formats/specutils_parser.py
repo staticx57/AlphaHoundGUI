@@ -4,7 +4,7 @@ SandiaSpecUtils Parser Wrapper
 """
 import os
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 # Try to import SandiaSpecUtils
 try:

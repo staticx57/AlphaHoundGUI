@@ -4,11 +4,9 @@ Unifies the analysis pipeline across file uploads (N42/CSV) and live devices (Al
 """
 
 import math
-from typing import List, Optional, Dict
 from spectroscopy.peak_detection import detect_peaks
 from nuclides.isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
-from spectroscopy.spectral_analysis import fit_gaussian
 
 # Enhanced analysis modules (with fallback)
 try:

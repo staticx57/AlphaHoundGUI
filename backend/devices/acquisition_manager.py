@@ -12,7 +12,7 @@ import asyncio
 import time
 import os
 from datetime import datetime, timezone
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 from enum import Enum
 

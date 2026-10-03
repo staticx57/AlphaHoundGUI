@@ -2,8 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, File, UploadFile, HTTPException, Response
 from pydantic import BaseModel, field_validator, Field
-from typing import List, Optional, Dict
-import math
+from typing import List, Optional
 from formats.n42_parser import parse_n42
 from formats.radiacode_xml_parser import is_radiacode_xml, parse_radiacode_xml
 from formats.csv_parser import parse_csv_spectrum
@@ -12,22 +11,9 @@ from nuclides.isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
 from spectroscopy.spectral_analysis import fit_gaussian, calibrate_energy, subtract_background
 from formats.chn_spe_parser import parse_chn_file, parse_spe_file
-from spectroscopy.detector_efficiency import get_detector_names, calculate_mda, DETECTOR_DATABASE
-from nuclides.decay_calculator import predict_decay_chain
+from spectroscopy.detector_efficiency import get_detector_names, calculate_mda
 
-# Enhanced analysis modules (with fallback)
-try:
-    from spectroscopy.peak_detection_enhanced import detect_peaks_enhanced
-    from nuclides.chain_detection_enhanced import identify_decay_chains_enhanced
-    from spectroscopy.confidence_scoring import enhance_isotope_identifications
-    from spectroscopy.multiplet_fitting import enhance_peaks_with_multiplet_fitting
-    HAS_ENHANCED_ANALYSIS = True
-    logger.info("[Analysis] Enhanced analysis modules loaded")
-except ImportError as e:
-    HAS_ENHANCED_ANALYSIS = False
-    logger.warning(f"[Analysis] Enhanced modules not available: {e}")
-
-from spectroscopy.analysis_utils import analyze_spectrum_peaks, sanitize_for_json
+from spectroscopy.analysis_utils import analyze_spectrum_peaks
 
 
 # Constants for input validation
@@ -129,7 +115,7 @@ def get_settings():
     return DEFAULT_SETTINGS
 
 @router.get("/detectors")
-def get_detectors():
+def list_detector_names():
     """Get list of available detector profiles."""
     return {"detectors": get_detector_names()}
 
@@ -418,7 +404,7 @@ def ml_identify(request: MLIdentifyRequest):
             "quality": quality,
             "top_confidence": results[0]['confidence'] if results else 0
         }
-    except ImportError as e:
+    except ImportError:
         raise HTTPException(status_code=501, detail="scikit-learn not installed")
     except Exception as e:
         logger.error(f"[ML] Error: {e}")
@@ -449,7 +435,7 @@ def snip_background_endpoint(request: dict):
         isotopes: (optional) Re-identified isotopes
     """
     try:
-        from spectroscopy.spectral_analysis import subtract_background, snip_background
+        from spectroscopy.spectral_analysis import subtract_background
         
         counts = request.get('counts', [])
         iterations = int(request.get('iterations', 24))
@@ -846,8 +832,6 @@ def anomaly_detection_endpoint(request: dict):
         import numpy as np
         
         counts = request.get('counts', [])
-        energies = request.get('energies', [])
-        
         if not counts:
             raise HTTPException(status_code=400, detail="counts is required")
         

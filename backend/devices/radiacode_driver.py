@@ -222,7 +222,7 @@ class RadiacodeDevice:
                         
                         # Perform initialization sequence from official library
                         import datetime
-                        from radiacode.types import COMMAND, VS
+                        from radiacode.types import COMMAND
                         logger.info("[Radiacode] Initializing device (SET_EXCHANGE)...")
                         self._device.execute(COMMAND.SET_EXCHANGE, b'\x01\xff\x12\xff')
                         
@@ -247,7 +247,7 @@ class RadiacodeDevice:
                         
                         lap("configuration")
                         self._connection_type = "BLE"
-                        logger.info(f"[Radiacode] BLE connected and initialized successfully")
+                        logger.info("[Radiacode] BLE connected and initialized successfully")
                     else:
                         # Linux: use upstream library's bluepy transport
                         logger.info(f"[Radiacode] Connecting via Bluetooth (bluepy) to {address}...")

@@ -8,7 +8,7 @@ Compatible with AlphaHound device data and uploaded files.
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 # Acquisition details carried in <SpectrumExtension><AcquisitionInfo> (not part of N42.42-2006, so

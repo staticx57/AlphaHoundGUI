@@ -1,4 +1,3 @@
-import { api } from './api.js';
 import { notifyAuto } from './dialogs.js';
 
 export class CalibrationUI {

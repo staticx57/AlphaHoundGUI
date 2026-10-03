@@ -4,7 +4,7 @@ from scipy.special import voigt_profile
 from dataclasses import dataclass
 
 from spectroscopy.gauss_area import channel_width_kev
-from typing import Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional
 
 import logging
 logger = logging.getLogger(__name__)
@@ -369,7 +369,7 @@ class AdvancedFittingEngine:
                 uncertainty=area_uncertainty
             )
 
-        except Exception as e:
+        except Exception:
             # print(f"DEBUG: Fit failed for {centroid_guess}: {e}")
             return None
 

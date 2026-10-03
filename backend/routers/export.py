@@ -51,7 +51,7 @@ def export_pdf(request: ReportRequest):
 @router.post("/export/n42")
 def export_n42(request: N42ExportRequest):
     """Export spectrum data as standards-compliant N42 XML file."""
-    logger.info(f"[N42 Export] Endpoint called")
+    logger.info("[N42 Export] Endpoint called")
     try:
         from formats.n42_exporter import generate_n42_xml
         

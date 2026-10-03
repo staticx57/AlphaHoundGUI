@@ -10,10 +10,9 @@ This provides more robust peak detection than simple prominence-based methods.
 
 import numpy as np
 from spectroscopy.gauss_area import channel_width_kev
-from typing import List, Dict, Optional, Tuple
-from scipy.signal import find_peaks, find_peaks_cwt, savgol_filter
+from typing import List, Dict, Optional
+from scipy.signal import find_peaks, find_peaks_cwt
 from scipy.optimize import curve_fit
-import math
 
 import logging
 logger = logging.getLogger(__name__)
@@ -111,7 +110,7 @@ def fit_single_peak(
             'counts': float(y[max_idx]) if max_idx < len(y) else 0.0  # Add counts for compatibility
         }
         
-    except Exception as e:
+    except Exception:
         return None
 
 

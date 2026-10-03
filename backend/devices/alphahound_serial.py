@@ -16,8 +16,6 @@ import serial
 import serial.tools.list_ports
 import threading
 import time
-import asyncio
-import traceback
 import math
 import json
 import os

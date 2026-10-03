@@ -5,7 +5,7 @@ Provides gamma line search and X-ray fluorescence line lookup.
 Ported from PyGammaSpec with enhancements.
 """
 
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Optional
 
 # === Common Gamma Line Database ===
 # Format: (energy_keV, intensity_%, isotope, halflife_s, decay_mode, notes)

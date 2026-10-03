@@ -12,7 +12,6 @@ For known sources, we can estimate the expected count rate and
 back-calculate the acquisition time.
 """
 
-import math
 from typing import Dict, Optional, List
 
 # Expected gross count rates for typical sources at contact distance

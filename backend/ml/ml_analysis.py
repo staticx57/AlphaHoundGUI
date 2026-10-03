@@ -663,8 +663,6 @@ def get_ml_identifier(model_type: str = "hobby", detector: str = "alphahound") -
     Returns:
         MLIdentifier instance (None if scikit-learn is not available)
     """
-    global _ml_identifiers
-    
     if not HAS_ML:
         return None
     

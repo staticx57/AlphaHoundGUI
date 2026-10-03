@@ -5,7 +5,7 @@ for use in both peak matching and ML training.
 """
 import os
 import csv
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 
 import logging
 logger = logging.getLogger(__name__)

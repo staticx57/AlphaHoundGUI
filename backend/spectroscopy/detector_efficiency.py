@@ -10,6 +10,7 @@ Data sources:
 - Efficiency curves: Approximate values based on crystal type and volume
 """
 
+from statistics import NormalDist
 from typing import Dict, Optional
 import math
 
@@ -338,7 +339,7 @@ def calculate_mda(
     }
     
     # Validate inputs
-    if background_counts < 0 or live_time_s <= 0 or branching_ratio <= 0:
+    if background_counts < 0 or live_time_s <= 0 or branching_ratio <= 0 or not (0.5 < confidence_level < 1.0):
         return result
     
     # Get detector efficiency at this energy
@@ -346,20 +347,16 @@ def calculate_mda(
     if efficiency <= 0:
         return result
     
-    # Currie's formula for detection limit (95% confidence)
-    # L_D = 2.71 + 4.65 × √B
-    # For different confidence levels, constants change slightly
-    if confidence_level >= 0.99:
-        k_alpha = 2.33
-        k_beta = 2.33
-    else:  # 95% default
-        k_alpha = 1.645
-        k_beta = 1.645
-    
-    # Detection limit in counts
-    # L_D = k_alpha^2 + 2*k_beta*sqrt(B) for paired blank
-    # Simplified Currie: L_D ≈ 2.71 + 4.65*sqrt(B) for k=1.645
-    L_D = 2.71 + 4.65 * math.sqrt(max(0, background_counts))
+    # Currie's detection limit for a paired blank (alpha = beta = 1 - confidence level):
+    #     L_D = k^2 + 2*sqrt(2)*k*sqrt(B),  k = the one-sided normal quantile of the confidence level.
+    # At the default 95 % (k = 1.645) that is the familiar 2.71 + 4.65*sqrt(B), kept as those rounded constants. The level was
+    # accepted and echoed back before but never used: every request got the 95 % limit.
+    root_b = math.sqrt(max(0, background_counts))
+    if abs(confidence_level - 0.95) < 1e-9:
+        L_D = 2.71 + 4.65 * root_b
+    else:
+        k = NormalDist().inv_cdf(confidence_level)
+        L_D = k * k + 2.0 * math.sqrt(2.0) * k * root_b
     
     result['detection_limit_counts'] = float(L_D)
     

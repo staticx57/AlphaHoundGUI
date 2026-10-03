@@ -12,8 +12,7 @@ References:
 import asyncio
 import struct
 import platform
-from typing import Optional, List, Dict, Any, Callable
-from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, List, Dict, Any
 import threading
 import logging
 

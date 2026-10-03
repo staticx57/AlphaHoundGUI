@@ -22,7 +22,7 @@ EXEMPT = ("TO_BE_DELETED/", "legacy/")
 ROOT_FILES_ALLOWED = {
     ".gitignore", ".gitattributes", "LICENSE", "README.md", "CHANGELOG.md", "INSTALL.md", "TODO.md", "TECHNICAL_DEBT.md",
     "requirements.txt", "requirements_lightweight.txt",
-    "install.bat", "install_deps.bat", "install_lightweight.bat", "run.bat", "run_lightweight.bat",
+    "install_deps.bat", "install_lightweight.bat", "run.bat", "run_lightweight.bat",
     "download_iaea_data.py",
 }
 MAX_TRACKED_BYTES = 800 * 1024
