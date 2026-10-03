@@ -106,8 +106,8 @@ against the live AlphaHound. Differences from the plan below:
 
 ### B. Dead but deliberate-looking: remove after a glance (about 650 lines)
 
-**Done** (every name was searched for again first: code, tests, docs, scripts). 1,460 lines of Python and 225 of JavaScript went, plus
-`tools/becquerel_comparison.py` and `docs/UI_MODE_TESTING.md`. Removing the listed items left more behind that nothing called any
+**Done** (every name was searched for again first: code, tests, docs, scripts). 1,176 lines of Python and 226 of JavaScript went, plus
+`tools/becquerel_comparison.py` (433) and `docs/UI_MODE_TESTING.md` (76). Removing the listed items left more behind that nothing called any
 more; those went too, found by diffing vulture before and after until it settled: `ChainMember`, `ISOTOPE_HALF_LIVES`,
 `ISOTOPES_TO_CHECK`, `SQRT_2PI`, `auto_find_roi`, `get_fwhm_channels`, `_sum_counts_in_region`, `identify_source_type` with its three
 helpers, `reference_energy`, and `api.getSpectrum` (only `getSpectrumUnified` called it). The four uncalled routes are gone from the
