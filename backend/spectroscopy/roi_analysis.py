@@ -13,7 +13,7 @@ References:
 """
 
 import math
-from typing import Dict, List, Sequence, Tuple, Optional
+from typing import Dict, List, NamedTuple, Sequence, Tuple, Optional
 
 import numpy as np
 from dataclasses import dataclass
@@ -519,6 +519,105 @@ def _limits_and_recommendations(*, analysis_valid: bool, detected: bool, confide
     return limiting_factors, recommendations, confidence
 
 
+class _PeakMeasurement(NamedTuple):
+    """What the window integration and the peak fit say about one line (see _measure_peak)."""
+    roi: dict
+    notes: list
+    containment: float
+    window: tuple
+    gross_counts: float
+    background_counts: float
+    background_var: float
+    net_in_window: Optional[float]
+    raw_net_counts: float
+    uncertainty: float
+    analysis_valid: bool
+    fit_success: bool
+    fit_net: Optional[float]
+    fit_fwhm: Optional[float]
+    fit_resolution: Optional[float]
+    roi_method: str
+
+
+def _measure_peak(e_arr, c_arr, isotope, peak_energy, expected_fwhm, min_energy) -> _PeakMeasurement:
+    """
+    Net counts of one line: a window integration with background bands, and a fit of the peak with its neighbours as a
+    cross-check, as the measured resolution, and as the primary result when the window method cannot give a clean one.
+    """
+
+    roi = integrate_peak(e_arr, c_arr, peak_energy, expected_fwhm, isotope.get("neighbor_peaks_keV", ()),
+                         min_energy, isotope.get("background_region"))
+    notes: List[Tuple[str, str]] = list(roi["notes"])
+    containment = roi["containment"]
+    window = roi["window"]
+    gross_counts = roi["gross"]
+    background_counts = roi["background"]
+    net_in_window = roi["net_raw"]
+    sigma_window = math.sqrt(max(roi["gross_var"] + roi["background_var"], 0.0))
+    raw_net_counts = net_in_window / containment                       # the whole peak, not just what fits the window
+    uncertainty = sigma_window / containment
+    analysis_valid = roi["window_valid"] >= 0.5
+
+    # --- A fit of the peak with its neighbours: a cross-check, the measured resolution, and the primary result when the
+    # window method cannot give a clean one ---
+    neighbors = isotope.get("neighbor_peaks_keV", ())
+    local_width = channel_width_at(e_arr, peak_energy)
+    grp = fit_peak_group(e_arr, c_arr, peak_energy, neighbors, expected_fwhm, local_width) if analysis_valid else {"success": False}
+    fit_success = bool(grp["success"])
+    fit_net = grp.get("net") if fit_success else None
+    fit_fwhm = grp.get("fwhm") if fit_success else None          # None when the fit held the width at the expected value
+    fit_resolution = (fit_fwhm / peak_energy * 100.0) if fit_fwhm else None
+    # The window method needs a continuum band on BOTH sides (measured on synthetic spectra: unbiased then, but +-30 % to +-50 %
+    # with a single band on a sloping continuum). A band is dropped when a neighbouring line could lie in it, whether or not
+    # that line is really in the spectrum, so in that case (and with no band at all) the fit, which gives each neighbour an
+    # amplitude of its own, is the primary result.
+    window_is_clean = roi["strict_bands"]
+    background_var = roi["background_var"]
+    if fit_success and not window_is_clean:
+        half_window = (window[1] - window[0]) / 2.0
+        channels_in_window = 2.0 * half_window / local_width
+        raw_net_counts = grp["net"]
+        uncertainty = grp["sigma"]
+        background_counts = max(grp["baseline_at_peak"], 0.0) * channels_in_window
+        background_var = grp["baseline_var"] * channels_in_window ** 2
+        containment = 1.0
+        net_in_window = None
+        notes = [(k, t) for k, t in notes if k not in ("band", "overlap")]
+        others = ", ".join(f"{g:g}" for g in grp["group"][1:])
+        notes.append(("fit", "Net counts come from a fit of this peak" + (f" together with its neighbours ({others} keV)" if others else "")
+                      + ", because background bands on both sides of it could not be used."))
+        width_note = "measured width" if grp["shape"] == "free" else "expected width"
+        roi_method = "peak fit" + (" with neighbouring lines" if others else "") + f" (linear baseline, {width_note})"
+    else:
+        roi_method = roi["method"]
+        if fit_success and analysis_valid and abs(fit_net - raw_net_counts) > 3 * math.sqrt(uncertainty ** 2 + grp["sigma"] ** 2) and abs(fit_net - raw_net_counts) > 20:
+            notes.append(("fit", f"The peak fit ({fit_net:.0f} counts) and the window integration ({raw_net_counts:.0f}) disagree: "
+                                 "a neighbouring peak or an uneven continuum is likely affecting one of them."))
+
+    return _PeakMeasurement(
+        roi=roi, notes=notes, containment=containment, window=window, gross_counts=gross_counts,
+        background_counts=background_counts, background_var=background_var, net_in_window=net_in_window,
+        raw_net_counts=raw_net_counts, uncertainty=uncertainty, analysis_valid=analysis_valid,
+        fit_success=fit_success, fit_net=fit_net, fit_fwhm=fit_fwhm, fit_resolution=fit_resolution,
+        roi_method=roi_method)
+
+
+def _activities(analysis_valid, efficiency, acquisition_time_s, branching_ratio, detection_limit_counts, detected,
+                net_counts, uncertainty):
+    """(activity Bq, activity uCi, activity uncertainty Bq, MDA Bq, MDA uCi); the activity only for a detected peak."""
+    # Minimum detectable activity, always (the reference for a non-detection)
+    activity_bq = activity_uci = activity_uncertainty_bq = mda_bq = mda_uci = None
+    if analysis_valid and efficiency > 0 and acquisition_time_s > 0 and branching_ratio > 0:
+        mda_bq = calculate_activity_bq(detection_limit_counts, acquisition_time_s, efficiency, branching_ratio)
+        mda_uci = bq_to_uci(mda_bq)
+        if detected:
+            # an activity is only reported for a detected peak; for the rest, the upper limit is the MDA
+            activity_bq = calculate_activity_bq(net_counts, acquisition_time_s, efficiency, branching_ratio)
+            activity_uci = bq_to_uci(activity_bq)
+            activity_uncertainty_bq = calculate_activity_bq(uncertainty, acquisition_time_s, efficiency, branching_ratio)
+    return activity_bq, activity_uci, activity_uncertainty_bq, mda_bq, mda_uci
+
+
 class ROIAnalyzer:
     """
     Performs Region-of-Interest analysis on gamma spectra.
@@ -560,54 +659,9 @@ class ROIAnalyzer:
         branching_ratio, blended_lines = effective_branching_ratio(isotope, peak_energy, expected_fwhm, self.detector_name)
         min_energy = float(self.detector.get("min_energy_keV") or 0.0)
 
-        roi = integrate_peak(e_arr, c_arr, peak_energy, expected_fwhm, isotope.get("neighbor_peaks_keV", ()),
-                             min_energy, isotope.get("background_region"))
-        notes: List[Tuple[str, str]] = list(roi["notes"])
-        containment = roi["containment"]
-        window = roi["window"]
-        gross_counts = roi["gross"]
-        background_counts = roi["background"]
-        net_in_window = roi["net_raw"]
-        sigma_window = math.sqrt(max(roi["gross_var"] + roi["background_var"], 0.0))
-        raw_net_counts = net_in_window / containment                       # the whole peak, not just what fits the window
-        uncertainty = sigma_window / containment
-        analysis_valid = roi["window_valid"] >= 0.5
-
-        # --- A fit of the peak with its neighbours: a cross-check, the measured resolution, and the primary result when the
-        # window method cannot give a clean one ---
-        neighbors = isotope.get("neighbor_peaks_keV", ())
-        local_width = channel_width_at(e_arr, peak_energy)
-        grp = fit_peak_group(e_arr, c_arr, peak_energy, neighbors, expected_fwhm, local_width) if analysis_valid else {"success": False}
-        fit_success = bool(grp["success"])
-        fit_net = grp.get("net") if fit_success else None
-        fit_fwhm = grp.get("fwhm") if fit_success else None          # None when the fit held the width at the expected value
-        fit_resolution = (fit_fwhm / peak_energy * 100.0) if fit_fwhm else None
-        # The window method needs a continuum band on BOTH sides (measured on synthetic spectra: unbiased then, but +-30 % to +-50 %
-        # with a single band on a sloping continuum). A band is dropped when a neighbouring line could lie in it, whether or not
-        # that line is really in the spectrum, so in that case (and with no band at all) the fit, which gives each neighbour an
-        # amplitude of its own, is the primary result.
-        window_is_clean = roi["strict_bands"]
-        background_var = roi["background_var"]
-        if fit_success and not window_is_clean:
-            half_window = (window[1] - window[0]) / 2.0
-            channels_in_window = 2.0 * half_window / local_width
-            raw_net_counts = grp["net"]
-            uncertainty = grp["sigma"]
-            background_counts = max(grp["baseline_at_peak"], 0.0) * channels_in_window
-            background_var = grp["baseline_var"] * channels_in_window ** 2
-            containment = 1.0
-            net_in_window = None
-            notes = [(k, t) for k, t in notes if k not in ("band", "overlap")]
-            others = ", ".join(f"{g:g}" for g in grp["group"][1:])
-            notes.append(("fit", "Net counts come from a fit of this peak" + (f" together with its neighbours ({others} keV)" if others else "")
-                          + ", because background bands on both sides of it could not be used."))
-            width_note = "measured width" if grp["shape"] == "free" else "expected width"
-            roi_method = "peak fit" + (" with neighbouring lines" if others else "") + f" (linear baseline, {width_note})"
-        else:
-            roi_method = roi["method"]
-            if fit_success and analysis_valid and abs(fit_net - raw_net_counts) > 3 * math.sqrt(uncertainty ** 2 + grp["sigma"] ** 2) and abs(fit_net - raw_net_counts) > 20:
-                notes.append(("fit", f"The peak fit ({fit_net:.0f} counts) and the window integration ({raw_net_counts:.0f}) disagree: "
-                                     "a neighbouring peak or an uneven continuum is likely affecting one of them."))
+        (roi, notes, containment, window, gross_counts, background_counts, background_var, net_in_window,
+         raw_net_counts, uncertainty, analysis_valid, fit_success, fit_net, fit_fwhm, fit_resolution,
+         roi_method) = _measure_peak(e_arr, c_arr, isotope, peak_energy, expected_fwhm, min_energy)
         warnings: List[str] = [t for _, t in notes]
 
         # Net counts (negative is kept as raw for the status message, but cannot be an activity)
@@ -635,15 +689,9 @@ class ROIAnalyzer:
         efficiency_percent = efficiency * 100
 
         # Minimum detectable activity, always (the reference for a non-detection)
-        activity_bq = activity_uci = activity_uncertainty_bq = mda_bq = mda_uci = None
-        if analysis_valid and efficiency > 0 and acquisition_time_s > 0 and branching_ratio > 0:
-            mda_bq = calculate_activity_bq(detection_limit_counts, acquisition_time_s, efficiency, branching_ratio)
-            mda_uci = bq_to_uci(mda_bq)
-            if detected:
-                # an activity is only reported for a detected peak; for the rest, the upper limit is the MDA
-                activity_bq = calculate_activity_bq(net_counts, acquisition_time_s, efficiency, branching_ratio)
-                activity_uci = bq_to_uci(activity_bq)
-                activity_uncertainty_bq = calculate_activity_bq(uncertainty, acquisition_time_s, efficiency, branching_ratio)
+        activity_bq, activity_uci, activity_uncertainty_bq, mda_bq, mda_uci = _activities(
+            analysis_valid, efficiency, acquisition_time_s, branching_ratio, detection_limit_counts, detected,
+            net_counts, uncertainty)
         if blended_lines:
             notes_line = ", ".join(f"{e:g}" for e in blended_lines)
             warnings.append(f"Other lines of this nuclide ({notes_line} keV) fall inside the peak at this detector's resolution; "
@@ -697,127 +745,82 @@ class ROIAnalyzer:
         )
 
 
-    def analyze_uranium_ratio(
-        self,
-        energies: List[float],
-        counts: List[int],
-        acquisition_time_s: float,
-        source_type: str = "auto"
-    ) -> Dict:
+    # a marker counts as present when its peak is significant (SNR >= 2) and has enough counts: a bare count threshold
+    # is crossed by noise on a busy continuum
+    URANIUM_MARKER_MIN_COUNTS = 30
+
+    @classmethod
+    def _marker_present(cls, result) -> bool:
+        return bool(result and result.detected and result.net_counts > cls.URANIUM_MARKER_MIN_COUNTS)
+
+    def _measure_uranium_markers(self, energies, counts, acquisition_time_s):
         """
-        Smart uranium enrichment analysis with prerequisite checks and confidence scoring.
-        
-        This method:
-        1. Checks if uranium signatures are present (prerequisite)
-        2. Detects Ra-226 interference that contaminates the 186 keV region
-        3. Uses multiple methods and cross-validates when possible
-        4. Returns confidence level and detailed diagnostics
-        
-        Returns:
-            Dictionary with analysis results, confidence, and diagnostics
+        ROI results for the U-238 series markers: Th-234 (93 keV), Bi-214 (609 keV) and Pa-234m (1001 keV).
+        Returns (th234, bi214, pa234m, diagnostics); a marker that cannot be analysed is None.
         """
         diagnostics = []
-        warnings = []
-        
-        # === STEP 1: CHECK PREREQUISITES - Is uranium even present? ===
-        # Look for U-238 decay chain markers
-        th234_result = None
-        bi214_result = None
-        pa234m_result = None
-        
-        try:
-            th234_result = self.analyze(energies, counts, "Th-234 (93 keV)", acquisition_time_s)
-            diagnostics.append(f"Th-234 (93 keV): {th234_result.net_counts:.0f} ± {th234_result.uncertainty_sigma:.0f} counts")
-        except Exception as exc:
-            logger.warning("Uranium prerequisite check failed: %s", exc)
-            
-        try:
-            bi214_result = self.analyze(energies, counts, "Bi-214 (609 keV)", acquisition_time_s)
-            diagnostics.append(f"Bi-214 (609 keV): {bi214_result.net_counts:.0f} ± {bi214_result.uncertainty_sigma:.0f} counts")
-        except Exception as exc:
-            logger.warning("Uranium prerequisite check failed: %s", exc)
-            
-        try:
-            pa234m_result = self.analyze(energies, counts, "Pa-234m (1001 keV)", acquisition_time_s)
-            diagnostics.append(f"Pa-234m (1001 keV): {pa234m_result.net_counts:.0f} ± {pa234m_result.uncertainty_sigma:.0f} counts")
-        except Exception as exc:
-            logger.warning("Uranium prerequisite check failed: %s", exc)
-        
-        # Minimum signal thresholds (3-sigma above background)
-        MIN_COUNTS_THRESHOLD = 30
-        
-        # Check if we have any uranium indicators
-        # present = a significant peak (SNR >= 2) as well as enough counts: a bare count threshold is crossed by noise on a busy continuum
-        def present(result):
-            return bool(result and result.detected and result.net_counts > MIN_COUNTS_THRESHOLD)
+        results = []
+        for label in ("Th-234 (93 keV)", "Bi-214 (609 keV)", "Pa-234m (1001 keV)"):
+            result = None
+            try:
+                result = self.analyze(energies, counts, label, acquisition_time_s)
+                diagnostics.append(f"{label}: {result.net_counts:.0f} ± {result.uncertainty_sigma:.0f} counts")
+            except Exception as exc:
+                logger.warning("Uranium prerequisite check failed: %s", exc)
+            results.append(result)
+        return results[0], results[1], results[2], diagnostics
 
-        has_th234 = present(th234_result)
-        has_bi214 = present(bi214_result)
-        has_pa234m = present(pa234m_result)
-        
-        uranium_detected = has_th234 or has_bi214 or has_pa234m
-        
-        if not uranium_detected:
-            return {
-                "can_analyze": False,
-                "reason": "No uranium signatures detected",
-                "category": "Not Applicable",
-                "description": "Spectrum does not contain detectable uranium. No Th-234, Bi-214, or Pa-234m peaks found above threshold.",
-                "confidence": 0.0,
-                "diagnostics": diagnostics,
-                "warnings": ["No U-238 decay chain daughters detected - uranium enrichment analysis not applicable"],
-                "u235_net_counts": 0,
-                "th234_net_counts": th234_result.net_counts if th234_result else 0,
-                "ratio_percent": 0,
-                "threshold_natural": 30
-            }
-        
-        # === SPECIAL CASE: Takumar Lens ===
-        # Thoriated lenses contain ThO2 with trace natural uranium
-        # Skip enrichment ratio (meaningless) and report Th-234 activity instead
-        logger.debug(f"[DEBUG] Takumar check: source_type={source_type}, has_th234={has_th234}")
-        if source_type == "takumar_lens" and has_th234:
-            return {
-                "can_analyze": True,
-                "category": "Thoriated Lens (Mixed Th/U)",
-                "description": "Super Takumar lens containing thorium dioxide with trace natural uranium. Enrichment ratio not applicable.",
-                "ratio_percent": 0,
-                "threshold_natural": 30,
-                "confidence": 0.9,  # High confidence since we detected Th-234
-                "ra226_interference": False,  # Not an error for this source type
-                "u235_net_counts": 0,
-                "u235_uncertainty": 0,
-                "th234_net_counts": th234_result.net_counts if th234_result else 0,
-                "th234_uncertainty": th234_result.uncertainty_sigma if th234_result else 0,
-                "bi214_net_counts": bi214_result.net_counts if bi214_result else 0,
-                "diagnostics": diagnostics,
-                "warnings": ["Takumar lens: Activity reported from Th-234 (93 keV) peak. Contains both Th-232 and trace natural U-238."],
-                "confidence_factors": ["Th-234 detected", "Known thoriated lens source type"]
-            }
-        
-        # === STEP 2: Analyze U-235 (186 keV) region ===
-        try:
-            u235_result = self.analyze(energies, counts, "U-235 (186 keV)", acquisition_time_s)
-            diagnostics.append(f"U-235 (186 keV): {u235_result.net_counts:.0f} ± {u235_result.uncertainty_sigma:.0f} counts")
-        except Exception as e:
-            warnings.append(f"Failed to analyze U-235 region: {str(e)}")
-            u235_result = None
-        # the 186 keV net counts and their uncertainty as used for the ratio (the Ra-226 correction below may reduce them)
-        u235_net = u235_result.net_counts if u235_result else 0.0
-        u235_sigma = u235_result.uncertainty_sigma if u235_result else 0.0
-        
-        # === STEP 3: Detect Ra-226 Interference ===
-        # Ra-226 emits at 186.2 keV and is in secular equilibrium with aged U-238
-        # Bi-214 presence indicates Ra-226 is present (Bi-214 is Ra-226's great-granddaughter)
+    @staticmethod
+    def _no_uranium_result(diagnostics, th234_result) -> Dict:
+        return {
+            "can_analyze": False,
+            "reason": "No uranium signatures detected",
+            "category": "Not Applicable",
+            "description": "Spectrum does not contain detectable uranium. No Th-234, Bi-214, or Pa-234m peaks found above threshold.",
+            "confidence": 0.0,
+            "diagnostics": diagnostics,
+            "warnings": ["No U-238 decay chain daughters detected - uranium enrichment analysis not applicable"],
+            "u235_net_counts": 0,
+            "th234_net_counts": th234_result.net_counts if th234_result else 0,
+            "ratio_percent": 0,
+            "threshold_natural": 30
+        }
+
+    @staticmethod
+    def _takumar_result(diagnostics, th234_result, bi214_result) -> Dict:
+        """Thoriated lenses hold ThO2 with trace natural uranium: an enrichment ratio is meaningless, so the Th-234 activity is reported."""
+        return {
+            "can_analyze": True,
+            "category": "Thoriated Lens (Mixed Th/U)",
+            "description": "Super Takumar lens containing thorium dioxide with trace natural uranium. Enrichment ratio not applicable.",
+            "ratio_percent": 0,
+            "threshold_natural": 30,
+            "confidence": 0.9,  # High confidence since we detected Th-234
+            "ra226_interference": False,  # Not an error for this source type
+            "u235_net_counts": 0,
+            "u235_uncertainty": 0,
+            "th234_net_counts": th234_result.net_counts if th234_result else 0,
+            "th234_uncertainty": th234_result.uncertainty_sigma if th234_result else 0,
+            "bi214_net_counts": bi214_result.net_counts if bi214_result else 0,
+            "diagnostics": diagnostics,
+            "warnings": ["Takumar lens: Activity reported from Th-234 (93 keV) peak. Contains both Th-232 and trace natural U-238."],
+            "confidence_factors": ["Th-234 detected", "Known thoriated lens source type"]
+        }
+
+    def _ra226_interference(self, energies, counts, acquisition_time_s, source_type, has_bi214,
+                            bi214_result, u235_result, u235_net, u235_sigma, warnings):
+        """
+        Does Ra-226 contaminate the 186 keV region? Ra-226 emits at 186.2 keV and is in secular equilibrium with aged
+        U-238; Bi-214 (its great-granddaughter) shows it is there, as does a source type that normally holds radium.
+        Subtracts the Ra-226 share when the source type allows it. Returns (ra226_interference, u235_net, u235_sigma);
+        warnings are appended in place.
+        """
         ra226_interference = False
-        
-        # Check source type hinting
         known_ra226_source = source_type in ["uranium_glass", "radium_dial", "natural_uranium", "takumar_lens"]
-        
-        # Special check for Thoriated Lens (pure Th only)
+
+        # Thoriated lens (pure Th only): check the thorium marker (Ac-228)
         if source_type == "thoriated_lens":
             try:
-                # Check for Thorium marker (Ac-228)
                 ac228_result = self.analyze(energies, counts, "Ac-228 (911 keV)", acquisition_time_s)
                 if ac228_result.detected:
                     warnings.append(
@@ -826,31 +829,29 @@ class ROIAnalyzer:
                     )
             except Exception:
                 logger.debug('Th-232 signature cross-check skipped', exc_info=True)
-        
-        # Special handling for Takumar lens (ThO2 + trace natural U)
+
+        # Takumar lens (ThO2 + trace natural U)
         if source_type == "takumar_lens":
             warnings.append(
                 "Takumar lens analysis: Source contains Thorium dioxide + trace natural uranium. "
                 "Ra-226 interference correction will be applied."
             )
-        
+
         if has_bi214 or known_ra226_source:
-            # Ra-226 is definitely present if Bi-214 is detected OR user confirmed source type
-            # The 186 keV region will contain BOTH U-235 (185.7 keV) AND Ra-226 (186.2 keV)
+            # Ra-226 is definitely present if Bi-214 is detected OR the user confirmed the source type: the 186 keV
+            # region then holds BOTH U-235 (185.7 keV) AND Ra-226 (186.2 keV)
             ra226_interference = True
-            
-            # === NEW: Try to subtract Ra-226 if we have good data ===
-            # Requested by user to "do our best" for Uranium Glass
-            
+
+            # Try to subtract Ra-226 when the data allow it ("do our best" for uranium glass)
             if (source_type in ["uranium_glass", "takumar_lens"] and bi214_result is not None and u235_result is not None
                     and bi214_result.net_counts > 0):
                 corrected = self._ra226_correction(u235_result, bi214_result, warnings)
                 if corrected:
                     u235_net, u235_sigma = corrected
-                    ra226_interference = False   # corrected, so the ratio below may be used (as an estimate)
-            
+                    ra226_interference = False   # corrected, so the ratio may be used (as an estimate)
+
             if ra226_interference:
-                # Only warn if we didn't correct it
+                # Only warn if we did not correct it
                 if has_bi214:
                     warnings.append(
                         f"Bi-214 detected ({bi214_result.net_counts:.0f} counts) indicates Ra-226 is in secular equilibrium. "
@@ -861,35 +862,87 @@ class ROIAnalyzer:
                         f"Source type '{source_type}' typically contains Ra-226. "
                         f"The 186 keV peak likely contains overlapping U-235 and Ra-226 contributions."
                     )
-        
-        # === STEP 4: Calculate Enrichment Ratio ===
-        # Note: If Ra-226 interference is detected, this ratio is UNRELIABLE
-        # but we still calculate it for informational purposes
+        return ra226_interference, u235_net, u235_sigma
+
+    @staticmethod
+    def _u235_th234_ratio(u235_result, u235_net, u235_sigma, th234_result, has_th234, ra226_interference):
+        """
+        The enrichment ratio U-235 (186 keV) / Th-234 (93 keV) in percent, its uncertainty and the method label.
+        With Ra-226 interference the ratio includes the Ra-226 contribution (UNRELIABLE) but is still calculated for information.
+        """
         ratio = 0.0
         ratio_uncertainty = 0.0
         method_used = "none"
-        
-        if u235_result and has_th234:
-            # Primary method: U-235 (186 keV) / Th-234 (93 keV)
-            # WARNING: If Ra-226 interference, this includes Ra-226 contribution
-            if th234_result.net_counts > 0:
-                ratio = (u235_net / th234_result.net_counts) * 100
-                method_used = "U-235/Th-234 ratio" + (" (UNRELIABLE - Ra-226 interference)" if ra226_interference else "")
-                
-                # Propagate uncertainty
-                if u235_net > 0:
-                    ratio_uncertainty = ratio * math.sqrt(
-                        (u235_sigma / u235_net) ** 2 +
-                        (th234_result.uncertainty_sigma / th234_result.net_counts) ** 2
-                    )
-        
+        if u235_result and has_th234 and th234_result.net_counts > 0:
+            ratio = (u235_net / th234_result.net_counts) * 100
+            method_used = "U-235/Th-234 ratio" + (" (UNRELIABLE - Ra-226 interference)" if ra226_interference else "")
+            if u235_net > 0:
+                ratio_uncertainty = ratio * math.sqrt(
+                    (u235_sigma / u235_net) ** 2 +
+                    (th234_result.uncertainty_sigma / th234_result.net_counts) ** 2
+                )
+        return ratio, ratio_uncertainty, method_used
+
+    def analyze_uranium_ratio(
+        self,
+        energies: List[float],
+        counts: List[int],
+        acquisition_time_s: float,
+        source_type: str = "auto"
+    ) -> Dict:
+        """
+        Smart uranium enrichment analysis with prerequisite checks and confidence scoring.
+
+        This method:
+        1. Checks if uranium signatures are present (prerequisite)
+        2. Detects Ra-226 interference that contaminates the 186 keV region
+        3. Uses multiple methods and cross-validates when possible
+        4. Returns confidence level and detailed diagnostics
+
+        Returns:
+            Dictionary with analysis results, confidence, and diagnostics
+        """
+        warnings = []
+
+        # Is uranium even present? Look for the U-238 series markers
+        th234_result, bi214_result, pa234m_result, diagnostics = self._measure_uranium_markers(
+            energies, counts, acquisition_time_s)
+        has_th234 = self._marker_present(th234_result)
+        has_bi214 = self._marker_present(bi214_result)
+        has_pa234m = self._marker_present(pa234m_result)
+
+        if not (has_th234 or has_bi214 or has_pa234m):
+            return self._no_uranium_result(diagnostics, th234_result)
+
+        logger.debug(f"[DEBUG] Takumar check: source_type={source_type}, has_th234={has_th234}")
+        if source_type == "takumar_lens" and has_th234:
+            return self._takumar_result(diagnostics, th234_result, bi214_result)
+
+        # The U-235 (186 keV) region
+        try:
+            u235_result = self.analyze(energies, counts, "U-235 (186 keV)", acquisition_time_s)
+            diagnostics.append(f"U-235 (186 keV): {u235_result.net_counts:.0f} ± {u235_result.uncertainty_sigma:.0f} counts")
+        except Exception as e:
+            warnings.append(f"Failed to analyze U-235 region: {str(e)}")
+            u235_result = None
+        # the 186 keV net counts and their uncertainty as used for the ratio (the Ra-226 correction may reduce them)
+        u235_net = u235_result.net_counts if u235_result else 0.0
+        u235_sigma = u235_result.uncertainty_sigma if u235_result else 0.0
+
+        ra226_interference, u235_net, u235_sigma = self._ra226_interference(
+            energies, counts, acquisition_time_s, source_type, has_bi214,
+            bi214_result, u235_result, u235_net, u235_sigma, warnings)
+
+        ratio, ratio_uncertainty, method_used = self._u235_th234_ratio(
+            u235_result, u235_net, u235_sigma, th234_result, has_th234, ra226_interference)
+
         confidence, confidence_factors = self._enrichment_confidence(
             th234_result, has_th234, markers=sum([has_th234, has_bi214, has_pa234m]),
             ra226_interference=ra226_interference, ratio=ratio, ratio_uncertainty=ratio_uncertainty)
-        
+
         category, description, confidence = self._classify_enrichment(
             ratio, ra226_interference, confidence, confidence_factors, warnings)
-        
+
         return {
             "can_analyze": True,
             "category": category,
@@ -910,7 +963,7 @@ class ROIAnalyzer:
             "warnings": warnings
         }
 
-    
+
     def _ra226_correction(self, u235_result, bi214_result, warnings: List[str]):
         """
         Subtract the Ra-226 share of the 186 keV peak, estimated from the Bi-214 609 keV peak (secular equilibrium).
