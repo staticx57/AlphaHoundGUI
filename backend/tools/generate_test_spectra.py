@@ -208,7 +208,7 @@ def generate_cesium137():
 def main():
     """Generate all synthetic test spectra."""
     # Create output directory
-    output_dir = os.path.join(os.path.dirname(__file__), "data", "test_spectra")
+    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "test_spectra")
     os.makedirs(output_dir, exist_ok=True)
     
     print("Generating synthetic test spectra...")

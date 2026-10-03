@@ -19,7 +19,7 @@ import recalibrate_n42 as rc  # noqa: E402
 from analysis_utils import analyze_spectrum_peaks  # noqa: E402
 from n42_parser import parse_n42  # noqa: E402
 
-ACQ = BACKEND / "data" / "acquisitions"
+ACQ = BACKEND / "tests" / "data" / "real_spectra"   # real spectra kept as test fixtures
 AXIS_CSV = ACQ / "spectrum_2025-12-12_08-41-27.csv"
 TAKUMARS = [
     "spectrum_2025-12-15_takumar_90min.n42",

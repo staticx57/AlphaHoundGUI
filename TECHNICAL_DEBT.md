@@ -22,6 +22,7 @@ test coverage as unknown).
 | CWT divide-by-zero warning | `find_peaks_cwt` divides by a noise percentile that is exactly 0 on a sparse spectrum (the ridge then counts as infinitely strong, which is the intended result), and numpy warned on every such upload. The warning is silenced with `np.errstate` around the call; peaks are identical on 16 runs (the real CSV spectra and synthetic ones); `test_real_csv.py` fails without the fix. |
 | Temp-file leak | A CSV upload that was rejected left its temporary file in the temp directory (265 had piled up). The file is now removed on every path; `tests/test_csv_temp_cleanup.py` fails on the old code. |
 | Repo layout | 19 unreferenced images and a scraped web page moved to `TO_BE_DELETED/` (`backend/static` 16 MB to 1.7 MB); the seven guides and notes that sat in the root moved to `docs/` with every link fixed (root: 22 to 15 tracked files); `tests/test_repo_layout.py` fails if new root files, backup/temp files, files over 800 KB, unreferenced images or broken document links appear (each rule verified to fire on a real offender). |
+| Fixtures and user data | The real spectra the tests use moved from `backend/data/acquisitions/` to `backend/tests/data/real_spectra/`; `acquisitions/` (the user's own measurements, 70 files on disk) is ignored and untracked (the files stay on disk); a layout rule fails if any of it is tracked again. `spectrum_wrapper.py` (457 lines, imported by nothing) went to `TO_BE_DELETED/`; `generate_test_spectra.py` is in `tools/`. |
 | Test layout | `test_fitting_engine.py` and `test_multiplet_fitting.py` were outside `tests/` and never ran; they are in `tests/` now. The print-driven `test_becquerel_comparison.py` is `tools/becquerel_comparison.py`. |
 | Install files | `requirements_lightweight.txt` was missing `slowapi` (imported by `main.py`) and listed an unused `pillow`; `install_lightweight.bat` now installs from that file. The app imports cleanly with the optional packages absent. |
 
@@ -30,7 +31,6 @@ test coverage as unknown).
 | Item | Detail |
 |------|--------|
 | Dead files | Moved to `TO_BE_DELETED/` (see its README) because the tool could not delete them: root backups and run output, four unused modules, the old `backend/archive/` and the former `archive/` (42 PyRIID-era debug scripts, icon backups, printed results). Nothing references them. Delete with `git rm -r TO_BE_DELETED`. |
-| Acquisition data not ignored | `backend/data/acquisitions/*.n42` is user data and shows as untracked. Add it to `.gitignore`. Also not done because of a permission denial. |
 | Kept from the old `archive/` | `legacy/AlphaHound-main/` (upstream GUI, MIT licence), `docs/alphahound_probes/` (raw device captures), `docs/abundance_weighting_research.md`, and two real CSV spectra in `backend/tests/data/real_csv/` with `tests/test_real_csv.py`. |
 
 ## Found while refactoring

@@ -35,3 +35,7 @@ external_tools/
 backend/tests/ui_smoke_out/
 backend/data/devctl_state.json
 backend/data/dose_log.jsonl
+
+# Spectra saved by acquisitions: the user's own measurements, not source
+backend/data/acquisitions/
+.pytest_cache/

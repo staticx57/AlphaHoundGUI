@@ -6,8 +6,8 @@ Older builds discarded the AlphaHound's own (nonlinear) energy axis when saving
 acquisitions. The per-channel counts in those files are still valid, so the axis can be
 restored from any spectrum CSV saved by the same unit (an ``Energy (keV),Counts`` file).
 
-    python tools/recalibrate_n42.py --axis-csv data/acquisitions/spectrum_2025-12-12_08-41-27.csv \
-        "data/acquisitions/takumar 942pm to 558am.n42" [more.n42 ...]
+    python tools/recalibrate_n42.py --axis-csv tests/data/real_spectra/spectrum_2025-12-12_08-41-27.csv \
+        "tests/data/real_spectra/takumar 942pm to 558am.n42" [more.n42 ...]
 
 Writes ``<name>.recal.n42`` next to each input; the originals are never modified. Only use an
 axis taken from the SAME physical unit (axes differ between devices).

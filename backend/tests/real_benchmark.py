@@ -9,7 +9,7 @@ never from what the engine currently outputs:
     Ra-226.xml                  radium source               -> U-238 (radium) series; no Th-232
     Th-232.xml                  thorium source              -> Th-232 series; no U-238
     U-238-U-235-FiestaWare.xml  uranium-glazed Fiestaware   -> U-238 series; no Th-232
-  AlphaHound CsI(Tl) (backend/data/acquisitions + backend/)
+  AlphaHound CsI(Tl) (backend/tests/data/real_spectra + backend/)
     Takumar lens x3 (re-calibrated to the device axis)   -> Th-232 series; no U-238
     Cs137_Verification_Spectra.n42                        -> Cs-137; no decay chain
     "7.5 x 4 Deep Red Uranium Glaze Bowl.csv" (community) -> U-238 series; no Th-232
@@ -34,7 +34,7 @@ if str(BACKEND) not in sys.path:
 sys.path.insert(0, str(BACKEND / "tools"))
 
 RC_DIR = BACKEND / "tests" / "data" / "radiacode_fisicas"
-ACQ = BACKEND / "data" / "acquisitions"
+ACQ = BACKEND / "tests" / "data" / "real_spectra"   # real spectra kept as test fixtures
 AXIS_CSV = ACQ / "spectrum_2025-12-12_08-41-27.csv"
 
 # (case id, device, loader key, path, expected chains, forbidden chains, expected isotopes)

@@ -13,7 +13,7 @@ Git history keeps all of it if you ever need a file back (`git log --follow -- T
 | Folder | What it is |
 |--------|-----------|
 | `root/` | Old backups and run output that sat in the repository root: `old_main_backup.js`, three `*.js.tmp` chart copies, result text files, a dated CSV, a package-research note |
-| `backend/` | `3.1` (a pip log), a Becquerel test output, four unused modules (`enhanced_analysis.py`, `radiacode_src.py`, `generate_testing_spectrum.py`, `verify_roi_api.py`), the `.bakg` icon, the old `backend/archive/` |
+| `backend/` | `3.1` (a pip log), a Becquerel test output, five unused modules (`enhanced_analysis.py`, `radiacode_src.py`, `generate_testing_spectrum.py`, `verify_roi_api.py`, `spectrum_wrapper.py`), the `.bakg` icon, the old `backend/archive/` |
 | `backend/static/` | 19 images nothing refers to (17 PNG icons of 0.5-1.5 MB beside the SVGs the page uses, an unused banner, two JPG duplicates of the README images) and a scraped web page (`# NuDat 3.0.md`): 16 MB in all, checked against every tracked text file and with the page loaded in headless Chrome (272 requests, no errors) |
 | `archive/` | The former `archive/` folder: 42 debug and exploration scripts from the PyRIID era, orphaned code, icon backups, old batch scripts, printed test results, PyRIID planning documents, demo and synthetic `.n42` files |
 

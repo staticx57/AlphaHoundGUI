@@ -10,7 +10,7 @@ sys.path.insert(0, str(BACKEND / "tools"))
 import recalibrate_n42 as rc  # noqa: E402
 from n42_parser import parse_n42  # noqa: E402
 
-ACQ = BACKEND / "data" / "acquisitions"
+ACQ = BACKEND / "tests" / "data" / "real_spectra"   # real spectra kept as test fixtures
 AXIS_CSV = ACQ / "spectrum_2025-12-12_08-41-27.csv"
 TAKUMAR = ACQ / "takumar 942pm to 558am.n42"
 

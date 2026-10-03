@@ -83,3 +83,9 @@ def test_relative_links_between_documents_are_not_broken():
             if not os.path.exists(os.path.normpath(os.path.join(ROOT, os.path.dirname(f), target))):
                 broken.append(f"{f} -> {target}")
     assert not broken, "broken links: " + "; ".join(broken)
+
+
+def test_user_acquisitions_are_not_tracked():
+    """backend/data/acquisitions/ is where the app saves the user's own measurements; fixtures live in tests/data/."""
+    saved = sorted(f for f in tracked_files() if f.startswith("backend/data/acquisitions/"))
+    assert not saved, "user data in git (use backend/tests/data/real_spectra for fixtures): " + ", ".join(saved[:5])
