@@ -34,6 +34,16 @@ Done and verified on the live AB+G (COM8): `P` polling and CPS parsing, dose str
 - [ ] `A`, `B`, `RA`, `RB`, `SpecA`, `SpecB`, `COUNT`, `ALL`, `?` return nothing; their effect is unknown (not sent by the app).
 - [x] The dose log is persisted (`backend/data/dose_log.jsonl`) and survives restarts; the dose-rate average, count-rate charts and per-acquisition channel statistics are in.
 
+### UI/UX round of 2026-10-03: needs your eyes / hardware to confirm
+Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit.py`, `ui_channels_sweep.py`, `ui_theme_sweep.py`) pass, but these need a person or a device:
+- [ ] AlphaHound channel panel with the real `P` stream (meters, history chart, CPS/CPM) in your favourite themes
+- [ ] Alerts on real readings: banner, beep (browsers only allow sound after a click on the page), desktop notification permission prompt
+- [ ] Radiacode "Device alarm limits" in Advanced Diagnostics with real registers (shape tested with a mock only)
+- [ ] Dose unit preference across both devices (Settings > Dose readings and alerts)
+- [ ] Screen reader pass (NVDA / VoiceOver): dialogs, the result summary, the alert banner
+- [ ] Open the app from a phone on the LAN (`http://<computer-ip>:3200`) with the computer offline
+- Ideas not done: sticky section navigation, auto-running the AI check after each upload (optional setting), linking the AI/line-matching disagreement to the peaks it is based on.
+
 ### Pending Manual Verification (needs local browser / Radiacode hardware)
 > Verified in headless Chrome with a mocked device (`python backend/tests/ui_smoke.py`, 15 checks): page load without JS errors, Radiacode tab layout/IDs, View Configuration + accumulated-dose elements present, AlphaHound dose readout + safety alert, connection-restore enabling controls, background load flow. Still needs real hardware / eyes: live Radiacode values, PDF download, exports, other themes and mobile widths, real-CSV peak comparison.
 
