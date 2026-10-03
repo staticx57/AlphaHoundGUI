@@ -462,7 +462,8 @@ AlphaHoundGUI/
 │   ├── acquisitions/                    # Auto-saved spectra (N42 format)
 │   ├── isotopes/                        # IAEA gamma data (CSV downloads)
 │   └── test_spectra/                    # Synthetic test spectra (6 N42 files)
-├── archive/                             # Archived scripts and legacy files
+├── legacy/AlphaHound-main/              # Upstream NuclearGeekETH AlphaHound GUI (MIT), kept for its licence
+├── TO_BE_DELETED/                       # Dead files awaiting deletion (see its README)
 ├── THEORY_OF_OPERATION.md               # System architecture documentation
 ├── MODULARITY_GUIDE.md                  # Extension guide for developers
 ├── CALIBRATION_GUIDE.md                 # Calibration and accuracy guide

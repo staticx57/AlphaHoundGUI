@@ -27,9 +27,9 @@ test coverage as unknown).
 
 | Item | Detail |
 |------|--------|
-| Dead files tracked in git | Root: `old_main_backup.js`, `head_charts.js.tmp`, `old_charts.js.tmp`, `older_charts.js.tmp`, `calibration_results.txt`, `scan_results.txt`, `ml_hobby_test.txt`, `test_output.txt`, `2025-12-19  11-03-17_174668s.csv`, `python packages research.md`. Backend: `3.1` (a pip log), `becquerel_test_output.txt`, `static/icons/upload_new.png.bakg`, `archive/`. Unused modules: `enhanced_analysis.py`, `radiacode_src.py` (a pasted library stub), `generate_testing_spectrum.py`, `verify_roi_api.py`. None are referenced by code. Deleting them was declined by the tool's permission check, so they are untouched. |
+| Dead files | Moved to `TO_BE_DELETED/` (see its README) because the tool could not delete them: root backups and run output, four unused modules, the old `backend/archive/` and the former `archive/` (42 PyRIID-era debug scripts, icon backups, printed results). Nothing references them. Delete with `git rm -r TO_BE_DELETED`. |
 | Acquisition data not ignored | `backend/data/acquisitions/*.n42` is user data and shows as untracked. Add it to `.gitignore`. Also not done because of a permission denial. |
-| `archive/` (8 MB) | Old scripts, legacy GUI, icon backups. Keep as history or remove; git history already holds it. |
+| Kept from the old `archive/` | `legacy/AlphaHound-main/` (upstream GUI, MIT licence), `docs/alphahound_probes/` (raw device captures), `docs/abundance_weighting_research.md`, and two real CSV spectra in `backend/tests/data/real_csv/` with `tests/test_real_csv.py`. |
 
 ## Found while refactoring
 
