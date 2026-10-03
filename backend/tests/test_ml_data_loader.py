@@ -58,16 +58,24 @@ def _labelled_folder(tmp_path):
     return tmp_path
 
 
-def test_training_with_real_data_gives_the_same_model_twice(tmp_path, monkeypatch):
+def test_training_with_real_data_gives_the_same_model_twice(tmp_path):
     folder = _labelled_folder(tmp_path)
     x, labels = load_real_training_data(data_dir=str(folder), target_channels=1024, augment_count=10)
     assert sorted(set(labels)) == ["Background", "Cs-137", "Th-232", "U-238"] and len(labels) == 40   # the data really is used
-    monkeypatch.setenv("ML_USE_REAL_DATA", "1")
-    monkeypatch.setattr(ml_analysis, "load_real_training_data",
-                        lambda data_dir=None, **kw: load_real_training_data(data_dir=str(folder), **kw))
     digests = []
     for _ in range(2):
-        ident = ml_analysis.MLIdentifier(model_type="hobby", detector="alphahound")
+        ident = ml_analysis.MLIdentifier(model_type="hobby", detector="alphahound",
+                                         use_real_data=True, real_data_dir=str(folder))
         ident.lazy_train()
         digests.append(_weights_digest(ident.model))
     assert digests[0] == digests[1]
+
+
+def test_real_data_changes_the_model_and_is_off_when_not_asked_for(tmp_path):
+    folder = _labelled_folder(tmp_path)
+    with_real = ml_analysis.MLIdentifier(model_type="hobby", detector="alphahound", use_real_data=True, real_data_dir=str(folder))
+    without = ml_analysis.MLIdentifier(model_type="hobby", detector="alphahound", use_real_data=False, real_data_dir=str(folder))
+    with_real.lazy_train()
+    without.lazy_train()
+    assert with_real.use_real_data is True and without.use_real_data is False
+    assert _weights_digest(with_real.model) != _weights_digest(without.model)

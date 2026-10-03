@@ -255,13 +255,18 @@ class MLIdentifier:
     - generic_nai: Generic NaI(Tl) @ 8% FWHM
     """
     
-    def __init__(self, model_type: str = "hobby", detector: str = "alphahound"):
+    def __init__(self, model_type: str = "hobby", detector: str = "alphahound", *,
+                 use_real_data: Optional[bool] = None, real_data_dir: Optional[str] = None):
         """Initialize ML identifier with selectable model type and detector.
         
         Args:
             model_type: "hobby" for 35 common isotopes, "comprehensive" for 95+ isotopes
             detector: Detector profile name (see DETECTOR_PROFILES)
+            use_real_data: train on augmented real spectra as well as synthetic ones; None follows ML_USE_REAL_DATA=1
+            real_data_dir: the data folder whose acquisitions/ holds those spectra (None: backend/data)
         """
+        self.use_real_data = (os.environ.get("ML_USE_REAL_DATA") == "1") if use_real_data is None else bool(use_real_data)
+        self.real_data_dir = real_data_dir
         self.model = None
         self.classes_: List[str] = []
         self.is_trained = False
@@ -487,12 +492,12 @@ class MLIdentifier:
         return spectra_matrix, labels
 
     def _with_real_spectra(self, spectra_matrix, labels: list):
-        """Append the augmented real spectra when ML_USE_REAL_DATA=1 (labels extended in place); otherwise unchanged."""
+        """Append the augmented real spectra when use_real_data is on (labels extended in place); otherwise unchanged."""
         # Labelled real spectra are opt-in: the loader labels by filename and resamples without
         # regard to calibration, so it can teach the model wrong things (and leaks benchmark files).
-        if os.environ.get("ML_USE_REAL_DATA") == "1" and HAS_REAL_DATA_LOADER and load_real_training_data:
+        if self.use_real_data and HAS_REAL_DATA_LOADER and load_real_training_data:
             try:
-                real_x, real_labels = load_real_training_data(data_dir=None, target_channels=self.n_channels,
+                real_x, real_labels = load_real_training_data(data_dir=self.real_data_dir, target_channels=self.n_channels,
                                                               augment_count=10)
                 if len(real_labels) > 0:
                     spectra_matrix = np.vstack([spectra_matrix, real_x])

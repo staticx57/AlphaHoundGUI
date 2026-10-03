@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import tempfile
+from typing import Optional
 
 import logging
 logger = logging.getLogger(__name__)
@@ -150,17 +151,19 @@ def _resolve_energies(energies: list, counts: list, tmp_path: str, comment_meta:
     return energies, is_calibrated
 
 
-def parse_csv_spectrum(content: bytes, filename: str) -> dict:
+def parse_csv_spectrum(content: bytes, filename: str, temp_dir: Optional[str] = None) -> dict:
     """
     Parse a CSV spectrum file (pandas: delimiter, header and column names are worked out from the content).
     Returns a dictionary result with counts, energies, peaks, isotopes, and metadata.
+
+    temp_dir: where the working copy of the file is written (None: the system temp folder); it is removed before returning.
     """
     # Some exporters (e.g. RadiaCode tools) prefix '# key,value' metadata lines; strip them
     # so the tabular parser sees only the header + data, but keep what they tell us.
     content, comment_meta = _split_comment_metadata(content)
 
     # The header-calibration scan reads the file again, so the content goes to a temp file, removed whatever happens next
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", dir=temp_dir) as tmp:
         tmp_path = tmp.name
         try:
             tmp.write(content)

@@ -1,7 +1,6 @@
 """A CSV upload leaves no temporary file behind, whether it parses or is rejected (rejected files used to be left in the
-temp directory, one per bad upload)."""
+temp directory, one per bad upload). The parser is given its own folder to work in, so the folder can be inspected."""
 import os
-import tempfile
 
 import pytest
 
@@ -16,20 +15,20 @@ REJECTED = {
 }
 
 
-@pytest.fixture
-def private_tempdir(tmp_path, monkeypatch):
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    return tmp_path
-
-
-def test_parsed_csv_leaves_no_temp_file(private_tempdir):
-    result = parse_csv_spectrum(GOOD, "good.csv")
+def test_parsed_csv_leaves_no_temp_file(tmp_path):
+    result = parse_csv_spectrum(GOOD, "good.csv", temp_dir=str(tmp_path))
     assert len(result["counts"]) == 32
-    assert os.listdir(private_tempdir) == []
+    assert os.listdir(tmp_path) == []
 
 
 @pytest.mark.parametrize("name", sorted(REJECTED))
-def test_rejected_csv_leaves_no_temp_file(private_tempdir, name):
+def test_rejected_csv_leaves_no_temp_file(tmp_path, name):
     with pytest.raises(ValueError):
-        parse_csv_spectrum(REJECTED[name], "bad.csv")
-    assert os.listdir(private_tempdir) == []
+        parse_csv_spectrum(REJECTED[name], "bad.csv", temp_dir=str(tmp_path))
+    assert os.listdir(tmp_path) == []
+
+
+def test_the_folder_argument_is_really_used(tmp_path):
+    """Without this the two tests above could pass for nothing: a folder that does not exist must fail loudly."""
+    with pytest.raises(OSError):
+        parse_csv_spectrum(GOOD, "good.csv", temp_dir=str(tmp_path / "does_not_exist"))
