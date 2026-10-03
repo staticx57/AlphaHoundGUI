@@ -1214,8 +1214,7 @@ export class DoseRateChart {
         } else if (canvas instanceof HTMLCanvasElement) {
             this.ctx = canvas.getContext('2d');
         } else {
-            // Fallback for backward compatibility
-            this.ctx = document.getElementById('doseRateChart')?.getContext('2d');
+            this.ctx = null;   // no canvas given: there is nothing to draw on (init() returns)
         }
 
         this.options = options;

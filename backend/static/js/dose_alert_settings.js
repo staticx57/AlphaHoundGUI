@@ -1,5 +1,4 @@
 import { DEFAULT_ALERTS, loadAlerts, saveAlerts } from './alerts.js';
-import { notify } from './dialogs.js';
 import { showToast } from './toast.js';
 import { fromUSv, getDosePref, resolveUnit, safeStorage, setDosePref, toUSv, unitLabel } from './units.js';
 

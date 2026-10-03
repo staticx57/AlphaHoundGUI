@@ -88,7 +88,7 @@ Structural debt (long functions, overlapping modules, what was cleaned and what 
 - [ ] Build a small labelled benchmark of real, calibrated spectra (known source → expected isotopes/chains, plus must-not-detect) before changing chain thresholds; get ground-truth calibration for the Takumar captures first
 - [ ] Peak list: noise spikes and Compton edges are reported as peaks (see `TECHNICAL_DEBT.md`, 'Spurious peaks', for what was measured and why no width or significance cut was applied). Needs labelled weak-peak spectra first; a Compton-edge flag for the 471 keV case would be a safe, separate step.
 - [ ] Fix/validate `backend/tools/generate_test_spectra.py` so each synthetic file's intended peaks dominate; then add golden tests (expected isotopes, no spurious chains)
-- [ ] Remove dead frontend code for elements that no longer exist (see `LEGACY_NULL_GUARDED` in `backend/tests/test_frontend_ids.py`: `*-top` controls, `btn-rc-*`, etc.), then empty that allowlist
+- [x] Removed the dead frontend code for elements that no longer exist; `LEGACY_NULL_GUARDED` is gone, and `tests/test_frontend_ids.py` now allows no missing IDs.
 - [x] **ROI peak fitting** (2026-10-03): `spectroscopy/roi_analysis.py` was rebuilt (two-band window, else a peak fit with neighbours; effective branching for blended lines; non-linear axes), validated on synthetic spectra for AlphaHound and Radiacode profiles and on the labelled real spectra; `tests/test_roi_analysis.py`. See CHANGELOG.
 - [ ] ROI: lines of a *different* nuclide inside the window cannot be separated by these detectors (Cs-137 beside Bi-214 609 keV, Ac-228 338 keV on Pb-214 352 keV); the result warns but still reports a detection. A source-aware correction (use the chain or template fit to subtract the other nuclide) would fix it.
 - [ ] ROI: ground-truth the generic efficiency curves per detector with a known source (the AlphaHound CsI measured 7.1 % FWHM at 662 keV on the Cs-137 verification file against the 10 % in the database; the fit already adapts, the efficiencies do not).
@@ -97,7 +97,7 @@ Structural debt (long functions, overlapping modules, what was cleaned and what 
 - [ ] Browser-check the chain diagram's "or" branch and the ROI notes in the other themes and on a phone width (checked in Dark at desktop width only).
 - [ ] Replace remaining `print` calls in multi-line/other statements and the `[Tag]` message prefixes now duplicated by logger names
 - [x] Split `routers/analysis.py` (1500+ lines) into `analysis.py`, `export.py`, `nuclear.py` (same 37 routes)
-- [ ] `static/js/main.js` is still about 3,300 lines in one module (toast and decay tool are out; `setupEventListeners` is now 11 named functions). Next: move those section functions into their own modules, passing in the state they use (`currentData`, `isAcquiring`, ...). The browser checks (162) and the frontend scope check guard it.
+- [ ] `static/js/main.js` is about 1,960 lines: the section functions are modules now (see `TECHNICAL_DEBT.md`); what remains is the device monitoring, acquisition, history, comparison and background logic and the `let` state they share. A small state module would let those move too.
 - [ ] Add unit tests for frontend JavaScript modules
 - [x] Add unit tests for backend API endpoints ✅ (`backend/tests/test_api_endpoints.py`; 59 tests pass)
 - [ ] Implement TypeScript for type safety

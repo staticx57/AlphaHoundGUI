@@ -21,7 +21,6 @@ export class AlphaHoundUI {
             isotopesContainer: document.getElementById('isotopes-container'),
             resultsRow: document.getElementById('results-row'),
             summary: document.getElementById('result-summary'),
-            isotopesTbody: document.getElementById('isotopes-tbody'),
             decayChainsContainer: document.getElementById('decay-chains-container'),
             decayChainsList: document.getElementById('decay-chains-list'),
             deviceConnected: document.getElementById('unified-device-controls'),
@@ -29,7 +28,6 @@ export class AlphaHoundUI {
             btns: {
                 refresh: document.getElementById('btn-refresh-ports'),
                 connect: document.getElementById('btn-connect-device'),
-                advanced: document.getElementById('btn-advanced'),
                 disconnect: document.getElementById('btn-disconnect-alphahound'),
                 row: document.getElementById('alphahound-connection-row')
             }
@@ -951,14 +949,12 @@ export class AlphaHoundUI {
             if (this.elements.portSelectParent) this.elements.portSelectParent.style.display = 'none';
             if (this.elements.btns.refresh) this.elements.btns.refresh.style.display = 'none';
             if (this.elements.btns.connect) this.elements.btns.connect.style.display = 'none';
-            if (this.elements.btns.advanced) this.elements.btns.advanced.style.display = 'none';
             if (this.elements.btns.disconnect) this.elements.btns.disconnect.style.display = 'inline-block';
             if (this.elements.btns.row) this.elements.btns.row.classList.add('ah-connected');
         } else {
             if (this.elements.portSelectParent) this.elements.portSelectParent.style.display = 'flex';
             if (this.elements.btns.refresh) this.elements.btns.refresh.style.display = 'block';
             if (this.elements.btns.connect) this.elements.btns.connect.style.display = 'block';
-            if (this.elements.btns.advanced) this.elements.btns.advanced.style.display = 'block';
             if (this.elements.btns.disconnect) this.elements.btns.disconnect.style.display = 'none';
             if (this.elements.btns.row) this.elements.btns.row.classList.remove('ah-connected');
         }

@@ -7,10 +7,9 @@ import { debug } from './log.js';
  * stateful singletons (ui, chartManager) as they are, and main.js functions it calls.
  *
  * @param {object} deps
- * @param {*} deps.ui
  * @param {*} deps.applyUIMode
  */
-export function setupUiModeListener({ ui, applyUIMode } = {}) {
+export function setupUiModeListener({ applyUIMode } = {}) {
     // UI Complexity Mode change listener
     document.querySelectorAll('input[name="ui-mode"]').forEach(radio => {
         radio.addEventListener('change', (e) => {

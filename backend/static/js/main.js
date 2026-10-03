@@ -6,15 +6,13 @@ import { ui } from './ui.js?v=3.0';
 import { chartManager, DoseRateChart } from './charts.js?v=4.6';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
-import { n42MetadataEditor } from './n42_editor.js';
 import { estimatorUI } from './estimator_ui.js';
 import { updateDeviceUI, resetDeviceUI, getActiveDevice } from './device_features.js';
 import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
-import { notify, notifyAuto, confirmDialog, infoDialog, setNotifier } from './dialogs.js';
+import { notifyAuto, confirmDialog, setNotifier } from './dialogs.js';
 import { ChannelPanel } from './channels.js';
-import { spectrumSignature } from './summary.js';
-import { formatAlarmLimits, formatDoseRate, formatDoseTotal, resolveUnit, getDosePref, setDosePref, toUSv, fromUSv, unitLabel, UREM_PER_USV, safeStorage } from './units.js';
-import { AlertCenter, loadAlerts, saveAlerts, DEFAULT_ALERTS } from './alerts.js';
+import { formatAlarmLimits, formatDoseRate, formatDoseTotal, resolveUnit, getDosePref, UREM_PER_USV, safeStorage } from './units.js';
+import { AlertCenter } from './alerts.js';
 import { initA11y } from './a11y.js';
 import { loadDecayEngines, runDecayPrediction, redrawDecayChart } from './decay_tool.js';
 import { showToast } from './toast.js';
@@ -24,7 +22,6 @@ import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette
 import { setupDeviceTabs } from './device_tabs.js';
 import { setupExports } from './exports_ui.js';
 import { setupAnalysisPanels } from './analysis_panels.js';
-import { setupDoseAndAlertSettings } from './dose_alert_settings.js';
 import { setupSettingsAndHistory } from './settings_history.js';
 import { setupThemeAndChartControls } from './chart_controls.js';
 import { setupDeviceControls } from './device_controls.js';
@@ -46,7 +43,6 @@ let acquisitionStartTime = null;
 let overlaySpectra = [];
 let compareMode = false;
 let backgroundData = null; // New background state
-let doseChart = null; // Live dose rate chart instance
 let rcDoseChart = null; // Radiacode dose rate chart instance
 let deviceScreen = null; // AlphaHound display replica
 let ahDetailsInterval = null; // AlphaHound details refresh timer
@@ -631,8 +627,6 @@ async function checkDeviceMessages() {
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
-    // Initialize Dose Rate Chart (if element exists)
-    doseChart = new DoseRateChart();
 
     await refreshPorts();
     await checkDeviceStatus();
@@ -720,24 +714,16 @@ function loadSettings() {
 
 function setupEventListeners() {
     setupFileUpload({ handleFile, getCurrentData: () => currentData });
-    setupUiModeListener({ ui, applyUIMode });
+    setupUiModeListener({ applyUIMode });
     setupDeviceTabs();
-    setupRadiacodeConnection({ DoseRateChart, chartManager, ui, startRadiacodeDosePolling, stopRadiacodeDosePolling, getCurrentData: () => currentData, setCurrentData: (value) => { currentData = value; }, getRcDoseChart: () => rcDoseChart, setRcDoseChart: (value) => { rcDoseChart = value; } });
+    setupRadiacodeConnection({ DoseRateChart, startRadiacodeDosePolling, getCurrentData: () => currentData, getRcDoseChart: () => rcDoseChart, setRcDoseChart: (value) => { rcDoseChart = value; } });
     setupExports({ ui, getCurrentData: () => currentData });
     setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFromHistory, getCurrentData: () => currentData, getSettings: () => currentSettings });
-    setupThemeAndChartControls({ chartManager, colors, reapplyIsotopeHighlights, updateChartScale, getCurrentData: () => currentData });
+    setupThemeAndChartControls({ chartManager, reapplyIsotopeHighlights, updateChartScale, getCurrentData: () => currentData });
     setupDeviceControls({ connectDevice, refreshPorts, showRadiacodeDisconnectedUI, startAcquisition, stopAcquisition, stopRadiacodeDosePolling });
-    setupComparisonAndBackground({ chartManager, clearBackground, connectDeviceTop, handleBackgroundFile, handleCompareFile, refreshPorts, setBackground, toggleCompareMode, updateOverlayCount, getCurrentData: () => currentData, getOverlaySpectra: () => overlaySpectra, setOverlaySpectra: (value) => { overlaySpectra = value; } });
+    setupComparisonAndBackground({ chartManager, clearBackground, handleBackgroundFile, handleCompareFile, setBackground, toggleCompareMode, updateOverlayCount, getCurrentData: () => currentData, getOverlaySpectra: () => overlaySpectra, setOverlaySpectra: (value) => { overlaySpectra = value; } });
     setupSnipAndCalibration({ chartManager, applyCalibration, getCurrentData: () => currentData });
     setupAnalysisPanels({ ui, isCompareMode: () => compareMode, getCurrentData: () => currentData });
-}
-
-// Calibration Tool
-const calBtn = document.getElementById('btn-calibrate');
-if (calBtn) {
-    calBtn.addEventListener('click', () => {
-        document.getElementById('calibration-modal').style.display = 'flex';
-    });
 }
 
 // NOTE: Device control listeners already registered in setupEventListeners() (lines 372-377)
@@ -776,17 +762,6 @@ if (btnDisplayPrev) {
 }
 
 // Clear Spectrum: handled once, device-aware, in setupEventListeners() (api.clearSpectrumUnified)
-
-// Top panel device controls (if they exist)
-const refreshTop = document.getElementById('btn-refresh-ports-top');
-const connectTop = document.getElementById('btn-connect-top');
-const disconnectTop = document.getElementById('btn-disconnect-top');
-const acquireTop = document.getElementById('btn-acquire-top');
-
-if (refreshTop) refreshTop.addEventListener('click', refreshPorts);
-if (connectTop) connectTop.addEventListener('click', connectDeviceTop);
-if (disconnectTop) disconnectTop.addEventListener('click', disconnectDevice);
-if (acquireTop) acquireTop.addEventListener('click', startAcquisition);
 
 // Chart Click for Calibration
 const chartCanvas = document.getElementById('spectrumChart');
@@ -1063,82 +1038,6 @@ document.getElementById('btn-analyze-roi')?.addEventListener('click', async () =
     }
 });
 
-// Uranium Enrichment Button
-document.getElementById('btn-uranium-ratio')?.addEventListener('click', async () => {
-    if (!currentData || !currentData.counts) {
-        return showToast('No spectrum data loaded', 'warning');
-    }
-
-    const detector = document.getElementById('roi-detector').value;
-    // Input is in minutes, convert to seconds for API
-    const acqTimeMinutes = parseFloat(document.getElementById('roi-acq-time').value) || 10;
-    const acqTime = acqTimeMinutes * 60;
-    // the source type decides whether the Ra-226 share of the 186 keV peak is subtracted (uranium glass / Takumar)
-    const ratioSourceType = document.getElementById('roi-source-type')?.value || 'unknown';
-
-    const resultsDiv = document.getElementById('roi-results');
-    resultsDiv.innerHTML = '<p style="color: var(--text-secondary);">Analyzing uranium ratio...</p>';
-
-    try {
-        const response = await fetch('/analyze/uranium-ratio', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                energies: currentData.energies,
-                counts: currentData.counts,
-                detector: detector,
-                acquisition_time_s: acqTime,
-                source_type: ratioSourceType
-            })
-        });
-
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(formatErrorMessage(errData));
-        }
-        const data = await response.json();
-
-        // Color based on category (theme-aware)
-        const styles = getComputedStyle(document.documentElement);
-        let categoryColor = styles.getPropertyValue('--xrf-high').trim() || '#10b981';  // Natural = green
-        if (data.category === 'Depleted Uranium') categoryColor = styles.getPropertyValue('--confidence-medium').trim() || '#f59e0b';  // Yellow
-        if (data.category === 'Enriched Uranium') categoryColor = styles.getPropertyValue('--confidence-low').trim() || '#ef4444';  // Red
-
-        resultsDiv.innerHTML = `
-                <div style="margin-bottom: 0.75rem;">
-                    <span style="color: var(--primary-color);">U-235 (186 keV):</span> Net Counts ${data.u235_net_counts.toFixed(0)} (${data.u235_uncertainty.toFixed(1)}σ)
-                </div>
-                <div>
-                    Ratio: 186 keV peak is <strong>${data.ratio_percent.toFixed(1)}%</strong> of 93 keV peak (≥${data.threshold_natural}%): 
-                    <span style="color: ${categoryColor}; font-weight: 600;">${escapeHtml(data.category)}</span>
-                </div>
-                <div style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">
-                    ${escapeHtml(data.description)}
-                </div>
-                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color); color: var(--text-secondary);">
-                    --- Peak Data ---<br>
-                    U-235 (186 keV): ${data.u235_net_counts.toFixed(0)} ± ${data.u235_uncertainty.toFixed(1)} counts<br>
-                    Th-234 (93 keV): ${data.th234_net_counts.toFixed(0)} ± ${data.th234_uncertainty.toFixed(1)} counts
-                </div>
-            `;
-
-        if (Array.isArray(data.warnings) && data.warnings.length) {
-            const list = document.createElement('ul');
-            list.id = 'roi-notes';
-            list.style.cssText = 'margin: 0.6rem 0 0 1.2rem; padding: 0; font-size: 0.78rem; color: var(--text-secondary);';
-            data.warnings.forEach((note) => {
-                const item = document.createElement('li');
-                item.textContent = note;
-                list.appendChild(item);
-            });
-            resultsDiv.appendChild(list);
-        }
-
-    } catch (err) {
-        resultsDiv.innerHTML = `<p style="color: #ef4444;">Error: ${escapeHtml(err.message)}</p>`;
-    }
-});
-
 // Highlight ROI Button
 document.getElementById('btn-highlight-roi')?.addEventListener('click', () => {
     if (!window.lastROI) {
@@ -1287,19 +1186,6 @@ async function connectDevice() {
     }
 }
 
-// Top Bar connect uses the top select box
-async function connectDeviceTop() {
-    const port = document.getElementById('port-select-top').value;
-    if (!port) return notifyAuto('Select a port');
-    try {
-        await api.connectDevice(port);
-        ui.setDeviceConnected(true);
-        startAlphaHoundMonitoring();
-    } catch (err) {
-        notifyAuto(err.message);
-    }
-}
-
 // ============================================================
 // AlphaHound: live dose sparkline, per-channel CPS, details panel, display replica
 // ============================================================
@@ -1355,7 +1241,6 @@ window.addEventListener('themechange', () => {
     if (channelPanel) channelPanel.refreshTheme();
     applyScreenColors();
     if (rcDoseChart) rcDoseChart.refreshTheme();
-    if (doseChart) doseChart.refreshTheme();
     redrawDecayChart();
 });
 
@@ -1423,7 +1308,6 @@ function startAlphaHoundMonitoring() {
             ui.updateDoseDisplay(rate);
             alertCenter.updateDose(rate / UREM_PER_USV);
             if (rcDoseChart) rcDoseChart.update(rate);
-            if (doseChart) doseChart.update(rate);
             if (deviceScreen) deviceScreen.setReadings({ dose: rate });
             ahSet('ah-dose', fmtDoseText(rate));
         },
@@ -1590,12 +1474,6 @@ async function checkRadiacodeStatus() {
     try {
         const status = await api.getRadiacodeStatus();
         if (!status.connected) return;
-        const connectedPanel = document.getElementById('radiacode-connected');
-        if (connectedPanel) connectedPanel.style.display = 'grid';
-        const modelSpan = document.getElementById('rc-device-model');
-        if (modelSpan && status.device_info) {
-            modelSpan.textContent = status.device_info.model || 'Radiacode';
-        }
         const connectBtn = document.getElementById('btn-connect-radiacode');
         if (connectBtn) {
             connectBtn.textContent = 'Connected';
@@ -1755,9 +1633,7 @@ function stopAcquisitionUI() {
 
     // Hide server-managed indicators
     const serverStatus = document.getElementById('acquisition-server-status');
-    const serverInfo = document.getElementById('server-acquisition-info');
     if (serverStatus) serverStatus.style.display = 'none';
-    if (serverInfo) serverInfo.style.display = 'none';
 }
 
 /**
@@ -1766,9 +1642,7 @@ function stopAcquisitionUI() {
  */
 function showServerManagedUI() {
     const serverStatus = document.getElementById('acquisition-server-status');
-    const serverInfo = document.getElementById('server-acquisition-info');
     if (serverStatus) serverStatus.style.display = 'inline';
-    if (serverInfo) serverInfo.style.display = 'block';
 }
 
 /**

@@ -9,10 +9,8 @@ import { notifyAuto } from './dialogs.js';
  * @param {object} deps
  * @param {*} deps.chartManager
  * @param {*} deps.clearBackground
- * @param {*} deps.connectDeviceTop
  * @param {*} deps.handleBackgroundFile
  * @param {*} deps.handleCompareFile
- * @param {*} deps.refreshPorts
  * @param {*} deps.setBackground
  * @param {*} deps.toggleCompareMode
  * @param {*} deps.updateOverlayCount
@@ -20,10 +18,8 @@ import { notifyAuto } from './dialogs.js';
  * @param {*} deps.getOverlaySpectra
  * @param {*} deps.setOverlaySpectra
  */
-export function setupComparisonAndBackground({ chartManager, clearBackground, connectDeviceTop, handleBackgroundFile, handleCompareFile, refreshPorts, setBackground, toggleCompareMode, updateOverlayCount, getCurrentData, getOverlaySpectra, setOverlaySpectra } = {}) {
+export function setupComparisonAndBackground({ chartManager, clearBackground, handleBackgroundFile, handleCompareFile, setBackground, toggleCompareMode, updateOverlayCount, getCurrentData, getOverlaySpectra, setOverlaySpectra } = {}) {
     // Sidebar Toggles (Mobile/Top Bar)
-    if (document.getElementById('btn-refresh-ports-top')) document.getElementById('btn-refresh-ports-top').addEventListener('click', refreshPorts);
-    if (document.getElementById('btn-connect-top')) document.getElementById('btn-connect-top').addEventListener('click', connectDeviceTop);
 
     // Comparison
     document.getElementById('btn-compare').addEventListener('click', toggleCompareMode);

@@ -6,9 +6,8 @@ on it throws at runtime. This broke the AlphaHound live dose readout
 (`dose-display`) and background loading (`bg-active-indicator`) without any
 backend test noticing.
 
-LEGACY_NULL_GUARDED lists IDs that are still looked up but no longer exist
-(removed panels, old "-top" controls). Every use is behind an `if`/`?.` guard.
-Do not add to it: add the element to index.html or remove the dead JS instead.
+There is no allow-list: an ID that is looked up must exist (in index.html, or be created by the script itself). A lookup that
+is guarded by an `if` still never runs, so the code behind it is dead; delete it (18 such lookups, 400 lines in all, were).
 """
 
 import pathlib
@@ -16,14 +15,6 @@ import re
 
 STATIC = pathlib.Path(__file__).resolve().parents[1] / "static"
 
-LEGACY_NULL_GUARDED = {
-    "btn-acquire-spectrum", "btn-acquire-top", "btn-advanced", "btn-calibrate",
-    "btn-connect-top", "btn-disconnect-radiacode", "btn-disconnect-top",
-    "btn-rc-clear", "btn-rc-get-spectrum", "btn-rc-reset-dose",
-    "btn-refresh-ports-top", "btn-uranium-ratio", "doseRateChart",
-    "isotopes-tbody", "port-select-top", "radiacode-connected",
-    "rc-device-model", "server-acquisition-info",
-}
 
 
 def _missing_ids():
@@ -46,7 +37,7 @@ def _missing_ids():
 
 
 def test_no_new_missing_element_ids():
-    unexpected = {i: sorted(f) for i, f in _missing_ids().items() if i not in LEGACY_NULL_GUARDED}
+    unexpected = {i: sorted(f) for i, f in _missing_ids().items()}
     assert not unexpected, f"JS looks up IDs absent from index.html: {unexpected}"
 
 

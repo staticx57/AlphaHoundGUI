@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { resetDeviceUI, updateDeviceUI } from './device_features.js';
+import { updateDeviceUI } from './device_features.js';
 import { escapeHtml } from './html.js';
 import { debug } from './log.js';
 import { showToast } from './toast.js';
@@ -12,16 +12,12 @@ import { showToast } from './toast.js';
  *
  * @param {object} deps
  * @param {*} deps.DoseRateChart
- * @param {*} deps.chartManager
- * @param {*} deps.ui
  * @param {*} deps.startRadiacodeDosePolling
- * @param {*} deps.stopRadiacodeDosePolling
  * @param {*} deps.getCurrentData
- * @param {*} deps.setCurrentData
  * @param {*} deps.getRcDoseChart
  * @param {*} deps.setRcDoseChart
  */
-export function setupRadiacodeConnection({ DoseRateChart, chartManager, ui, startRadiacodeDosePolling, stopRadiacodeDosePolling, getCurrentData, setCurrentData, getRcDoseChart, setRcDoseChart } = {}) {
+export function setupRadiacodeConnection({ DoseRateChart, startRadiacodeDosePolling, getCurrentData, getRcDoseChart, setRcDoseChart } = {}) {
     // Radiacode connection mode toggle (show/hide BLE controls)
     document.querySelectorAll('input[name="rc-conn-mode"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
@@ -95,16 +91,6 @@ export function setupRadiacodeConnection({ DoseRateChart, chartManager, ui, star
                 const result = await api.connectRadiacode(useBluetooth, bluetoothMac);
                 debug('[Radiacode] Connected:', result);
 
-                // Show connected panel
-                const connectedPanel = document.getElementById('radiacode-connected');
-                if (connectedPanel) connectedPanel.style.display = 'grid';
-
-                // Update model display
-                const modelSpan = document.getElementById('rc-device-model');
-                if (modelSpan && result.device_info) {
-                    modelSpan.textContent = result.device_info.model || 'Radiacode';
-                }
-
                 btnConnectRadiacode.textContent = 'Connected';
                 showToast('Radiacode connected successfully', 'success');
 
@@ -128,11 +114,9 @@ export function setupRadiacodeConnection({ DoseRateChart, chartManager, ui, star
                 }
 
                 // Disable acquisition buttons during initialization
-                const acquireBtn = document.getElementById('btn-acquire-spectrum');
                 const getAccumulatedBtn = document.getElementById('btn-get-accumulated');
                 const getCurrentBtn = document.getElementById('btn-get-current');
 
-                if (acquireBtn) acquireBtn.disabled = true;
                 if (getAccumulatedBtn) getAccumulatedBtn.disabled = true;
                 if (getCurrentBtn) getCurrentBtn.disabled = true;
 
@@ -145,7 +129,6 @@ export function setupRadiacodeConnection({ DoseRateChart, chartManager, ui, star
                     startRadiacodeDosePolling();
 
                     // Re-enable acquisition buttons after initialization
-                    if (acquireBtn) acquireBtn.disabled = false;
                     if (getAccumulatedBtn) getAccumulatedBtn.disabled = false;
                     if (getCurrentBtn) getCurrentBtn.disabled = false;
 
@@ -168,83 +151,6 @@ export function setupRadiacodeConnection({ DoseRateChart, chartManager, ui, star
                 btnConnectRadiacode.textContent = 'Connect';
             } finally {
                 btnConnectRadiacode.disabled = false;
-            }
-        });
-    }
-
-    // Radiacode Disconnect Button
-    const btnDisconnectRadiacode = document.getElementById('btn-disconnect-radiacode');
-    if (btnDisconnectRadiacode) {
-        btnDisconnectRadiacode.addEventListener('click', async () => {
-            try {
-                stopRadiacodeDosePolling();  // Stop polling first
-                await api.disconnectRadiacode();
-                const connectedPanel = document.getElementById('radiacode-connected');
-                if (connectedPanel) connectedPanel.style.display = 'none';
-                document.getElementById('btn-connect-radiacode').textContent = 'Connect';
-                document.getElementById('rc-dose-display').textContent = '--';
-                document.getElementById('rc-dose-total').textContent = 'Total --';
-                showToast('Radiacode disconnected', 'info');
-
-                // Reset device feature UI
-                resetDeviceUI();
-            } catch (err) {
-                console.error('[Radiacode] Disconnect error:', err);
-            }
-        });
-    }
-
-    // Radiacode Get Spectrum Button
-    const btnRcGetSpectrum = document.getElementById('btn-rc-get-spectrum');
-    if (btnRcGetSpectrum) {
-        btnRcGetSpectrum.addEventListener('click', async () => {
-            btnRcGetSpectrum.disabled = true;
-            btnRcGetSpectrum.textContent = 'Loading...';
-
-            try {
-                const data = await api.getRadiacodeSpectrum(true);
-                debug('[Radiacode] Spectrum received:', data);
-
-                setCurrentData(data);
-                ui.renderDashboard(data);
-                chartManager.render(data.energies, data.counts, data.peaks, 'linear');
-                chartManager.showScrubber(data.energies, data.counts);  // Show zoom slider
-
-                showToast('Spectrum loaded from Radiacode', 'success');
-            } catch (err) {
-                console.error('[Radiacode] Spectrum error:', err);
-                showToast(`Failed to get spectrum: ${err.message}`, 'error');
-            } finally {
-                btnRcGetSpectrum.disabled = false;
-                btnRcGetSpectrum.innerHTML = '<img src="/static/icons/chart.svg" class="icon"> Get Spectrum';
-            }
-        });
-    }
-
-    // Radiacode Clear Spectrum Button
-    const btnRcClear = document.getElementById('btn-rc-clear');
-    if (btnRcClear) {
-        btnRcClear.addEventListener('click', async () => {
-            try {
-                await api.clearRadiacodeSpectrum();
-                showToast('Radiacode spectrum cleared', 'info');
-            } catch (err) {
-                console.error('[Radiacode] Clear error:', err);
-                showToast(`Failed to clear: ${err.message}`, 'error');
-            }
-        });
-    }
-
-    // Radiacode Reset Dose Button (Radiacode-only feature)
-    const btnRcResetDose = document.getElementById('btn-rc-reset-dose');
-    if (btnRcResetDose) {
-        btnRcResetDose.addEventListener('click', async () => {
-            try {
-                await api.resetRadiacodeDose();
-                showToast('Radiacode dose reset', 'info');
-            } catch (err) {
-                console.error('[Radiacode] Reset dose error:', err);
-                showToast(`Failed to reset dose: ${err.message}`, 'error');
             }
         });
     }

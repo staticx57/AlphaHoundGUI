@@ -9,12 +9,11 @@ import { showToast } from './toast.js';
  *
  * @param {object} deps
  * @param {*} deps.chartManager
- * @param {*} deps.colors
  * @param {*} deps.reapplyIsotopeHighlights
  * @param {*} deps.updateChartScale
  * @param {*} deps.getCurrentData
  */
-export function setupThemeAndChartControls({ chartManager, colors, reapplyIsotopeHighlights, updateChartScale, getCurrentData } = {}) {
+export function setupThemeAndChartControls({ chartManager, reapplyIsotopeHighlights, updateChartScale, getCurrentData } = {}) {
     // Theme Dropdown
     const themeSelect = document.getElementById('theme-select');
     if (themeSelect) {
