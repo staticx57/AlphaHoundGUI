@@ -2905,3 +2905,5 @@ input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .stat-rows dt { color: var(--text-secondary); }
 .stat-rows dd { margin: 0; font-family: var(--ch-font); font-weight: 600; color: var(--text-primary); text-align: right; }
 .stat-detail { margin-top: 0.3rem; font-size: 0.74rem; line-height: 1.35; color: var(--text-secondary); }
+
+.decay-info { min-height: 1.2em; margin: 0.6rem 0 0; font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); }

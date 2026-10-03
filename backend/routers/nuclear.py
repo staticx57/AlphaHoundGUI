@@ -23,7 +23,7 @@ class DecayPredictionRequest(BaseModel):
     initial_activity_bq: float = Field(default=1000.0, ge=0)
     time_hours: Optional[float] = None
     duration_days: Optional[float] = None
-    engine: Optional[str] = Field(default="auto", description="Decay engine to use (auto, radioactivedecay, curie, pyne, builtin)")
+    engine: Optional[str] = Field(default="auto", description="Decay engine to use (auto, radioactivedecay, curie, builtin)")
 
 
 class IsotopeInfoRequest(BaseModel):
@@ -40,7 +40,8 @@ def get_decay_engines_endpoint():
         from decay_engine import decay_engine_manager
         return {
             "engines": decay_engine_manager.list_engines(),
-            "default": decay_engine_manager.get_default_engine_name()
+            "default": decay_engine_manager.get_default_engine_name(),
+            "isotopes": decay_engine_manager.list_isotopes(),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -50,7 +51,8 @@ def get_decay_engines_endpoint():
 def predict_decay_endpoint(request: DecayPredictionRequest):
     """
     Predict decay chain activity evolution over time.
-    Supports multi-engine selection (radioactivedecay, curie, pyne, builtin).
+    Engines: auto, radioactivedecay (ICRP-107), curie (ENSDF) and builtin (embedded ICRP-107); see /analyze/decay-engines.
+    Input that cannot be computed (unknown isotope, a non-positive duration or activity, a stable parent) is a 400.
     """
     try:
         from decay_engine import decay_engine_manager

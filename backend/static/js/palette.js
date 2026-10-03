@@ -147,6 +147,34 @@ export function channelPalette({ primary, secondary, accent, bg }) {
     return { gamma: toHex(gamma), beta: toHex(beta), alpha: toHex(alpha) };
 }
 
+/**
+ * `n` series colours for a theme: the first three are the channel colours (gamma, beta, alpha), further ones step round the
+ * hue wheel from the theme's primary colour (golden angle, alternating lightness), each readable on the background and
+ * nudged until it differs from those already chosen. Charts with many lines also vary the line pattern; colour is never the
+ * only cue.
+ */
+export function seriesPalette(theme, n) {
+    const base = channelPalette(theme);
+    const bg = parseColor(theme.bg) || { r: 15, g: 23, b: 42 };
+    const out = [base.gamma, base.beta, base.alpha].slice(0, Math.max(0, n));
+    const hsl0 = rgbToHsl(parseColor(base.gamma));
+    const sat = clamp(Math.max(0.5, hsl0.s), 0.5, 0.9);
+    let hue = hsl0.h;
+    while (out.length < n) {
+        hue += 137.508;
+        const used = out.map(parseColor);
+        let chosen = null;
+        for (let tweak = 0; tweak < 12; tweak++) {
+            const l = [0.62, 0.5, 0.72, 0.42][(out.length + tweak) % 4];
+            const candidate = ensureContrast(hslToRgb({ h: hue + tweak * 11, s: sat, l }), bg);
+            if (minDistance(candidate, used) >= 0.55) { chosen = candidate; break; }
+            if (!chosen || minDistance(candidate, used) > minDistance(chosen, used)) chosen = candidate;
+        }
+        out.push(toHex(chosen));
+    }
+    return out;
+}
+
 /** The look of the device-screen replica in a theme: a bright tint of the theme colour on black, like a phosphor. */
 export function screenPalette({ primary }) {
     const hsl = rgbToHsl(parseColor(primary) || { r: 56, g: 189, b: 248 });

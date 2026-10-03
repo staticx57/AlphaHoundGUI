@@ -44,7 +44,7 @@ def test_decay_engines_listed(client):
 
     body = response.json()
     names = {e["name"] for e in body["engines"]}
-    assert {"builtin", "radioactivedecay", "curie", "pyne"} <= names
+    assert names == {"builtin", "radioactivedecay", "curie"}      # every listed engine is a real one (there is no PyNE stand-in)
 
     # builtin has no third-party dependency, so it is always available
     builtin = next(e for e in body["engines"] if e["name"] == "builtin")
@@ -70,16 +70,27 @@ def test_decay_prediction_honors_engine_selection(client, engine):
         assert body["engine_used"] == engine
 
 
-def test_decay_prediction_unavailable_engine_falls_back(client):
-    """An unavailable engine must degrade to builtin, and say so."""
+def test_decay_prediction_unavailable_engine_falls_back(client, monkeypatch):
+    """An engine that is not available here must degrade to another one, and say so."""
+    import decay_engine
+    monkeypatch.setattr(decay_engine.decay_engine_manager._engines["curie"], "available", False, raising=False)
     response = client.post("/analyze/decay-prediction", json={
         "isotope": "Cs-137",
         "initial_activity_bq": 1000.0,
         "duration_days": 365.0,
-        "engine": "pyne",
+        "engine": "curie",
     })
     assert response.status_code == 200
-    assert response.json()["engine_used"] in ("pyne", "builtin")
+    body = response.json()
+    assert body["engine_used"] != "curie" and body["warnings"] and "curie" in body["warnings"][0]
+
+
+def test_decay_prediction_unknown_engine_is_a_client_error(client):
+    response = client.post("/analyze/decay-prediction", json={
+        "isotope": "Cs-137", "initial_activity_bq": 1000.0, "duration_days": 365.0, "engine": "pyne",
+    })
+    assert response.status_code == 400
+    assert "pyne" in response.json()["detail"]
 
 
 @pytest.mark.parametrize("engine", ["auto", "builtin", "radioactivedecay", "curie"])

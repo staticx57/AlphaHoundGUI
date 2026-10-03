@@ -14,6 +14,9 @@ import { spectrumSignature } from './summary.js';
 import { formatAlarmLimits, formatDoseRate, formatDoseTotal, resolveUnit, getDosePref, setDosePref, toUSv, fromUSv, unitLabel, UREM_PER_USV, safeStorage } from './units.js';
 import { AlertCenter, loadAlerts, saveAlerts, DEFAULT_ALERTS } from './alerts.js';
 import { initA11y } from './a11y.js';
+import { seriesPalette } from './palette.js';
+import { chartTheme, themeGlowPlugin } from './chart_theme.js';
+import { durationToDays, formatBq, describeDecayResult, forLogAxis, activityAxisRange } from './decay_view.js';
 
 initA11y();
 import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
@@ -2657,6 +2660,7 @@ window.addEventListener('themechange', () => {
     applyScreenColors();
     if (rcDoseChart) rcDoseChart.refreshTheme();
     if (doseChart) doseChart.refreshTheme();
+    if (decayChartInstance && decayResult) renderDecayChart(decayResult);
 });
 
 /** Create the display replica once (the canvas lives in the AlphaHound details panel). */
@@ -3377,6 +3381,7 @@ function applyCalibration(slope, intercept) {
 
 // Globals for Decay Chart
 let decayChartInstance = null;
+let decayResult = null;   // the last prediction, kept so a theme change can redraw the chart
 
 /**
  * Populate the decay engine selector from the backend, marking engines whose
@@ -3390,7 +3395,17 @@ async function loadDecayEngines() {
     try {
         const response = await fetch('/analyze/decay-engines');
         if (!response.ok) return;
-        const { engines, default: defaultEngine } = await response.json();
+        const { engines, default: defaultEngine, isotopes } = await response.json();
+
+        const list = document.getElementById('decay-isotope-list');
+        if (list && Array.isArray(isotopes) && isotopes.length) {
+            list.replaceChildren(...isotopes.map((iso) => {
+                const option = document.createElement('option');
+                option.value = iso.name;
+                option.label = `${iso.name} (${iso.half_life})`;
+                return option;
+            }));
+        }
 
         select.innerHTML = '';
         const auto = document.createElement('option');
@@ -3415,11 +3430,16 @@ async function loadDecayEngines() {
 
 
 async function runDecayPrediction() {
-    const isotope = document.getElementById('decay-isotope').value;
+    const isotope = document.getElementById('decay-isotope').value.trim();
     const activity = parseFloat(document.getElementById('decay-activity').value);
     const duration = parseFloat(document.getElementById('decay-duration').value);
+    const unit = document.getElementById('decay-duration-unit')?.value || 'years';
     const engineSelect = document.getElementById('decay-engine-select');
     const engine = engineSelect ? engineSelect.value : 'auto';
+    const info = document.getElementById('decay-info');
+    if (!isotope) return notifyAuto('Enter an isotope, for example Cs-137.');
+    if (!(activity > 0)) return notifyAuto('The starting activity must be more than zero.');
+    if (!(duration > 0)) return notifyAuto('The duration must be more than zero.');
 
     try {
         const response = await fetch('/analyze/decay-prediction', {
@@ -3428,7 +3448,7 @@ async function runDecayPrediction() {
             body: JSON.stringify({
                 isotope: isotope,
                 initial_activity_bq: activity,
-                duration_days: duration * 365.25, // input is years
+                duration_days: durationToDays(duration, unit),
                 engine: engine
             })
         });
@@ -3437,17 +3457,19 @@ async function runDecayPrediction() {
             let errorMsg = "Prediction failed";
             try {
                 const err = await response.json();
-                if (err.detail) errorMsg = err.detail;
+                if (err.detail) errorMsg = typeof err.detail === 'string' ? err.detail : 'Check the values entered.';
             } catch (ignore) { }
             throw new Error(errorMsg);
         }
 
         const result = await response.json();
+        decayResult = result;
         renderDecayChart(result);
 
     } catch (e) {
         console.error(e);
-        notifyAuto("Error running prediction: " + e.message);
+        if (info) info.textContent = '';
+        notifyAuto(e.message);
     }
 }
 
@@ -3456,81 +3478,75 @@ function renderDecayChart(result) {
         decayChartInstance.destroy();
     }
 
-    const labels = result.time_points_days.map(d => (d / 365.25).toFixed(2)); // Years
+    const th = chartTheme();
+    const names = result.isotopes;
+    const colors = seriesPalette(readThemeColors(), names.length);
+    const dashes = [[], [7, 4], [2, 3], [9, 3, 2, 3]];       // colour is never the only cue
+    const labels = result.time_labels;
+    const range = activityAxisRange(result);
 
-    // Create datasets for each isotope
-    const datasets = [];
-    const colors = [
-        '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
-        '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef'
-    ];
-
-    let colorIdx = 0;
-    for (const iso of result.isotopes) {
-        // Skip isotopes with negligible activity if list is huge? 
-        // For now show all.
-        datasets.push({
-            label: iso,
-            data: result.activities[iso],
-            borderColor: colors[colorIdx % colors.length],
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.4
-        });
-        colorIdx++;
-    }
+    const datasets = names.map((iso, i) => ({
+        label: iso,
+        data: forLogAxis(result.activities[iso]),
+        borderColor: colors[i],
+        backgroundColor: 'transparent',
+        borderDash: dashes[i % dashes.length],
+        borderWidth: th.lineWidth,
+        pointRadius: 0,
+        spanGaps: false,
+        tension: Math.min(0.4, th.tension),
+    }));
 
     const ctx = document.getElementById('decayChart');
     if (!ctx) return console.error('Decay chart canvas not found');
 
+    const notes = describeDecayResult(result);
+    const info = document.getElementById('decay-info');
+    if (info) info.textContent = [...notes.warnings, notes.info].join(' \u00b7 ');
+    ctx.setAttribute('aria-label', `Decay of ${result.isotope}: ${names.length} nuclides over ${labels[labels.length - 1]}. ${notes.info}`);
+
     decayChartInstance = new Chart(ctx.getContext('2d'), {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: datasets
-        },
+        plugins: [themeGlowPlugin],
+        data: { labels, datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 title: {
                     display: true,
-                    text: `Decay Chain: ${result.isotopes[0]} over ${labels[labels.length - 1]} Years`
-                        + (result.engine_used ? `  ·  engine: ${result.engine_used}` : ''),
-                    color: '#94a3b8'
+                    text: `Decay of ${result.isotope} over ${labels[labels.length - 1]}`,
+                    color: th.textSecondary,
+                    font: { family: th.font }
                 },
-                legend: {
-                    position: 'right',
-                    labels: { color: '#94a3b8' }
+                legend: { position: 'right', labels: { color: th.textSecondary, font: { family: th.font }, usePointStyle: false } },
+                themeGlow: { blur: th.glow },
+                tooltip: {
+                    backgroundColor: th.card, titleColor: th.text, bodyColor: th.text, borderColor: th.grid, borderWidth: 1,
+                    titleFont: { family: th.font }, bodyFont: { family: th.font },
+                    callbacks: { label: (item) => `${item.dataset.label}: ${formatBq(item.parsed.y)}` }
                 }
             },
             scales: {
                 x: {
-                    title: { display: true, text: 'Time (Years)', color: '#94a3b8' },
-                    grid: { color: '#334155' },
-                    ticks: { color: '#94a3b8' }
+                    title: { display: true, text: 'Time since the start', color: th.textSecondary, font: { family: th.font } },
+                    grid: { color: th.grid, borderDash: th.gridDash },
+                    ticks: { color: th.textSecondary, font: { family: th.font }, maxTicksLimit: 8, maxRotation: 0 }
                 },
                 y: {
                     type: 'logarithmic',
-                    title: { display: true, text: 'Activity (Bq)', color: '#94a3b8' },
-                    grid: { color: '#334155' },
+                    min: range.min,
+                    max: range.max,
+                    title: { display: true, text: 'Activity (Bq)', color: th.textSecondary, font: { family: th.font } },
+                    grid: { color: th.grid, borderDash: th.gridDash },
                     ticks: {
-                        color: '#94a3b8',
-                        callback: function (value, index, values) {
-                            // Clean up log scale ticks
-                            // Show 10^x values clearly
+                        color: th.textSecondary,
+                        font: { family: th.font },
+                        callback: function (value) {
+                            // one tick per decade
                             const log10 = Math.log10(value);
-                            if (Number.isInteger(log10)) {
-                                return value.toExponential();
-                            }
-                            // Show a few intermediates if needed, otherwise hide
-                            if (values.length < 5) return value.toPrecision(2);
-                            return null; // hide cluttered ticks
+                            return Math.abs(log10 - Math.round(log10)) < 1e-9 ? formatBq(value) : null;
                         }
                     }
                 }

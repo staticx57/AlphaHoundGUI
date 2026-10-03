@@ -20,13 +20,29 @@ logger = logging.getLogger(__name__)
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 
+import functools
+
+from curie_compat import CURIE_LOCK, make_curie_thread_safe
+
 # Try to import curie
 try:
     import curie
     HAS_CURIE = True
+    # Curie opens its SQLite connections in whichever thread asks first; the web server answers from a pool of threads, so
+    # without this a lookup fails (and the functions below quietly return nothing) depending on the worker that runs it
+    make_curie_thread_safe(curie)
 except ImportError:
     HAS_CURIE = False
     logger.warning("[Curie Integration] curie not installed, using fallback data")
+
+
+def _serialized(fn):
+    """One thread at a time inside Curie: its connections are shared."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with CURIE_LOCK:
+            return fn(*args, **kwargs)
+    return wrapper
 
 
 
@@ -121,6 +137,7 @@ ISOTOPE_XRAY_ELEMENT_MAP = {
 }
 
 
+@_serialized
 def get_isotope_gammas(isotope_name: str, min_intensity: float = 1.0) -> List[Dict]:
     """
     Get gamma emission lines for an isotope from curie.
@@ -198,6 +215,7 @@ def get_element_xrays(
     return sorted(result, key=lambda x: -x['intensity'])
 
 
+@_serialized
 def calculate_attenuation(
     element: str,
     energy_kev: float,
@@ -266,6 +284,7 @@ def calculate_attenuation(
         }
 
 
+@_serialized
 def get_isotope_half_life(isotope_name: str) -> Optional[float]:
     """
     Get half-life in seconds for an isotope.

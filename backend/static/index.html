@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-    <link rel="stylesheet" href="/static/style.css?v=31">
+    <link rel="stylesheet" href="/static/style.css?v=32">
     <link rel="stylesheet" href="/static/button-fixes.css?v=6">
     <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
     <!-- Charting libraries are served from this app (static/vendor, versions in its README), so charts work offline and on a LAN without internet -->
@@ -1154,10 +1154,9 @@
                         </label>
                         <select id="decay-engine-select" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
                             <option value="auto">Auto (Recommended - Best Available)</option>
-                            <option value="radioactivedecay">RadioactiveDecay (ICRP-107 Dataset)</option>
-                            <option value="curie">Curie (ENSDF / Experimental Data)</option>
-                            <option value="pyne">PyNE (Nuclear Engineering)</option>
-                            <option value="builtin">Built-in Bateman Solver (NumPy Fallback)</option>
+                            <option value="radioactivedecay">radioactivedecay (ICRP-107 data)</option>
+                            <option value="curie">Curie (ENSDF data)</option>
+                            <option value="builtin">Built-in solver (ICRP-107 data embedded)</option>
                         </select>
                         <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">Select the backend nuclear data & decay prediction engine</p>
                     </div>
@@ -1422,16 +1421,14 @@
                         <label
                             style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Parent
                             Isotope</label>
-                        <select id="decay-isotope"
+                        <input type="text" id="decay-isotope" list="decay-isotope-list" value="U-238" autocomplete="off" spellcheck="false"
+                            aria-describedby="decay-isotope-hint"
                             style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
-                            <option value="Cs-137">Cs-137</option>
-                            <option value="Co-60">Co-60</option>
-                            <option value="Sr-90">Sr-90</option>
-                            <option value="U-238" selected>U-238</option>
-                            <option value="Th-232">Th-232</option>
-                            <option value="Am-241">Am-241</option>
-                            <option value="Ra-226">Ra-226</option>
-                        </select>
+                        <datalist id="decay-isotope-list">
+                            <option value="Cs-137"></option><option value="Co-60"></option><option value="Sr-90"></option><option value="U-238"></option>
+                            <option value="Th-232"></option><option value="Am-241"></option><option value="Ra-226"></option>
+                        </datalist>
+                        <span id="decay-isotope-hint" class="settings-hint">pick one or type any, e.g. Tc-99m</span>
                     </div>
                     <div>
                         <label
@@ -1442,10 +1439,16 @@
                     </div>
                     <div>
                         <label
-                            style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Duration
-                            (Years)</label>
-                        <input type="number" id="decay-duration" value="100"
-                            style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                            style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Duration</label>
+                        <div style="display: flex; gap: 0.4rem;">
+                            <input type="number" id="decay-duration" value="100" min="0" step="any" aria-label="Duration"
+                                style="width: 100%; min-width: 0; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                            <select id="decay-duration-unit" aria-label="Duration unit"
+                                style="padding: 0.6rem 0.3rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                                <option value="seconds">s</option><option value="minutes">min</option><option value="hours">h</option>
+                                <option value="days">days</option><option value="years" selected>years</option>
+                            </select>
+                        </div>
                     </div>
                     <button id="btn-run-decay" class="btn-primary"
                         style="height: 42px; padding: 0 1.5rem;">Calculate</button>
@@ -1453,6 +1456,7 @@
                 <div style="height: 400px; position: relative;">
                     <canvas id="decayChart" role="img" aria-label="Decay chain activity over time"></canvas>
                 </div>
+                <p id="decay-info" class="decay-info" role="status" aria-live="polite"></p>
             </div>
         </div>
 

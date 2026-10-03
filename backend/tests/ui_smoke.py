@@ -833,6 +833,68 @@ with sync_playwright() as p:
           drag["lo"] <= drag["hi"] - 1.99 and abs(drag["chartMin"] - drag["wantMin"]) < 1 and abs(drag["chartMax"] - drag["wantMax"]) < 1, str(drag))
     check("R no JS errors in the zoom bar flows", not errs_r, "; ".join(errs_r[:3]))
     ctx_r.close()
+
+    # S. Decay prediction: any isotope, any duration unit, curves that start where they should, the engine named, errors in words
+    ctx_s = browser.new_context(viewport={"width": 1400, "height": 1000})
+    ps = ctx_s.new_page()
+    errs_s = []
+    ps.on("pageerror", lambda e: errs_s.append(f"pageerror: {e}"))
+    ps.on("dialog", lambda d: (errs_s.append("native dialog: " + d.message), d.dismiss()))
+    ps.add_init_script("""localStorage.setItem('analysisSettings', JSON.stringify({ mode: 'simple', uiMode: 'expert', isotope_min_confidence: 40,
+        chain_min_confidence: 30, energy_tolerance: 20, chain_min_isotopes_medium: 3, chain_min_isotopes_high: 4, max_isotopes: 5 }))""")
+    ps.goto(URL, wait_until="networkidle")
+    ps.set_input_files("#file-input", SPEC)
+    ps.wait_for_selector("#dashboard", state="visible", timeout=20000)
+    ps.click("#btn-analysis")
+    ps.click("#btn-decay-tool")
+    ps.wait_for_selector("#decay-modal", state="visible")
+    ps.wait_for_function("document.querySelectorAll('#decay-isotope-list option').length > 40", timeout=8000)
+    check("S the isotope field offers every isotope the engines know (and takes any typed name)",
+          ps.get_attribute("#decay-isotope", "list") == "decay-isotope-list" and ps.evaluate("document.querySelectorAll('#decay-isotope-list option').length") > 40)
+    engines = ps.evaluate("[...document.querySelectorAll('#decay-engine-select option')].map(o => o.value)")
+    check("S the engine menu lists only real engines (no PyNE stand-in)", engines == ["auto", "builtin", "radioactivedecay", "curie"], str(engines))
+    ps.fill("#decay-isotope", "cs137")
+    ps.fill("#decay-activity", "10000")
+    ps.fill("#decay-duration", "400")
+    ps.click("#btn-run-decay")      # opening the modal already drew the default (U-238), so wait for OUR curve
+    ps.wait_for_function("window.Chart && Chart.getChart(document.getElementById('decayChart'))?.data.datasets[0].label === 'Cs-137'", timeout=10000)
+    chart = ps.evaluate("""() => { const c = Chart.getChart(document.getElementById('decayChart'));
+        return { labels: c.data.datasets.map(d => d.label), first: c.data.datasets[0].data[0], last: c.data.datasets[0].data.slice(-1)[0],
+                 lengths: [...new Set(c.data.datasets.map(d => d.data.length))], dashes: c.data.datasets.slice(0, 3).map(d => (d.borderDash || []).join(',')),
+                 colors: [...new Set(c.data.datasets.map(d => d.borderColor))].length, x: c.data.labels.slice(-1)[0] } }""")
+    check("S a loosely typed isotope (cs137) runs and shows the parent and its daughter", chart["labels"][:2] == ["Cs-137", "Ba-137m"], str(chart))
+    check("S the parent starts at the requested activity and decays over 13 half-lives (it used to start at 0)",
+          abs(chart["first"] - 10000) < 1 and 0.9 < chart["last"] < 1.2 and len(chart["lengths"]) == 1, str(chart))
+    check("S the lines differ by pattern as well as colour", len(set(chart["dashes"])) == len(chart["dashes"]) and chart["colors"] == len(chart["labels"]), str(chart["dashes"]))
+    info = ps.inner_text("#decay-info")
+    check("S the page says which engine and data produced the curves", "Computed with" in info and "nuclide" in info and ("ICRP" in info or "ENSDF" in info), info)
+    ps.fill("#decay-isotope", "tc99m")
+    ps.fill("#decay-duration", "24")
+    ps.select_option("#decay-duration-unit", "hours")
+    ps.click("#btn-run-decay")
+    ps.wait_for_function("Chart.getChart(document.getElementById('decayChart')).data.datasets[0].label === 'Tc-99m'", timeout=8000)
+    hours = ps.evaluate("""() => { const c = Chart.getChart(document.getElementById('decayChart')); const d = c.data.datasets[0].data;
+        return { last: c.data.labels.slice(-1)[0], ratio: d[d.length - 1] / d[0] } }""")
+    check("S hours work: 24 h of Tc-99m is four half-lives and the axis says hours", " h" in hours["last"] and 0.05 < hours["ratio"] < 0.08, str(hours))
+    ps.fill("#decay-isotope", "Xx-999")
+    ps.click("#btn-run-decay")
+    ps.wait_for_function("document.querySelector('.toast')?.textContent?.includes('Xx-999')", timeout=6000)
+    check("S an unknown isotope is explained in a message (not a flat line)", ps.inner_text("#decay-info").strip() == "")
+    ps.select_option("#decay-duration-unit", "years")
+    ps.fill("#decay-isotope", "U-238")
+    ps.fill("#decay-duration", "1000000")
+    ps.click("#btn-run-decay")
+    ps.wait_for_function("Chart.getChart(document.getElementById('decayChart')).data.datasets[0].label === 'U-238'", timeout=8000)
+    ps.select_option("#theme-select", "oscilloscope")
+    ps.wait_for_timeout(500)
+    themed = ps.evaluate("""() => { const c = Chart.getChart(document.getElementById('decayChart'));
+        return { width: c.data.datasets[0].borderWidth, glow: c.options.plugins.themeGlow.blur, n: c.data.datasets.length,
+                 want: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ch-line-w')) } }""")
+    check("S the chart is redrawn in the new theme's character when the theme changes", abs(themed["width"] - themed["want"]) < 0.01 and themed["glow"] > 0 and themed["n"] >= 12, str(themed))
+    ps.keyboard.press("Escape")
+    ps.wait_for_function("getComputedStyle(document.getElementById('decay-modal')).display === 'none'", timeout=3000)
+    check("S no JS errors or native dialogs in the decay modal", not errs_s, "; ".join(errs_s[:3]))
+    ctx_s.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]
