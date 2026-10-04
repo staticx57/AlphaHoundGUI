@@ -311,13 +311,35 @@ def calculate_consistency_score(
         return 0.0
 
 
+AMBIGUOUS_LINES = (511.0, 1460.8, 2614.5)   # annihilation, K-40 and Tl-208: in many spectra whatever the source
+
+
+def matched_lines_consistency(matched_lines: List[float], total_lines: int) -> float:
+    """
+    Multi-peak consistency (0-0.15) from the lines the matcher actually assigned to the isotope, out of the lines it lists: the same rules
+    as calculate_consistency_score, but on the isotope's own line list instead of the small intensity table above.
+    """
+    matched = len(matched_lines)
+    if matched == 0:
+        return 0.0
+    all_ambiguous = all(any(abs(e - a) < 5 for a in AMBIGUOUS_LINES) for e in matched_lines)
+    if total_lines == 1:
+        return 0.02 if all_ambiguous else 0.06
+    if matched >= 3:
+        return 0.15
+    if matched == 2:
+        return 0.08 if all_ambiguous else 0.12
+    return 0.04 * matched / total_lines
+
+
 def calculate_isotope_confidence(
     isotope: str,
     detected_energy: float,
     expected_energy: float,
     peak_data: Optional[Dict] = None,
     all_peaks: Optional[List[Dict]] = None,
-    tolerance: float = 15.0
+    tolerance: float = 15.0,
+    identification: Optional[Dict] = None,
 ) -> Tuple[float, ConfidenceFactors]:
     """
     Calculate comprehensive confidence score for an isotope identification.
@@ -340,9 +362,15 @@ def calculate_isotope_confidence(
     
     # Calculate individual factors - ALL based on observed spectrum properties
     energy_score = calculate_energy_match_score(detected_energy, expected_energy, tolerance)
-    
-    intensity_score = calculate_intensity_score(isotope, expected_energy)
-    
+
+    if identification and identification.get('matched_peaks'):
+        # the share of the isotope's emission (its listed lines, weighted by intensity) that the spectrum shows
+        expected_total = sum(e.get('intensity', 0) or 0 for e in identification.get('expected_peaks') or [])
+        seen = sum(m.get('intensity', 0) or 0 for m in identification['matched_peaks'])
+        intensity_score = 0.25 * (min(1.0, seen / expected_total) if expected_total > 0 else 0.5)
+    else:
+        intensity_score = calculate_intensity_score(isotope, expected_energy)
+
     fit_score = calculate_fit_quality_score(
         r_squared=peak_data.get('r_squared'),
         fit_valid=peak_data.get('fit_valid', False)
@@ -356,9 +384,13 @@ def calculate_isotope_confidence(
     
     # Get all detected energies for consistency check
     # This is the KEY intrinsic filter - multi-peak consistency
-    detected_energies = [p.get('energy', 0) for p in all_peaks]
-    detected_energies.append(detected_energy)
-    consistency_score = calculate_consistency_score(isotope, detected_energies, tolerance)
+    if identification and identification.get('matched_peaks'):
+        consistency_score = matched_lines_consistency(
+            [m['expected'] for m in identification['matched_peaks']], identification.get('total_lines') or 1)
+    else:
+        detected_energies = [p.get('energy', 0) for p in all_peaks]
+        detected_energies.append(detected_energy)
+        consistency_score = calculate_consistency_score(isotope, detected_energies, tolerance)
     
     # Total score - purely based on observed spectrum
     total = energy_score + intensity_score + fit_score + snr_score + consistency_score
@@ -409,37 +441,47 @@ def enhance_isotope_identifications(
         Enhanced identification list
     """
     enhanced = []
-    
+
     for ident in identifications:
         isotope = ident.get('isotope', ident.get('name', ''))
-        matched_energy = ident.get('matched_energy', ident.get('energy', 0))
-        expected_energy = ident.get('expected_energy', matched_energy)
-        
-        # Find matching peak data
-        peak_data = None
-        for peak in peaks:
-            if abs(peak.get('energy', 0) - matched_energy) < 10:
-                peak_data = peak
-                break
-        
+        # The isotope's own evidence: its strongest matched line (the matcher's records carry `matched_peaks`; reading keys it never
+        # writes scored every isotope as a perfect match of a line at 0 keV, a constant per isotope whatever the spectrum held)
+        matched = ident.get('matched_peaks') or []
+        best = max(matched, key=lambda m: (m.get('intensity', 0), -m.get('diff', 0))) if matched else None
+        matched_energy = best['observed'] if best else ident.get('matched_energy', ident.get('energy', 0))
+        expected_energy = best['expected'] if best else ident.get('expected_energy', matched_energy)
+
+        # The peak that line was matched to
+        peak_data = min(peaks, key=lambda p: abs(p.get('energy', 0) - matched_energy), default=None)
+        if peak_data is not None and abs(peak_data.get('energy', 0) - matched_energy) >= 10:
+            peak_data = None
+
         # Calculate enhanced confidence
         confidence, factors = calculate_isotope_confidence(
             isotope=isotope,
             detected_energy=matched_energy,
             expected_energy=expected_energy,
             peak_data=peak_data,
-            all_peaks=peaks
+            all_peaks=peaks,
+            identification=ident,
         )
-        
+
         # Create enhanced identification
         enhanced_ident = ident.copy()
+        enhanced_ident['matched_energy'] = matched_energy
+        enhanced_ident['expected_energy'] = expected_energy
         
         # IMPORTANT: Convert to 0-100 scale to match core.py filtering thresholds
         enhanced_confidence = round(confidence * 100, 1)
         
+        # The validation rules' ceiling (a multi-line isotope seen through too few of its lines) holds whatever the peak quality
+        if ident.get('validation_cap') is not None:
+            enhanced_confidence = min(enhanced_confidence, ident['validation_cap'])
+
         # Preserve suppression from original identification
         # If the original identification was suppressed, apply the same reduction
         if ident.get('suppressed', False):
+            enhanced_ident['unsuppressed_confidence'] = round(enhanced_confidence, 1)   # for a later step that can overrule the reason
             enhanced_confidence *= 0.1  # 90% reduction, same as original suppression
             enhanced_ident['suppressed'] = True
             enhanced_ident['suppression_reason'] = ident.get('suppression_reason', 'unknown')

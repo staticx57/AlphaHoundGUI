@@ -80,14 +80,23 @@ def _detect_peaks(result: dict, energies, counts, use_enhanced: bool) -> list:
     return peaks
 
 
-def _reconcile_with_template_fit(result: dict, energies, counts, peaks, decay_chains, isotopes, current_settings: dict):
+def _fit_templates(result: dict, energies, counts):
+    """The full-spectrum template fit (None when it cannot be made)."""
+    try:
+        from spectroscopy.source_templates import fit_source_templates
+        return fit_source_templates(energies, counts, result.get("metadata"))
+    except Exception as e:
+        logger.warning(f"[Analysis] Source template fit failed: {e}")
+        return None
+
+
+def _reconcile_with_template_fit(result: dict, energies, counts, peaks, decay_chains, isotopes, current_settings: dict, fit):
     """
-    Fit the whole spectrum with source templates: it decides whether the U-238 / Th-232 series are really present,
+    Apply the full-spectrum template fit: it decides whether the U-238 / Th-232 series are really present,
     and can report a clearly-off energy calibration. Returns the (decay_chains, isotopes) to report.
     """
     try:
-        from spectroscopy.source_templates import fit_source_templates, reconcile_with_fit
-        fit = fit_source_templates(energies, counts, result.get("metadata"))
+        from spectroscopy.source_templates import reconcile_with_fit
         if fit:
             result["source_fit"] = fit
             # Where the clean lines of the sources found actually sit: reports a clearly-off energy calibration. (The fit's own gain
@@ -157,7 +166,17 @@ def _assess_data_quality(peaks, energies, counts, live_time: float) -> dict:
 def _annotate_detector(result: dict, is_calibrated: bool):
     """Which detector profile describes this spectrum (the ROI panel preselects it) and its lower display limit."""
     try:
-        from spectroscopy.source_templates import resolve_detector
+        from spectroscopy.source_templates import resolve_detector, estimate_resolution_662, HPGE, HPGE_MAX_RESOLUTION
+        metadata = result.get("metadata") or {}
+        text = " ".join(str(v) for v in metadata.values() if isinstance(v, str)).lower()
+        # A file that names no known detector is analysed at the resolution its peaks show: germanium spectra from generic formats were
+        # analysed as an AlphaHound CsI (10 %) and read as Na-22, with no natural series
+        if is_calibrated and not any(k in text for k in ("alphahound", "radiacode", "bgo", "hpge", "germanium")):
+            r662 = estimate_resolution_662(result["energies"], result["counts"])
+            if r662 is not None:
+                result["measured_resolution_662"] = round(r662, 4)
+                if r662 < HPGE_MAX_RESOLUTION:
+                    result["metadata"] = {**metadata, "detector_type": f"{HPGE}: peaks {r662 * 100:.2f} % FWHM at 662 keV"}
         result["detector_profile"] = resolve_detector(result.get("metadata"))
     except Exception as e:
         logger.debug(f"[Analysis] Detector profile not resolved: {e}")
@@ -171,12 +190,13 @@ def _annotate_detector(result: dict, is_calibrated: bool):
             logger.debug('display_min_keV not set', exc_info=True)
 
 
-def _identify(peaks, current_settings: dict, use_enhanced: bool):
+def _identify(peaks, current_settings: dict, use_enhanced: bool, detector=None):
     """Line-matching isotope identification and decay-chain detection (enhanced when available, with the basic one as fallback)."""
     all_isotopes = identify_isotopes(
         peaks,
         energy_tolerance=current_settings['energy_tolerance'],
-        mode=current_settings.get('mode', 'simple')
+        mode=current_settings.get('mode', 'simple'),
+        detector=detector,
     )
 
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
@@ -228,7 +248,37 @@ def _add_xrf_detections(result: dict, peaks):
         logger.debug('XRF detection skipped', exc_info=True)
 
 
-def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0, use_enhanced: bool = True) -> dict:
+def _auto_calibrate(result: dict, energies, counts):
+    """
+    Correct a clearly drifted axis from the lines of the source itself (spectroscopy/auto_calibration.py). Returns the energies to analyse:
+    a new list when a correction was applied (the original is kept in result['original_energies'] for Undo), else `energies` unchanged.
+    """
+    try:
+        from spectroscopy.auto_calibration import auto_calibrate
+        from spectroscopy.source_templates import _resolution, is_germanium
+        detector = result.get("detector_profile")
+        if not detector or is_germanium(detector):
+            return energies
+        outcome = auto_calibrate(energies, counts, detector, _resolution(detector))
+    except Exception as e:
+        logger.warning(f"[Analysis] Automatic axis correction failed: {e}")
+        return energies
+    result["auto_calibration"] = outcome
+    if not outcome.get("applied"):
+        return energies
+    a, b = outcome["correction"]["offset_keV"], outcome["correction"]["gain"]
+    corrected = [a + b * float(e) for e in energies]
+    result["original_energies"] = list(energies)
+    result["energies"] = corrected
+    # the same convention as a manual correction (true = (measured - offset) / gain), marked as automatic
+    result["metadata"] = {**(result.get("metadata") or {}),
+                          "energy_correction": {"gain": 1.0 / b, "offset_keV": -a / b, "automatic": True, "source": outcome["source"]}}
+    result["warnings"] = result.get("warnings", []) + [outcome["message"]]
+    return corrected
+
+
+def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0, use_enhanced: bool = True,
+                           auto_calibrate: bool = True) -> dict:
     """
     Common analysis pipeline for all spectrum sources.
     Detects peaks, identifies isotopes, and finds decay chains.
@@ -238,6 +288,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
         is_calibrated: Whether the spectrum has energy calibration
         live_time: Acquisition time in seconds
         use_enhanced: Whether to use enhanced analysis modules if available
+        auto_calibrate: Correct a clearly drifted axis from the source's own lines first (off for an axis the user chose)
 
     Returns:
         Updated result dict with 'peaks', 'isotopes', 'decay_chains', and 'analysis_mode'
@@ -249,6 +300,8 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     counts = result["counts"]
 
     _annotate_detector(result, is_calibrated)
+    if auto_calibrate and is_calibrated:
+        energies = _auto_calibrate(result, energies, counts)
     peaks = _detect_peaks(result, energies, counts, use_enhanced)
 
     # Without an energy calibration the "energies" are channel numbers, so matching them
@@ -271,17 +324,25 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     # Settings by acquisition time: a long calibrated acquisition is judged strictly, an upload or a short one leniently
     current_settings = DEFAULT_SETTINGS if live_time > 30.0 else UPLOAD_SETTINGS
 
-    all_isotopes, all_chains = _identify(peaks, current_settings, use_enhanced)
+    all_isotopes, all_chains = _identify(peaks, current_settings, use_enhanced, result.get("detector_profile"))
 
     weighted_chains = apply_abundance_weighting(all_chains)
     # The simple-mode isotope cap is applied after the spectrum fit below: capping first lets isotopes
     # of a series the fit later rules out (e.g. U-238 daughters on a thorium source) use up the slots
     # and push out the real ones.
+    # The template fit decides the series: run it before the confidence filter, so members of a confirmed series that the line
+    # matcher demoted on a single coincidental line are not filtered out first
+    fit = _fit_templates(result, energies, counts)
+    try:
+        from spectroscopy.source_templates import restore_confirmed_series
+        all_isotopes = restore_confirmed_series(fit, all_isotopes)
+    except Exception as e:
+        logger.warning(f"[Analysis] Series restore failed: {e}")
     isotopes, decay_chains = apply_confidence_filtering(
         all_isotopes, weighted_chains, {**current_settings, "max_isotopes": 10**6})
 
     decay_chains, isotopes = _reconcile_with_template_fit(
-        result, energies, counts, peaks, decay_chains, isotopes, current_settings)
+        result, energies, counts, peaks, decay_chains, isotopes, current_settings, fit)
     _add_equilibrium_status(decay_chains, result, energies, counts, live_time)
 
     if current_settings.get("mode") == "simple":

@@ -399,7 +399,47 @@ ABUNDANCE_WEIGHTS = {
 CHAIN_DETECTION_CONFIDENCE = 40.0
 
 
-def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_rules):
+def _line_tolerance(energy, energy_tolerance, detector):
+    """
+    How far a peak may sit from a line and still match it: the configured tolerance, narrowed to what the detector can resolve (half its
+    FWHM, a 4 % calibration error and a 5 keV floor, in quadrature) where that is smaller. A fixed 20-30 keV is wider than a whole peak below
+    ~150 keV: Pb X-rays from a lead shield (74 keV) matched Am-241 (59.5 keV), and Am-241 itself matched Ba-133 (81 keV).
+    """
+    if not detector:
+        return energy_tolerance
+    try:
+        from spectroscopy.source_templates import _match_tolerance
+        return min(energy_tolerance, _match_tolerance(energy, detector))
+    except Exception:
+        return energy_tolerance
+
+
+DETECTABLE_FRACTION = 0.2   # a line counts towards the required ones when its expected counts are this share of the strongest line's
+
+
+def _detectable_lines(isotope, gamma_energies, detector):
+    """
+    How many of the listed lines a detector would show: emission probability times efficiency at least DETECTABLE_FRACTION of the
+    strongest line's. None when an intensity is unknown (the validation rule then stands as it is). Requiring every listed line threw
+    out Pb-212 (238.6 keV, 43.6 %) for lack of its 300.1 keV line (3.3 %), the strongest thorium line in every thoriated spectrum.
+    """
+    gammas = IAEA_DATA.get(isotope, {}).get('gammas', []) if HAS_IAEA_DATA else []
+    weights = []
+    for e in gamma_energies:
+        intensity = next((i for g, i in gammas if abs(g - e) < 2.0), None)
+        if intensity is None:
+            return None
+        try:
+            from spectroscopy.detector_efficiency import interpolate_efficiency
+            eff = interpolate_efficiency(detector or 'AlphaHound CsI(Tl)', e) or 0.0
+        except Exception:
+            eff = 1.0
+        weights.append(intensity * eff)
+    top = max(weights, default=0.0)
+    return sum(1 for w in weights if top > 0 and w >= DETECTABLE_FRACTION * top) if weights else None
+
+
+def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_rules, detector=None):
     """
     Match one isotope's gamma lines against the detected peaks and score it (intensity weighted, with the single-line,
     peak-count, intrinsic-validation and abundance adjustments). Returns the match record, or None if no line matched.
@@ -408,24 +448,28 @@ def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_
     matched_peaks = []
     total_intensity = 0.0
     matched_intensity = 0.0
+    used = set()   # one peak is evidence for one line of this isotope: a bump between two lines used to "match" both
 
-    for gamma_energy in gamma_energies:
-        # intensity weight (yield) from IAEA data; 1.0 if unavailable (falls back to simple counting)
-        intensity = get_gamma_intensity(isotope, gamma_energy)
+    # intensity weight (yield) from IAEA data; 1.0 if unavailable (falls back to simple counting). Strong lines claim their peak first.
+    lines = sorted(((get_gamma_intensity(isotope, e), e) for e in gamma_energies), key=lambda t: -t[0])
+    for intensity, gamma_energy in lines:
         total_intensity += intensity
-
-        for peak in peaks:
-            energy_diff = abs(peak['energy'] - gamma_energy)
-            if energy_diff <= energy_tolerance:
-                matches += 1
-                matched_intensity += intensity
-                matched_peaks.append({
-                    'expected': gamma_energy,
-                    'observed': peak['energy'],
-                    'diff': energy_diff,
-                    'intensity': intensity
-                })
-                break
+        tolerance = _line_tolerance(gamma_energy, energy_tolerance, detector)
+        candidates = [(abs(p['energy'] - gamma_energy), i) for i, p in enumerate(peaks)
+                      if i not in used and abs(p['energy'] - gamma_energy) <= tolerance]
+        if not candidates:
+            continue
+        energy_diff, i = min(candidates)
+        used.add(i)
+        matches += 1
+        matched_intensity += intensity
+        matched_peaks.append({
+            'expected': gamma_energy,
+            'observed': peaks[i]['energy'],
+            'diff': energy_diff,
+            'intensity': intensity
+        })
+    matched_peaks.sort(key=lambda m: m['expected'])
 
     if matches == 0:
         return None
@@ -448,11 +492,16 @@ def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_
 
     # Physics-based rules for specific isotopes (required number of peaks, low-energy penalty)
     rules = validation_rules.get(isotope)
+    cap = None
     if rules:
         required_peaks = rules.get("required_peaks", 1)
+        detectable = _detectable_lines(isotope, gamma_energies, detector)
+        if detectable is not None:
+            required_peaks = max(1, min(required_peaks, detectable))
         min_conf_single = rules.get("min_confidence_single", 30.0)
         if matches < required_peaks:
             base_confidence = min(base_confidence, min_conf_single)
+            cap = min_conf_single
             logger.info(f"[Intrinsic] {isotope}: {matches}/{required_peaks} peaks - capped at {min_conf_single}%")
         if rules.get("low_energy_penalty") and matches == 1:
             base_confidence *= 0.6
@@ -468,7 +517,9 @@ def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_
         'matched_peaks': matched_peaks,
         'expected_peaks': [{'energy': e, 'intensity': get_gamma_intensity(isotope, e)} for e in gamma_energies],
         'abundance_weight': abundance_weight,
-        'suppressed': False
+        'suppressed': False,
+        # the ceiling the validation rules put on this match (too few of the required lines); later rescoring must keep it
+        'validation_cap': cap,
     }
 
 
@@ -545,7 +596,7 @@ def _apply_contextual_rules(isotope_matches, chains_detected, peaks):
                 isotope_matches[iso]['suppression_reason'] = 'u238_chain_dominant'
 
 
-def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
+def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple', detector=None):
     """
     Identify possible isotopes based on detected peaks.
     Returns ALL matches - filtering should be done at application layer.
@@ -554,6 +605,7 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
         peaks: List of detected peak dictionaries with 'energy' key
         energy_tolerance: Maximum energy difference for a match (keV)
         mode: 'simple' or 'advanced' - determines which database to use
+        detector: detector profile name; when given, the tolerance narrows at low energy to what it can resolve
 
     Returns:
         List of identified isotopes with confidence scores (unfiltered)
@@ -576,7 +628,7 @@ def identify_isotopes(peaks, energy_tolerance=20.0, mode='simple'):
     for isotope, gamma_energies in database.items():
         if not gamma_energies:
             continue
-        match = _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_rules)
+        match = _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_rules, detector)
         if match is None:
             continue
         isotope_matches[isotope] = match

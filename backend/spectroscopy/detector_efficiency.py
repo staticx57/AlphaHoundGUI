@@ -174,6 +174,30 @@ DETECTOR_DATABASE = {
         }
     },
     
+    # A germanium detector named nowhere in the file: chosen when the peaks are narrower than any scintillator's (generic formats such as
+    # CNF, SPE or SPC come from them). Efficiencies follow the shape of a ~30 % relative-efficiency coaxial detector at 25 cm.
+    "HPGe (generic)": {
+        "type": "HPGe",
+        "description": "High-purity germanium (generic; resolution measured from the spectrum)",
+        "dimensions_mm": None,
+        "volume_cm3": None,
+        "min_energy_keV": 20,
+        "cs137_sensitivity_cps_per_uSv_h": None,
+        "energy_resolution_662keV": 0.003,   # ~2 keV FWHM at 662 keV
+        "efficiencies": {
+            60: 0.25,
+            122: 0.38,
+            186: 0.34,
+            352: 0.21,
+            511: 0.16,
+            662: 0.13,
+            1173: 0.083,
+            1332: 0.075,
+            1461: 0.068,
+            2614: 0.042,
+        }
+    },
+
     "Custom": {
         "type": "Custom",
         "description": "User-defined detector efficiency",

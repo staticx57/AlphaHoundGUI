@@ -28,6 +28,10 @@ from spectroscopy.detector_efficiency import interpolate_efficiency, DETECTOR_DA
 
 PRESENT_Z = 10.0
 PRESENT_FRACTION = 0.07
+# An artificial source is one or a few lines: next to a stronger source its share of the counts is small (Co-60 beside Cs-137: 0.053 at
+# z = 30). On the labelled real spectra true artificial sources had z >= 30 and a share >= 0.053, false ones z <= 5.7 and <= 0.008.
+PRESENT_FRACTION_ARTIFICIAL = 0.02
+ARTIFICIAL_TEMPLATES = ("Cs-137", "Co-60", "Eu-152", "Ba-133")
 HIGH_Z = 25.0
 HIGH_FRACTION = 0.15
 
@@ -54,6 +58,11 @@ TEMPLATES: Dict[str, Sequence] = {
     "K-40": [(1460.8, 10.7)],
     "Cs-137": [(661.7, 85.1)],
     "Co-60": [(1173.2, 99.9), (1332.5, 100.0)],
+    # Calibration sources whose lines fall on natural-series lines at scintillator resolution: without their own templates the thorium
+    # template took a real Eu-152 source (244.7/344.3/964.1 keV on 238.6/338.3/969.0) and reported the Th-232 series
+    "Eu-152": [(121.8, 28.5), (244.7, 7.6), (344.3, 26.6), (411.1, 2.2), (444.0, 3.1), (778.9, 12.9), (867.4, 4.2), (964.1, 14.5),
+               (1085.8, 10.1), (1112.1, 13.7), (1408.0, 20.9)],
+    "Ba-133": [(160.6, 0.6), (223.2, 0.5), (276.4, 7.2), (302.9, 18.3), (356.0, 62.1), (383.8, 8.9)],
 }
 
 # Which decay chain each template supports
@@ -71,7 +80,41 @@ def resolve_detector(metadata: Optional[dict]) -> str:
         return "Radiacode 103"
     if "bgo" in text:
         return "AlphaHound BGO"
+    if "hpge" in text or "germanium" in text:
+        return HPGE
     return "AlphaHound CsI(Tl)"
+
+
+HPGE = "HPGe (generic)"
+HPGE_MAX_RESOLUTION = 0.03   # FWHM/E at 662 keV: germanium is ~0.2-0.5 %, the best scintillators ~6 %
+
+
+def is_germanium(detector: str) -> bool:
+    return _resolution(detector) < HPGE_MAX_RESOLUTION
+
+
+def estimate_resolution_662(energies, counts, max_peaks: int = 6) -> Optional[float]:
+    """
+    The detector's FWHM/E scaled to 662 keV (FWHM taken proportional to sqrt(E)), measured on the strongest clear peaks above 100 keV;
+    None when no peak can be measured. Lets a file that names no detector be analysed at the resolution it was really taken with.
+    """
+    from spectroscopy.spectral_analysis import snip_background, _measured_fwhm
+    E = np.asarray(energies, dtype=float)
+    c = np.asarray(counts, dtype=float)
+    if E.size < 64 or E.size != c.size:
+        return None
+    net = c - np.asarray(snip_background(c, iterations=24), dtype=float)
+    inner = np.arange(1, E.size - 1)
+    maxima = inner[(net[inner] > net[inner - 1]) & (net[inner] >= net[inner + 1]) & (E[inner] >= 100.0)
+                   & (net[inner] > 5.0 * np.sqrt(np.maximum(c[inner], 1.0)))]
+    ratios = []
+    for k in maxima[np.argsort(-net[maxima])][:4 * max_peaks]:
+        measured = _measured_fwhm(E, net, c, float(E[k]), 0.0)
+        if measured and measured[1] > 0:
+            ratios.append(measured[1] / (662.0 * np.sqrt(E[k] / 662.0)))
+        if len(ratios) >= max_peaks:
+            break
+    return float(np.median(ratios)) if ratios else None
 
 
 def detector_min_energy(metadata: Optional[dict]) -> float:
@@ -111,6 +154,18 @@ def _continuum_basis(E):
     return np.array([np.exp(-0.5 * ((E - c) / (0.25 * c / 2.355)) ** 2) for c in centers]).T
 
 
+def _ba133_confirmed(E, c, sources, r662) -> bool:
+    """
+    Ba-133's lines in the fitted range (276-384 keV) coincide with Pb-214's (242-352 keV) and lie close to Eu-152's 344 keV at scintillator
+    resolution: on the labelled real spectra its template reached z 16-20 on radium sources and on an Eu-152 source. What tells it apart
+    lies outside the fit: with the radium series present the range cannot separate it, and a real source shows its 81 keV line (33 %).
+    """
+    if sources["radium_series"]["present"]:
+        return False
+    from spectroscopy.calibration_check import measure_line
+    return measure_line(E, c, 81.0, r662) is not None
+
+
 def fit_source_templates(energies, counts, metadata: Optional[dict] = None) -> Optional[dict]:
     """
     Fit all templates; return {"detector", "gain", "offset_keV", "resolution_scale",
@@ -135,6 +190,10 @@ def fit_source_templates(energies, counts, metadata: Optional[dict] = None) -> O
     w = 1.0 / np.sqrt(np.maximum(c[mask], 1.0))
     detector = resolve_detector(metadata)
     r662 = _resolution(detector)
+    if is_germanium(detector):
+        # the search steps (2 % in gain, +-15 % in width) are built for scintillator peaks; at germanium resolution the lines
+        # identify themselves and the line matcher (with a germanium tolerance) does the work
+        return None
     names = list(TEMPLATES)
     continuum = _continuum_basis(Em)
 
@@ -182,9 +241,11 @@ def fit_source_templates(energies, counts, metadata: Optional[dict] = None) -> O
         sources[name] = {
             "z": round(float(z[i]), 2),
             "fraction": round(frac, 4),
-            "present": bool(z[i] >= PRESENT_Z and frac >= PRESENT_FRACTION),
+            "present": bool(z[i] >= PRESENT_Z and frac >= (PRESENT_FRACTION_ARTIFICIAL if name in ARTIFICIAL_TEMPLATES else PRESENT_FRACTION)),
             "high": bool(z[i] >= HIGH_Z and frac >= HIGH_FRACTION),
         }
+    if sources["Ba-133"]["present"] and not _ba133_confirmed(E, c, sources, r662):
+        sources["Ba-133"].update(present=False, high=False)
 
     chains = {}
     for name, chain in SERIES_TO_CHAIN.items():
@@ -250,20 +311,34 @@ def _fallback_chain_entry(parent):
     }
 
 
-SINGLE_SOURCE_TEMPLATES = ("K-40", "Cs-137", "Co-60")
+RADIUM_AND_BELOW = ["Ra-226", "Rn-222", "Po-218", "Pb-214", "Bi-214", "Po-214", "Pb-210", "Bi-210", "Po-210"]
+
+SINGLE_SOURCE_TEMPLATES = ("K-40", "Cs-137", "Co-60", "Eu-152", "Ba-133")
 
 
 def _match_tolerance(energy, detector):
-    """Line-position tolerance: half FWHM, ~4 % calibration error and a small floor, in quadrature."""
+    """
+    Line-position tolerance: half FWHM, the calibration error and a small floor, in quadrature: ~4 % and 5 keV for a scintillator, 0.5 %
+    and 1 keV for germanium (a 30 keV window there spans a dozen peaks: environmental HPGe spectra matched 511 keV plus a line near
+    1274 keV and read as Na-22).
+    """
     fwhm = _resolution(detector) * 662.0 * np.sqrt(max(energy, 1.0) / 662.0)
-    return float(np.sqrt((0.5 * fwhm) ** 2 + (0.04 * energy) ** 2 + 5.0 ** 2))
+    calibration, floor = (0.005, 1.0) if is_germanium(detector) else (0.04, 5.0)
+    return float(np.sqrt((0.5 * fwhm) ** 2 + (calibration * energy) ** 2 + floor ** 2))
+
+
+EXPLAIN_Z = 5.0   # a template this significant explains peaks away, even below the bar for reporting it
 
 
 def _explained_by_fit(observed_kev, fit):
-    """True if a peak at observed_kev is covered by a line of any source the fit found present."""
+    """
+    True if a peak at observed_kev is covered by a line of a source the fit found present, or used with a clear significance (z >= 5).
+    Explaining a peak away only removes isotopes outside the templates: the weak uranium glazes (fresh-uranium z 5.7-7.8) had their U-235
+    lines (143.8/163.3 keV) reported as Tl-201 (135/167 keV). A real Tl-201 source beside such a uranium signal would be missed the same way.
+    """
     g, o, det = fit["gain"], fit["offset_keV"], fit["detector"]
     for name, src in fit["sources"].items():
-        if not src["present"]:
+        if not (src["present"] or src["z"] >= EXPLAIN_Z):
             continue
         for line, _ in TEMPLATES[name]:
             if abs(observed_kev - (g * line + o)) <= _match_tolerance(line, det):
@@ -299,6 +374,26 @@ def _has_own_evidence(iso, fit, peaks, natural_present):
     return False
 
 
+def restore_confirmed_series(fit, isotopes):
+    """
+    Lift the line matcher's 'a man-made source dominates' demotion from members of a series the full-spectrum fit confirms. One
+    coincidental line decided it (I-131 364.5 keV on the Pb-214 352 keV peak of a uraninite ore demoted every radium daughter); the fit
+    weighs the whole spectrum and is what decides the series. Returns the isotope list with those members at their unsuppressed score.
+    """
+    if not fit:
+        return isotopes
+    confirmed = {p for p, v in fit["chains"].items() if v["present"]}
+    out = []
+    for iso in isotopes:
+        if (iso.get("suppressed") and iso.get("suppression_reason") == "manmade_source_detected"
+                and iso.get("unsuppressed_confidence") is not None
+                and any(iso.get("isotope") in SERIES_MEMBERS[p] for p in confirmed)):
+            iso = {**iso, "confidence": iso["unsuppressed_confidence"], "suppressed": False,
+                   "suppression_reason": None, "restored_by": "spectrum_fit"}
+        out.append(iso)
+    return out
+
+
 def reconcile_with_fit(fit, decay_chains, isotopes, isotope_min_confidence=30.0, peaks=None):
     """
     Make the reported chains/isotopes agree with the full-spectrum fit:
@@ -329,13 +424,17 @@ def reconcile_with_fit(fit, decay_chains, isotopes, isotope_min_confidence=30.0,
     out.sort(key=lambda c: c.get("confidence", 0), reverse=True)
 
     ruled_out = {p for p, v in verdict.items() if not v["present"]}
+    # Uranium without its radium daughters (glazes, uranium glass): the 186 keV peak is U-235, not Ra-226, and Pb-214/Bi-214 are absent
+    fresh_only = fit["sources"]["fresh_uranium"]["present"] and not fit["sources"]["radium_series"]["present"]
     natural_present = any(v["present"] for v in verdict.values())
     series_members = {m for members in SERIES_MEMBERS.values() for m in members}
     kept, names = [], set()
     for iso in isotopes:
         name = iso.get("isotope")
         reason = None
-        if any(name in SERIES_MEMBERS[p] for p in ruled_out):
+        if fresh_only and name in RADIUM_AND_BELOW:
+            reason = "uranium_without_radium_daughters"
+        elif any(name in SERIES_MEMBERS[p] for p in ruled_out):
             reason = "series_not_supported_by_spectrum_fit"
         elif name in SINGLE_SOURCE_TEMPLATES:
             if not fit["sources"][name]["present"]:
@@ -354,6 +453,17 @@ def reconcile_with_fit(fit, decay_chains, isotopes, isotope_min_confidence=30.0,
             iso["spectrum_fit"] = fit["sources"][name]
         kept.append(iso)
         names.add(name)
+
+    # Uranium the fit confirms without radium: its 186 keV line is U-235's (the line list leaves 185.7 keV out, as Ra-226's 186.2 sits on it)
+    if fresh_only and "U-235" not in names:
+        src = fit["sources"]["fresh_uranium"]
+        u235 = [(e, i / _U235_ACT) for e, i in TEMPLATES["fresh_uranium"] if e < 300.0]
+        kept.append({
+            "isotope": "U-235", "confidence": 95.0 if src["high"] else 80.0, "matches": len(u235), "total_lines": len(u235),
+            "matched_peaks": [], "expected_peaks": [{"energy": e, "intensity": i} for e, i in u235],
+            "abundance_weight": 1.0, "suppressed": False, "spectrum_fit": src,
+        })
+        names.add("U-235")
 
     # A source the fit confirms must be listed even if line matching missed it
     for name in SINGLE_SOURCE_TEMPLATES:

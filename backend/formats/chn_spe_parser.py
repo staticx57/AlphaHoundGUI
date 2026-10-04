@@ -72,9 +72,14 @@ def parse_chn_file(filepath):
     # Generate energies if calibrated
     energies = list(range(num_channels))
     if calibration:
-        energies = [calibration['a'] + calibration['b'] * i + calibration['c'] * i**2 
-                   for i in range(num_channels)]
-    
+        calibrated = [calibration['a'] + calibration['b'] * i + calibration['c'] * i**2
+                      for i in range(num_channels)]
+        # all-zero coefficients (how digiBASE/GammaVision write "not calibrated") give no axis: keep channel numbers
+        if all(b > a for a, b in zip(calibrated, calibrated[1:])):
+            energies = calibrated
+        else:
+            calibration = None
+
     return {
         'counts': counts,
         'energies': energies,
@@ -165,8 +170,8 @@ def parse_spe_file(filepath):
                 num_coeffs = int(lines[i].strip())
                 i += 1
                 if i < len(lines):
-                    # Second line is coefficients
-                    coeffs = [float(x) for x in lines[i].strip().split()]
+                    # Second line is coefficients, in GammaVision files followed by their unit ("... 0.000000E+000 keV")
+                    coeffs = [float(x) for x in lines[i].strip().split()[:num_coeffs]]
                     if len(coeffs) >= 2:
                         calibration = {
                             'a': coeffs[0],  # offset
@@ -181,9 +186,14 @@ def parse_spe_file(filepath):
     # Generate energies if calibrated
     energies = list(range(num_channels))
     if calibration:
-        energies = [calibration['a'] + calibration['b'] * i + calibration['c'] * i**2 
-                   for i in range(num_channels)]
-    
+        calibrated = [calibration['a'] + calibration['b'] * i + calibration['c'] * i**2
+                      for i in range(num_channels)]
+        # all-zero coefficients (how digiBASE/GammaVision write "not calibrated") give no axis: keep channel numbers
+        if all(b > a for a, b in zip(calibrated, calibrated[1:])):
+            energies = calibrated
+        else:
+            calibration = None
+
     return {
         'counts': counts,
         'energies': energies,

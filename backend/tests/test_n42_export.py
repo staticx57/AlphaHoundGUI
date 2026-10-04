@@ -303,3 +303,31 @@ def test_alphahound_instrument_names_its_manufacturer():
     xml = generate_n42_xml({"counts": [1, 2, 3, 4], "energies": [0, 1, 2, 3], "metadata": {"instrument_model": "AlphaHound"}})
     parsed = parse_n42(xml)
     assert parsed["metadata"]["manufacturer"] == "RadView Detection"
+
+
+def test_other_software_reads_the_energy_axis():
+    """
+    InterSpec (and anything built on Sandia's SpecUtils) read our N42 files on a default 0-3000 keV axis: the calibration was a
+    'List'/'ChannelEnergies' pair inside the Spectrum, which is not how N42-2012 states one, so it was ignored. The file now also carries a
+    standard EnergyCalibration (id, EnergyBoundaryValues halfway between channel energies) that the Spectrum references.
+    """
+    SpecUtils = pytest.importorskip("SpecUtils")
+    import tempfile
+    n = 1024
+    axis = [15.0001 + 1.68372 * i - 4.75865e-05 * i ** 2 + 5.49654e-06 * i ** 3 for i in range(n)]   # the AlphaHound's cubic axis
+    xml = generate_n42_xml({"counts": [10] * n, "energies": axis, "metadata": {"live_time": 300.0, "real_time": 300.0}})
+    with tempfile.NamedTemporaryFile("w", suffix=".n42", delete=False, encoding="utf-8") as fh:
+        fh.write(xml)
+        path = fh.name
+    try:
+        spec = SpecUtils.SpecFile()
+        spec.loadFile(path, SpecUtils.ParserType.Auto, ".n42")
+        m = [x for x in spec.measurements() if x.numGammaChannels() > 1][0]
+        assert m.energyCalibrationModel().name == "LowerChannelEdge"
+        edges = list(m.channelEnergies())
+        centres = [(a + b) / 2 for a, b in zip(edges, edges[1:])]
+        assert max(abs(c - e) for c, e in zip(centres, axis)) < 0.5 * max(b - a for a, b in zip(axis, axis[1:]))
+    finally:
+        os.unlink(path)
+    # and our own reader still gets the channel energies exactly
+    assert parse_n42(xml)["energies"] == pytest.approx(axis, abs=1e-4)

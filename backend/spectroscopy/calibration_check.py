@@ -108,13 +108,19 @@ def check_calibration(energies: Sequence[float], counts: Sequence[float], presen
     residual = np.abs(measured - (gain * nominal + offset))
     tolerance = np.maximum(CONSISTENT_REL * nominal, 2.0 * errors)
     result["consistent"] = bool(np.all(residual <= tolerance))
+    shifts = (measured - nominal) / nominal
+    worst = int(np.argmax(np.abs(shifts)))
+    listed = ", ".join(f"{m['nominal_kev']:g} keV at {m['measured_kev']:.0f}" for m in lines[:3])
     if result["consistent"]:
         result["correction"] = {"gain": float(gain), "offset_keV": float(offset)}
-        shifts = (measured - nominal) / nominal
-        worst = int(np.argmax(np.abs(shifts)))
         if abs(shifts[worst]) > WARN_SHIFT:
-            listed = ", ".join(f"{m['nominal_kev']:g} keV at {m['measured_kev']:.0f}" for m in lines[:3])
             direction = "low" if np.all(shifts < 0) else "high" if np.all(shifts > 0) else "tilted"
             result["message"] = (f"Energy calibration looks {direction}, by up to {abs(shifts[worst]) * 100:.1f}% ({listed}). "
                                  f"Recalibrate, or correct with gain {gain:.3f} and offset {offset:.1f} keV.")
+    elif abs(shifts[worst]) > WARN_SHIFT and (np.all(shifts < -CONSISTENT_REL) or np.all(shifts > CONSISTENT_REL)):
+        # Every line clearly moved the same way, by different fractions (a gain drift on a nonlinear axis): the axis is off, but no
+        # straight line maps it back, so there is a warning and no correction to apply.
+        direction = "low" if shifts[worst] < 0 else "high"
+        result["message"] = (f"Energy calibration looks {direction}, by {abs(shifts).min() * 100:.1f} to {abs(shifts).max() * 100:.1f}% "
+                             f"({listed}). The lines do not agree on one gain and offset, so use Calibrate with known lines.")
     return result

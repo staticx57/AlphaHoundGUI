@@ -1068,6 +1068,45 @@ with sync_playwright() as p:
     check("X no JS errors or native dialogs", not errs_x, "; ".join(errs_x[:3]))
     ctx_x.close()
 
+    # X2: a clearly drifted axis is corrected automatically, and Undo restores it (the December Takumar capture at the October gain, 0.943)
+    import shutil, sys as _sys, tempfile as _tempfile
+    _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
+    import recalibrate_n42 as _rc
+    from formats.n42_parser import parse_n42 as _parse_n42
+    from formats.n42_exporter import generate_n42_xml as _generate
+    acq = pathlib.Path(__file__).resolve().parent / "data" / "real_spectra"
+    tmp_dir = pathlib.Path(_tempfile.mkdtemp())
+    shutil.copy(acq / "spectrum_takumar_8hr_reference.n42", tmp_dir / "in.n42")
+    _rc.main(["--axis-csv", str(acq / "spectrum_2025-12-12_08-41-27.csv"), str(tmp_dir / "in.n42")])
+    parsed = _parse_n42((tmp_dir / "in.recal.n42").read_text(encoding="utf-8"))
+    drifted_path = tmp_dir / "takumar_drifted.n42"
+    drifted_path.write_text(_generate({"counts": parsed["counts"], "energies": [e * 0.943 for e in parsed["energies"]],
+                                       "metadata": {"live_time": 28800.0, "real_time": 28800.0}}), encoding="utf-8")
+    ctx_x2 = browser.new_context(viewport={"width": 1400, "height": 1000})
+    px2 = ctx_x2.new_page()
+    errs_x2 = []
+    px2.on("pageerror", lambda e: errs_x2.append(f"pageerror: {e}"))
+    px2.on("dialog", lambda d: (errs_x2.append("native dialog: " + d.message), d.dismiss()))
+    px2.goto(URL, wait_until="load")
+    px2.set_input_files("#file-input", str(drifted_path))
+    px2.wait_for_function("!document.getElementById('cal-notice').hidden", timeout=30000)
+    notice2 = px2.inner_text("#cal-notice-text")
+    check("X2 a drifted capture is corrected automatically and the notice offers Undo, not Apply",
+          "corrected automatically" in notice2 and px2.evaluate("!document.getElementById('btn-undo-auto-correction').hidden")
+          and px2.evaluate("document.getElementById('btn-apply-axis-correction').hidden"), notice2[:140])
+    x_corrected = px2.evaluate("Chart.getChart(document.getElementById('spectrumChart')).data.datasets[0].data[200].x")
+    original_x = parsed["energies"][200] * 0.943
+    px2.click("#btn-undo-auto-correction")
+    px2.wait_for_function(f"Math.abs(Chart.getChart(document.getElementById('spectrumChart')).data.datasets[0].data[200].x - {original_x}) < 0.5",
+                          timeout=30000)
+    x_undone = px2.evaluate("Chart.getChart(document.getElementById('spectrumChart')).data.datasets[0].data[200].x")
+    check("X2 Undo puts the chart back on the axis the file came with", abs(x_undone - original_x) < 0.5 and x_corrected > x_undone * 1.03,
+          f"{x_corrected:.1f} -> {x_undone:.1f} keV (file: {original_x:.1f})")
+    check("X2 no JS errors or native dialogs", not errs_x2, "; ".join(errs_x2[:3]))
+    ctx_x2.close()
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+
     # Y: the calibration dialog re-analyses on the new axis (the peak list used to keep the old energies while the chart showed the new ones)
     ctx_y = browser.new_context(viewport={"width": 1400, "height": 1000})
     py = ctx_y.new_page()

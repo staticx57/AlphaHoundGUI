@@ -770,6 +770,39 @@ class ROIAnalyzer:
             results.append(result)
         return results[0], results[1], results[2], diagnostics
 
+    def _bi214_is_radium(self, energies, counts, diagnostics) -> bool:
+        """
+        Does the counted 609 keV peak come from Bi-214 (radium)? At scintillator resolution Tl-208 583 keV (thorium) and Cs-137 662 keV fall
+        inside the Bi-214 window, and the window cannot tell them apart: a thoriated lens and a Cs-137 check source were reported as holding
+        Ra-226 in secular equilibrium. The full-spectrum template fit can: when it finds thorium or Cs-137 and no radium series, the peak is
+        theirs, provided the peak also sits nearer their line than 609.3 keV (the fit alone can slide a one-line template onto an unrelated
+        peak). In every other case (radium found, no fit, neither source, the peak where Bi-214 would be) the Bi-214 reading stands.
+        """
+        try:
+            from spectroscopy.source_templates import fit_source_templates, _resolution
+            from spectroscopy.calibration_check import measure_line
+            fit = fit_source_templates(energies, counts, {"detector": self.detector_name})
+            if not fit:
+                return True
+            peak = measure_line(np.asarray(energies, dtype=float), np.asarray(counts, dtype=float), 609.3, _resolution(self.detector_name))
+        except Exception as exc:
+            logger.warning("Template fit for the Bi-214 cross-check failed: %s", exc)
+            return True
+        sources = fit["sources"]
+        if sources["radium_series"]["present"] or peak is None:
+            return True
+        at = peak["measured_kev"]
+        others = []
+        if sources["thorium_series"]["present"] and at < (583.2 + 609.3) / 2:
+            others.append("Tl-208 583 keV (thorium)")
+        if sources["Cs-137"]["present"] and at > (609.3 + 661.7) / 2:
+            others.append("Cs-137 662 keV")
+        if not others:
+            return True
+        diagnostics.append(f"609 keV region: the peak at {at:.0f} keV is {' and '.join(others)}, not Bi-214 (the spectrum fit finds no "
+                           f"radium series)")
+        return False
+
     @staticmethod
     def _no_uranium_result(diagnostics, th234_result) -> Dict:
         return {
@@ -910,6 +943,8 @@ class ROIAnalyzer:
         has_th234 = self._marker_present(th234_result)
         has_bi214 = self._marker_present(bi214_result)
         has_pa234m = self._marker_present(pa234m_result)
+        if has_bi214:
+            has_bi214 = self._bi214_is_radium(energies, counts, diagnostics)
 
         if not (has_th234 or has_bi214 or has_pa234m):
             return self._no_uranium_result(diagnostics, th234_result)

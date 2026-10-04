@@ -828,7 +828,8 @@ def anomaly_detection_endpoint(request: dict):
         identifier = get_ml_identifier('hobby')
         if identifier:
             try:
-                predictions = identifier.identify(counts, top_k=3)
+                # the spectrum's axis, so the model resamples onto its own grid (without it the counts are read as if already on it)
+                predictions = identifier.identify(counts, top_k=3, energies=request.get('energies') or None)
                 if predictions:
                     top_conf = predictions[0]['confidence']
                     if top_conf < 30:
@@ -989,7 +990,8 @@ def isotope_emissions(isotope: str = Query(..., max_length=20), min_intensity: f
 def _analyze_on_axis(energies, counts, metadata: dict, live_time: float) -> dict:
     """The full analysis of a spectrum whose energy axis is already decided (calibrated, since someone chose it)."""
     result = {"counts": counts, "energies": energies, "metadata": metadata}
-    return sanitize_for_json(analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time))
+    # the axis was chosen (calibration dialog, axis correction): analyse it as given, no automatic correction on top
+    return sanitize_for_json(analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time, auto_calibrate=False))
 
 
 class ReanalysisRequest(BaseModel):

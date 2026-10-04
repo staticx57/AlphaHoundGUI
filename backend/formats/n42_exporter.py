@@ -92,10 +92,21 @@ def _prepare_export(spectrum_data: Dict) -> Dict:
     }
 
 
+ENERGY_CALIBRATION_ID = "EnergyCalibration-1"
+
+
 def _build_tree(prepared: Dict, spectrum_data: Dict) -> ET.Element:
     """The N42 element tree: measurement times, the spectrum with its calibration, the instrument and the optional extension."""
     ET.register_namespace('', N42_NAMESPACE)
     root = ET.Element('RadInstrumentData', {'xmlns': N42_NAMESPACE})
+    # The calibration as N42-2012 states it, for other software (InterSpec / SpecUtils ignored the List/ChannelEnergies pair below and showed
+    # a default 0-3000 keV axis): an identified EnergyCalibration with channel boundaries halfway between the channel energies
+    energies = [float(e) for e in prepared['energies']]
+    if len(energies) > 1:
+        edges = ([energies[0] - (energies[1] - energies[0]) / 2] + [(a + b) / 2 for a, b in zip(energies, energies[1:])]
+                 + [energies[-1] + (energies[-1] - energies[-2]) / 2])
+        standard_cal = ET.SubElement(root, "EnergyCalibration", id=ENERGY_CALIBRATION_ID)
+        ET.SubElement(standard_cal, "EnergyBoundaryValues").text = " ".join(f"{e:.5f}" for e in edges)
     rad_measurement = ET.SubElement(root, "RadMeasurement")
 
     ET.SubElement(rad_measurement, "MeasurementClassCode").text = "Foreground"
@@ -103,6 +114,8 @@ def _build_tree(prepared: Dict, spectrum_data: Dict) -> ET.Element:
     ET.SubElement(rad_measurement, "RealTime").text = f"PT{prepared['real_time']:.3f}S"   # ISO 8601 duration
 
     spectrum = ET.SubElement(rad_measurement, "Spectrum")
+    if len(energies) > 1:
+        spectrum.set("energyCalibrationReference", ENERGY_CALIBRATION_ID)
     ET.SubElement(spectrum, "LiveTime").text = f"PT{prepared['live_time']:.3f}S"
 
     energy_cal = ET.SubElement(spectrum, "EnergyCalibration")

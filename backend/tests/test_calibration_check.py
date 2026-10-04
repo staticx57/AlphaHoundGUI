@@ -76,6 +76,33 @@ def test_lines_that_disagree_are_not_averaged_into_a_correction():
     assert not check["consistent"] and check["correction"] is None and check["message"] is None
 
 
+# What the live AlphaHound showed on 2026-10-04 (28.8 deg C): measured/nominal of the thorium lines on its own axis
+LIVE_DRIFT = [(0.0, 0.97), (238.6, 0.966), (338.3, 0.937), (583.2, 0.923), (1588.2, 0.920), (2614.5, 0.882), (3100.0, 0.875)]
+
+
+def test_lines_all_clearly_off_the_same_way_are_reported_without_a_correction():
+    """A drifted gain on a nonlinear axis: every line low by 3-12 %, but not by one straight-line map. Silence hid it."""
+    _, counts = ss.series_spectrum(DETECTOR, ss.THORIUM_SERIES, 400.0, live_time_s=3600.0, seed=1, energies=TRUE_AXIS)
+    drift = np.interp(TRUE_AXIS, *zip(*LIVE_DRIFT))
+    check = check_calibration(TRUE_AXIS * drift, counts, ["thorium_series"], 0.10)
+    assert len(check["lines"]) >= 2 and all(m["shift_percent"] < -2.5 for m in check["lines"])
+    assert not check["consistent"] and check["correction"] is None   # no straight line to offer
+    assert check["message"] and "low" in check["message"] and "Calibrate" in check["message"]
+
+
+def test_a_real_alphahound_capture_with_the_gain_drift_seen_live_is_flagged(tmp_path):
+    """The December Takumar capture on the device axis, with the 0.943 gain change measured between it and the live spectrum."""
+    src = tmp_path / "in.n42"
+    shutil.copy(ACQ / "takumar 942pm to 558am.n42", src)
+    assert rc.main(["--axis-csv", str(AXIS_CSV), str(src)]) == 0
+    parsed = parse_n42((tmp_path / "in.recal.n42").read_text(encoding="utf-8"))
+    drifted = [e * 0.943 for e in parsed["energies"]]
+    # the check itself, on the source this capture really holds (the whole-spectrum fit's verdict at this drift is a separate matter)
+    check = check_calibration(drifted, parsed["counts"], ["thorium_series"], 0.10)
+    assert len(check["lines"]) >= 2 and all(m["shift_percent"] < -2.5 for m in check["lines"])
+    assert check["message"] and "calibration looks low" in check["message"]
+
+
 def analysed(parsed):
     return analyze_spectrum_peaks(parsed, True, 0)
 

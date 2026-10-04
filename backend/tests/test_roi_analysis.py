@@ -222,6 +222,32 @@ def test_uranium_glass_without_bi214_does_not_crash():
     assert "category" in result and result["u235_net_counts"] >= 0
 
 
+def _real(name):
+    """A labelled real spectrum of the benchmark, parsed."""
+    import real_benchmark as rb
+    case = next(c for c in rb.CASES if c[0] == name)
+    return rb.load(case[2], case[3])
+
+
+@pytest.mark.parametrize("name, detector", [("ah_cs137", "AlphaHound CsI(Tl)"), ("ah_takumar_night", "AlphaHound CsI(Tl)"),
+                                            ("ah_takumar_8h", "AlphaHound CsI(Tl)"), ("rc103_th232", "Radiacode 103")])
+def test_a_609_kev_window_filled_by_another_source_is_not_called_radium(name, detector):
+    """Real captures: Cs-137 662 keV and Tl-208 583 keV fall in the Bi-214 609 keV window at scintillator resolution. They were reported as
+    'Bi-214 detected ... Ra-226 is in secular equilibrium' and an enrichment 'Indeterminate (Ra-226 Interference)'."""
+    parsed = _real(name)
+    result = analyze_uranium_enrichment(parsed["energies"], parsed["counts"], detector, 600, "auto")
+    assert result["ra226_interference"] is False
+    assert not result["category"].startswith("Indeterminate (Ra-226")
+    assert not any("secular equilibrium" in w for w in result["warnings"])
+
+
+@pytest.mark.parametrize("name", ["rc103_ra226"])
+def test_a_real_radium_source_still_shows_the_interference(name):
+    parsed = _real(name)
+    result = analyze_uranium_enrichment(parsed["energies"], parsed["counts"], "Radiacode 103", 727, "auto")
+    assert result["ra226_interference"] is True and result["category"].startswith("Indeterminate (Ra-226")
+
+
 # --------------------------------------------------------------------------- API
 def test_roi_endpoint_accepts_fractional_counts_and_both_device_families():
     from fastapi.testclient import TestClient

@@ -42,9 +42,16 @@ def test_lines_up_to_2_6_mev_are_found_on_the_alphahounds_own_axis():
 def test_a_mislabelled_axis_still_gets_its_peaks(stretch):
     axis = ss.linear_axis(1024, 3000.0)
     counts = ss.series_spectrum(DETECTOR, ss.THORIUM_SERIES, 400.0, live_time_s=3600.0, seed=1, energies=axis)[1]
-    result = analyze_spectrum_peaks({"counts": counts.tolist(), "energies": (axis * stretch).tolist(), "metadata": {}}, True, 3600.0)
+    # peak finding on the stretched axis itself (the automatic axis correction off)
+    result = analyze_spectrum_peaks({"counts": counts.tolist(), "energies": (axis * stretch).tolist(), "metadata": {}}, True, 3600.0,
+                                    auto_calibrate=False)
     energies = [p["energy"] for p in result["peaks"]]
     assert near(energies, 238.6 * stretch, 0.05 * 238.6 * stretch) and near(energies, 583.2 * stretch, 0.05 * 583.2 * stretch), energies
+    # with it on, a stretch within what a real drift does is taken out and the peaks sit at their true energies
+    corrected = analyze_spectrum_peaks({"counts": counts.tolist(), "energies": (axis * stretch).tolist(), "metadata": {}}, True, 3600.0)
+    if corrected.get("auto_calibration", {}).get("applied"):
+        energies = [p["energy"] for p in corrected["peaks"]]
+        assert near(energies, 238.6, 0.03 * 238.6) and near(energies, 583.2, 0.03 * 583.2), energies
 
 
 def test_a_real_thoriated_lens_capture_reports_its_high_energy_peaks(tmp_path):
