@@ -3,22 +3,19 @@ Curie Library Integration Module
 ================================
 
 This module provides wrappers for the `curie` nuclear data library,
-enabling dynamic gamma line lookups, X-ray emission energies, and 
-mass attenuation coefficient calculations for shielding correction.
+enabling dynamic gamma line lookups and X-ray emission energies (shielding lives in nuclides/shielding.py).
 
 Usage:
     from nuclides.curie_integration import (
         get_isotope_gammas,
         get_element_xrays,
-        calculate_attenuation,
         HAS_CURIE
     )
 """
 
 import logging
 logger = logging.getLogger(__name__)
-import numpy as np
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 import functools
 
@@ -213,75 +210,6 @@ def get_element_xrays(
             })
     
     return sorted(result, key=lambda x: -x['intensity'])
-
-
-@_serialized
-def calculate_attenuation(
-    element: str,
-    energy_kev: float,
-    thickness_cm: float,
-    density_g_cm3: Optional[float] = None
-) -> Dict:
-    """
-    Calculate gamma attenuation through a material.
-    
-    Uses the formula: I/I0 = exp(-mu * rho * x)
-    
-    Args:
-        element: Element symbol (e.g., "Pb", "Fe", "Al")
-        energy_kev: Gamma energy in keV
-        thickness_cm: Material thickness in cm
-        density_g_cm3: Material density (optional, uses standard if None)
-        
-    Returns:
-        Dict with 'transmission', 'attenuation_percent', 'mu' keys
-    """
-    # Standard densities (g/cm³)
-    DENSITIES = {
-        "Pb": 11.34,
-        "Fe": 7.87,
-        "Al": 2.70,
-        "Cu": 8.96,
-        "Concrete": 2.3,
-        "Water": 1.0,
-        "Air": 0.00120,
-    }
-    
-    if not HAS_CURIE:
-        return {
-            'transmission': 1.0,
-            'attenuation_percent': 0.0,
-            'mu': 0.0,
-            'error': 'curie not installed'
-        }
-    
-    try:
-        elem = curie.Element(element)
-        mu = elem.mu(energy_kev)  # Mass attenuation coefficient (cm²/g)
-        
-        rho = density_g_cm3
-        if rho is None:
-            rho = DENSITIES.get(element, 7.0)  # Default to ~iron density
-        
-        # Beer-Lambert law: I/I0 = exp(-mu * rho * x)
-        transmission = np.exp(-mu * rho * thickness_cm)
-        attenuation = 1.0 - transmission
-        
-        return {
-            'transmission': float(transmission),
-            'attenuation_percent': float(attenuation * 100),
-            'mu': float(mu),
-            'density': float(rho),
-            'thickness_cm': float(thickness_cm)
-        }
-    
-    except Exception as e:
-        return {
-            'transmission': 1.0,
-            'attenuation_percent': 0.0,
-            'mu': 0.0,
-            'error': str(e)
-        }
 
 
 def get_all_xrays_for_isotope(isotope_name: str) -> List[Dict]:

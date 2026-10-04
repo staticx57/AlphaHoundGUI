@@ -1,4 +1,5 @@
-"""Export (PDF/N42/CSV) and N42 metadata endpoints."""
+"""Export (PDF/N42/CSV/PCF/CHN) and N42 metadata endpoints."""
+import os
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
@@ -87,6 +88,42 @@ def export_n42(request: N42ExportRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _export_spectrum_file(request: N42ExportRequest, fmt: str) -> Response:
+    """PCF (GADRAS) and CHN (Ortec) through SpecUtils; the calibration error of the fitted polynomial is reported in a header."""
+    from formats.spectrum_export import export_spectrum, SpectrumExportError, SpecUtilsUnavailable
+    try:
+        result = export_spectrum(request.model_dump(), fmt)
+    except SpectrumExportError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except SpecUtilsUnavailable as e:
+        raise HTTPException(status_code=501, detail=str(e))
+    except Exception as e:
+        logger.error(f"[{fmt.upper()} Export] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    stem = os.path.splitext(request.filename or "spectrum")[0] or "spectrum"
+    return Response(
+        content=result["content"],
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}{result["extension"]}"',
+            "X-Calibration-Max-Error-keV": f'{result["calibration_max_error_kev"]:.4f}',
+            "X-Calibration-Calibrated": "true" if result["calibrated"] else "false",
+        },
+    )
+
+
+@router.post("/export/pcf")
+def export_pcf(request: N42ExportRequest):
+    """Export the spectrum as a GADRAS PCF file (opens in InterSpec and GADRAS)."""
+    return _export_spectrum_file(request, "pcf")
+
+
+@router.post("/export/chn")
+def export_chn(request: N42ExportRequest):
+    """Export the spectrum as an Ortec CHN file (a polynomial calibration only)."""
+    return _export_spectrum_file(request, "chn")
 
 
 @router.post("/export/csv-auto")

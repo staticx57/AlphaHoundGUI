@@ -6,7 +6,6 @@ These are common formats from commercial MCA (Multi-Channel Analyzer) systems.
 """
 
 import struct
-import os
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,66 +32,43 @@ def parse_chn_file(filepath):
     if len(data) < 32:
         raise ValueError("File too small to be a valid CHN file")
     
-    # Parse 32-byte header
-    # Byte 0-1: Format indicator (-1 = Ortec format)
-    # Byte 2-3: MCA number
-    # Byte 4-5: Segment number
-    # Byte 6-7: Start seconds (ASCII)
-    # Byte 8-11: Real time (20ms units)
-    # Byte 12-15: Live time (20ms units)
-    # Byte 16-23: Start date/time string
-    # Byte 24-27: Channel offset
-    # Byte 28-31: Number of channels
-    
-    format_id = struct.unpack('<h', data[0:2])[0]
-    mca_num = struct.unpack('<h', data[2:4])[0]
-    segment = struct.unpack('<h', data[4:6])[0]
-    
-    # Real and live time in 20ms units
-    real_time_raw = struct.unpack('<I', data[8:12])[0]
-    live_time_raw = struct.unpack('<I', data[12:16])[0]
-    real_time = real_time_raw * 0.02  # Convert to seconds
+    # 32-byte header (little endian), as written by Maestro and by SpecUtils/InterSpec:
+    #   0 int16 -1 (format), 2 int16 MCA number, 4 int16 segment, 6 char[2] start seconds,
+    #   8 int32 real time and 12 int32 live time (20 ms units), 16 char[8] start date DDMMMYY + century flag,
+    #   24 char[4] start time HHMM, 28 uint16 first channel, 30 uint16 number of channels
+    format_id, mca_num, segment = struct.unpack('<3h', data[0:6])
+    if format_id != -1:
+        raise ValueError("Not an Ortec CHN file (the format marker is not -1)")
+
+    real_time_raw, live_time_raw = struct.unpack('<2I', data[8:16])
+    real_time = real_time_raw * 0.02
     live_time = live_time_raw * 0.02
-    
-    # Date/time string (8 bytes)
-    date_str = data[16:24].decode('ascii', errors='ignore').strip()
-    
-    # Channel info
-    channel_offset = struct.unpack('<I', data[24:28])[0]
-    num_channels = struct.unpack('<I', data[28:32])[0]
-    
-    # Parse spectrum data (32-bit integers)
+
+    date_str = (data[16:24].decode('ascii', errors='ignore') + ' ' + data[24:28].decode('ascii', errors='ignore')).strip()
+
+    channel_offset, num_channels = struct.unpack('<2H', data[28:32])
+
+    # 32-bit counts follow the header
     spectrum_start = 32
     spectrum_end = spectrum_start + num_channels * 4
-    
-    if len(data) < spectrum_end:
+
+    if num_channels == 0 or len(data) < spectrum_end:
         raise ValueError(f"File truncated: expected {spectrum_end} bytes, got {len(data)}")
-    
-    counts = []
-    for i in range(num_channels):
-        offset = spectrum_start + i * 4
-        count = struct.unpack('<I', data[offset:offset+4])[0]
-        counts.append(count)
-    
-    # Try to parse calibration from trailer (if present)
+
+    counts = list(struct.unpack(f'<{num_channels}I', data[spectrum_start:spectrum_end]))
+
+    # Optional trailer: int16 -102 (type), int16 length, then float32 energy calibration a0, a1, a2
     calibration = None
-    trailer_start = spectrum_end
-    if len(data) >= trailer_start + 256:
-        # Calibration coefficients are at offset 0 and 4 in trailer
-        try:
-            cal_a = struct.unpack('<f', data[trailer_start:trailer_start+4])[0]
-            cal_b = struct.unpack('<f', data[trailer_start+4:trailer_start+8])[0]
-            cal_c = struct.unpack('<f', data[trailer_start+8:trailer_start+12])[0]
-            
-            if abs(cal_b) > 0.001:  # Sanity check
-                calibration = {
-                    'a': cal_a,  # offset
-                    'b': cal_b,  # keV/channel
-                    'c': cal_c   # quadratic term
-                }
-        except (struct.error, ValueError, IndexError):
-            logger.debug('CHN/SPE calibration trailer unreadable', exc_info=True)
-    
+    trailer = data[spectrum_end:]
+    if len(trailer) >= 16 and struct.unpack('<h', trailer[:2])[0] == -102:
+        cal_a, cal_b, cal_c = struct.unpack('<3f', trailer[4:16])
+        if abs(cal_b) > 0.001:  # Sanity check
+            calibration = {
+                'a': cal_a,  # offset
+                'b': cal_b,  # keV/channel
+                'c': cal_c   # quadratic term
+            }
+
     # Generate energies if calibrated
     energies = list(range(num_channels))
     if calibration:
@@ -221,53 +197,3 @@ def parse_spe_file(filepath):
             'date': date_mea
         }
     }
-
-
-def parse_spectrum_file(filepath):
-    """
-    Auto-detect file type and parse spectrum.
-    
-    Native support: .chn, .spe
-    Extended support via SandiaSpecUtils: 100+ additional formats
-    """
-    ext = os.path.splitext(filepath)[1].lower()
-    
-    # Native parsers for common formats
-    if ext == '.chn':
-        return parse_chn_file(filepath)
-    elif ext == '.spe':
-        return parse_spe_file(filepath)
-    else:
-        # Try SandiaSpecUtils for 100+ other formats
-        try:
-            from formats.specutils_parser import parse_with_specutils, is_specutils_available
-            if is_specutils_available():
-                result = parse_with_specutils(filepath)
-                # Normalize output format
-                return {
-                    'counts': result['counts'],
-                    'energies': result['energies'],
-                    'num_channels': len(result['counts']),
-                    'live_time': result['metadata'].get('live_time', 0),
-                    'real_time': result['metadata'].get('real_time', 0),
-                    'calibration': None,  # SpecUtils handles calibration internally
-                    'metadata': result['metadata']
-                }
-        except ImportError:
-            pass
-        except Exception as e:
-            logger.warning(f"[SpecUtils] Failed to parse {filepath}: {e}")
-        
-        raise ValueError(f"Unsupported file type: {ext}. Install SandiaSpecUtils for extended format support.")
-
-
-if __name__ == '__main__':
-    # Test with sample files if available
-    import sys
-    if len(sys.argv) > 1:
-        result = parse_spectrum_file(sys.argv[1])
-        logger.info(f"Channels: {result['num_channels']}")
-        logger.info(f"Live time: {result['live_time']:.1f}s")
-        logger.info(f"Real time: {result['real_time']:.1f}s")
-        logger.info(f"Calibration: {result['calibration']}")
-        logger.info(f"Total counts: {sum(result['counts'])}")

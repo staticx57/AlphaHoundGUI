@@ -185,6 +185,26 @@ export class AlphaHoundAPI {
         return response;
     }
 
+    /**
+     * Writes the spectrum as a PCF (GADRAS, InterSpec) or CHN (Ortec) file.
+     * The response carries X-Calibration-Max-Error-keV: how far the stored polynomial is from the real energy axis.
+     * @param {'pcf'|'chn'} format
+     * @param {Object} data - counts, energies, metadata, filename
+     * @returns {Promise<Response>}
+     */
+    async exportSpectrumFile(format, data) {
+        const response = await fetch(`/export/${format}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const errJson = await response.json().catch(() => ({}));
+            throw new Error(errJson.detail || `${format.toUpperCase()} export failed`);
+        }
+        return response;
+    }
+
     // ============================================================
     // Server-Side Managed Acquisition API
     // ============================================================

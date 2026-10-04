@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
-from fastapi import APIRouter, File, UploadFile, HTTPException, Response
-from pydantic import BaseModel, field_validator, Field
+from fastapi import APIRouter, File, UploadFile, HTTPException, Query, Response
+from pydantic import BaseModel, field_validator, model_validator, Field
 from typing import List, Optional
 from formats.n42_parser import parse_n42
 from formats.radiacode_xml_parser import is_radiacode_xml, parse_radiacode_xml
@@ -908,4 +908,56 @@ def estimate_acquisition_time_endpoint(request: TimeEstimatorRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# === Dose Rate Calculator ===
+# === Shielding (narrow-beam gamma attenuation) ===
+
+class ShieldingRequest(BaseModel):
+    """One photon energy, or every gamma line of an isotope, through a slab of a material."""
+    material: str
+    energy_kev: Optional[float] = Field(default=None, gt=0)
+    isotope: Optional[str] = Field(default=None, max_length=20)
+    thickness_cm: Optional[float] = Field(default=None, ge=0)
+    target_transmission: Optional[float] = Field(default=None, gt=0, lt=1)
+    density_g_cm3: Optional[float] = Field(default=None, gt=0)
+    min_intensity: float = Field(default=1.0, ge=0, le=100)
+
+    @model_validator(mode='after')
+    def _one_source(self):
+        if (self.energy_kev is None) == (self.isotope is None):
+            raise ValueError("Give either energy_kev or isotope, not both and not neither")
+        if self.isotope is not None and self.thickness_cm is None:
+            raise ValueError("An isotope needs a thickness_cm to be shielded by")
+        return self
+
+
+@router.get("/analyze/shielding/materials")
+def shielding_materials():
+    """The materials the shielding calculator knows, with the density used for each."""
+    from nuclides.shielding import list_materials
+    return {"materials": list_materials(),
+            "note": "Narrow-beam attenuation (scattered photons not counted): a lower bound on what gets through."}
+
+
+@router.post("/analyze/shielding")
+def shielding(request: ShieldingRequest):
+    """Half-value and tenth-value layers, transmission through a thickness, thickness for a target transmission; or, for an
+    isotope, the transmission of each of its gamma lines and of the emission as a whole."""
+    from nuclides.shielding import attenuation, isotope_lines, ShieldingError
+    try:
+        if request.isotope is not None:
+            return isotope_lines(request.isotope.strip(), request.material, request.thickness_cm,
+                                 min_intensity=request.min_intensity, density_g_cm3=request.density_g_cm3)
+        return attenuation(request.material, request.energy_kev, thickness_cm=request.thickness_cm,
+                           target_transmission=request.target_transmission, density_g_cm3=request.density_g_cm3)
+    except ShieldingError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/analyze/emissions")
+def isotope_emissions(isotope: str = Query(..., max_length=20), min_intensity: float = Query(1.0, ge=0, le=100)):
+    """Alpha and beta emissions of an isotope and how far they travel (what the alpha and beta channels can see)."""
+    from nuclides.emissions import particle_emissions
+    from nuclides.shielding import ShieldingError
+    try:
+        return particle_emissions(isotope.strip(), min_intensity=min_intensity)
+    except ShieldingError as e:
+        raise HTTPException(status_code=400, detail=str(e))

@@ -252,6 +252,9 @@
   - ISO 8601 duration format for LiveTime/RealTime
   - Instrument information (manufacturer, model, serial)
   - Spectrum extensions for analysis results
+- **PCF** (GADRAS, InterSpec) and **CHN** (Ortec): written through SpecUtils; the energy axis is stored as a polynomial.
+  PCF holds the AlphaHound's cubic axis to 0.005 keV; CHN holds only a quadratic and refuses an axis it cannot reproduce
+  (the response header `X-Calibration-Max-Error-keV` reports the error that is left)
 - **CSV**: Channel-energy-counts format with metadata header
 - **JSON**: Complete analysis results with peaks, isotopes, chains
 - **PDF Reports**: Professional reports with:

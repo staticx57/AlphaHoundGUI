@@ -107,6 +107,48 @@ export function setupExports({ ui, getCurrentData } = {}) {
         }
     });
 
+    // PCF (GADRAS, InterSpec) and CHN (Ortec) export
+    for (const format of ['pcf', 'chn']) {
+        const btn = document.getElementById(`btn-export-${format}`);
+        btn?.addEventListener('click', async () => {
+            const data = getCurrentData();
+            if (!data) return notifyAuto('No spectrum data to export');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<img src="/static/icons/hourglass.svg" class="icon spin" style="width: 14px; height: 14px;"> Exporting...';
+            btn.disabled = true;
+            try {
+                const meta = data.metadata || {};
+                const response = await api.exportSpectrumFile(format, {
+                    counts: data.counts,
+                    energies: data.energies,
+                    filename: meta.filename || 'spectrum',
+                    metadata: { ...meta, start_time: meta.start_time || new Date().toISOString(), source: meta.source || 'AlphaHound Device' }
+                });
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const base = String(meta.filename || `spectrum_export_${new Date().toISOString().replace(/[:.]/g, '-')}`)
+                    .replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '_');
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${base || 'spectrum'}.${format}`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => window.URL.revokeObjectURL(url), 30000);
+
+                const error = parseFloat(response.headers.get('X-Calibration-Max-Error-keV'));
+                if (error > 0.5) {
+                    notifyAuto(`Warning: ${format.toUpperCase()} stores the energy axis as a quadratic, which is up to ${error.toFixed(1)} keV off this spectrum's axis.`);
+                }
+            } catch (err) {
+                notifyAuto(`Error exporting ${format.toUpperCase()}: ${err.message}`);
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        });
+    }
+
     // Edit N42 Metadata Button
     const btnEditN42 = document.getElementById('btn-edit-n42');
     btnEditN42?.addEventListener('click', async () => {

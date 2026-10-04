@@ -658,6 +658,18 @@ with sync_playwright() as p:
     check("O PDF export downloads a real PDF file", head.startswith(b"%PDF-") and download.suggested_filename.endswith("_report.pdf"),
           f"{download.suggested_filename} {head!r}")
     check("O ... without opening a pop-up tab", len(ctx_o.pages) == 1)
+    with po.expect_download(timeout=20000) as dl_chn:
+        po.click("#btn-export-chn")
+    with open(dl_chn.value.path(), "rb") as fh:
+        chn = fh.read()
+    channels = int.from_bytes(chn[30:32], "little")
+    check("O CHN export downloads an Ortec file with the spectrum's channels",
+          dl_chn.value.suggested_filename.endswith(".chn") and int.from_bytes(chn[:2], "little", signed=True) == -1 and channels > 0 and len(chn) >= 32 + 4 * channels,
+          f"{dl_chn.value.suggested_filename} {len(chn)} bytes, {channels} channels")
+    with po.expect_download(timeout=20000) as dl_pcf:
+        po.click("#btn-export-pcf")
+    check("O PCF export downloads a non-empty .pcf file",
+          dl_pcf.value.suggested_filename.endswith(".pcf") and os.path.getsize(dl_pcf.value.path()) > 1000, dl_pcf.value.suggested_filename)
     with po.expect_response(lambda r: r.url.endswith("/upload"), timeout=20000) as bad:
         po.set_input_files("#file-input", files=[{"name": "words.csv", "mimeType": "text/csv", "buffer": b"this,is,not\nnumbers,at,all\n"}])
     check("O an unreadable CSV is refused with a client error", bad.value.status == 400, str(bad.value.status))
@@ -957,6 +969,50 @@ with sync_playwright() as p:
     check("U clearing the overlays empties the list main.js counts", count_zero.startswith("0 "), count_zero)
     check("U no JS errors or native dialogs in these flows", not errs_u, "; ".join(errs_u[:3]))
     ctx_u.close()
+
+    # V: shielding and emissions modal
+    ctx_v = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pv = ctx_v.new_page()
+    errs_v = []
+    pv.on("pageerror", lambda e: errs_v.append(f"pageerror: {e}"))
+    pv.on("dialog", lambda d: (errs_v.append("native dialog: " + d.message), d.dismiss()))
+    pv.goto(URL, wait_until="load")
+    pv.click("#btn-shield-tool")
+    pv.wait_for_function("document.querySelectorAll('#shield-material option').length > 8", timeout=8000)
+    check("V the shielding modal opens and lists the materials from the server",
+          pv.evaluate("getComputedStyle(document.getElementById('shield-modal')).display") == "flex"
+          and pv.locator("#shield-material option").count() >= 12)
+    pv.fill("#shield-thickness", "1")
+    pv.click("#btn-run-shield")
+    pv.wait_for_function("document.getElementById('shield-result').textContent.includes('gamma photons get through')", timeout=10000)
+    text_v = pv.inner_text("#shield-result")
+    check("V Cs-137 through 1 cm of lead: a sentence, a line table with its 661.7 keV line and the beta/gamma emissions",
+          "Through 1 cm of lead, 28 % of Cs-137" in text_v and "661.7" in text_v and "Cs-137 shows in the beta and gamma channels" in text_v
+          and pv.locator("#shield-result table").count() == 2, text_v[:160])
+    pv.select_option("#shield-mode", "energy")
+    check("V the energy mode swaps the isotope field for the energy field",
+          pv.evaluate("document.getElementById('shield-isotope-field').style.display") == "none"
+          and pv.evaluate("document.getElementById('shield-energy-field').style.display") == "")
+    pv.fill("#shield-energy", "662")
+    pv.fill("#shield-thickness", "0.55")
+    pv.click("#btn-run-shield")
+    pv.wait_for_function("document.getElementById('shield-result').textContent.includes('halves the beam')", timeout=10000)
+    text_e = pv.inner_text("#shield-result")
+    check("V a single energy gives the half- and tenth-value layers and what 0.55 cm lets through",
+          "halves the beam in 0.55 cm" in text_e and "0.55 cm lets 50 % through" in text_e, text_e[:200])
+    pv.select_option("#shield-mode", "isotope")
+    pv.fill("#shield-isotope", "Sr-90")
+    pv.click("#btn-run-shield")
+    pv.wait_for_function("document.getElementById('shield-result').textContent.includes('Sr-90 shows in the beta channel')", timeout=10000)
+    text_s = pv.inner_text("#shield-result")
+    check("V a pure beta emitter has no gamma shielding to show but its beta reach is shown",
+          "No gamma lines" in text_s and "1.54 m" in text_s, text_s[:200])
+    pv.keyboard.press("Escape")
+    check("V Escape closes the modal and returns focus to its button",
+          pv.evaluate("getComputedStyle(document.getElementById('shield-modal')).display") == "none"
+          and pv.evaluate("document.activeElement.id") == "btn-shield-tool")
+    check("V no JS errors or native dialogs in the modal", not errs_v, "; ".join(errs_v[:3]))
+    ctx_v.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

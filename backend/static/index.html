@@ -29,6 +29,8 @@
             </button>
             <button id="btn-history" title="File History"><img alt="" src="/static/icons/history.svg" class="icon">
                 History</button>
+            <button id="btn-shield-tool" title="Shielding: how much a shield stops, and how far alpha and beta travel"><img alt=""
+                    src="/static/icons/atom.svg" class="icon"> Shielding</button>
             <button id="btn-settings" title="Analysis Settings"><img alt="" src="/static/icons/settings.svg" class="icon">
                 Settings</button>
             <select id="theme-select" title="Select Theme" style="min-width: 140px;">
@@ -670,6 +672,8 @@
                         PDF</button>
                     <button id="btn-export-n42" class="btn-accent"><img alt="" src="/static/icons/upload.svg" class="icon">
                         N42</button>
+                    <button id="btn-export-pcf" title="GADRAS / InterSpec PCF file">PCF</button>
+                    <button id="btn-export-chn" title="Ortec CHN file">CHN</button>
                 </div>
 
                 <!-- Right Group: Tools -->
@@ -1457,6 +1461,45 @@
                     <canvas id="decayChart" role="img" aria-label="Decay chain activity over time"></canvas>
                 </div>
                 <p id="decay-info" class="decay-info" role="status" aria-live="polite"></p>
+            </div>
+        </div>
+
+
+        <!-- Shielding and emissions modal -->
+        <div id="shield-modal" class="modal" style="display: none; z-index: 1200;">
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="shield-title" style="max-width: 900px; padding: 1.5rem;">
+                <div class="modal-header" style="margin-bottom: 1.5rem;">
+                    <h3 id="shield-title" style="margin: 0; color: var(--primary-color);">Shielding and emissions</h3>
+                    <button id="close-shield" class="close-btn" aria-label="Close" style="line-height: 1;"><img alt=""
+                            src="/static/icons/close.svg" class="icon" style="width: 16px; height: 16px;"></button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1.2fr 1.2fr 1fr auto; gap: 1rem; margin-bottom: 1.5rem; align-items: end; background: rgba(255,255,255,0.02); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                    <div>
+                        <label for="shield-mode" style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Source</label>
+                        <select id="shield-mode" style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                            <option value="isotope" selected>Isotope</option>
+                            <option value="energy">Single energy</option>
+                        </select>
+                    </div>
+                    <div id="shield-isotope-field">
+                        <label for="shield-isotope" style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Isotope</label>
+                        <input type="text" id="shield-isotope" list="decay-isotope-list" value="Cs-137" autocomplete="off" spellcheck="false" style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                    </div>
+                    <div id="shield-energy-field" style="display: none;">
+                        <label for="shield-energy" style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Photon energy (keV)</label>
+                        <input type="number" id="shield-energy" value="662" min="1" max="20000" step="any" style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                    </div>
+                    <div>
+                        <label for="shield-material" style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Material</label>
+                        <select id="shield-material" style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);"><option value="lead">Lead</option></select>
+                    </div>
+                    <div>
+                        <label for="shield-thickness" style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Thickness (cm)</label>
+                        <input type="number" id="shield-thickness" value="1" min="0" step="any" style="width: 100%; padding: 0.6rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color);">
+                    </div>
+                    <button id="btn-run-shield" class="btn-primary" style="height: 42px; padding: 0 1.5rem;">Calculate</button>
+                </div>
+                <div id="shield-result" role="status" aria-live="polite"></div>
             </div>
         </div>
 

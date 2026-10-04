@@ -150,6 +150,27 @@ Each has no reference anywhere in code, tests or scripts. Most are leftovers of 
 * `download_iaea_data.py` sits in the repository root and writes `backend/data/idb`: it belongs in `backend/tools/`.
 * `ALPHAHOUND_DOSE_LOG` is read by `main.py` but documented only in the CHANGELOG; `REAL_BENCHMARK_EXTRA` (benchmark helper) is not documented anywhere.
 
+## Library review (2026-10-04): unused but useful features
+
+What was measured, not guessed. Done: shielding and emissions from curie, PCF and CHN export from SpecUtils, and the two bugs found on the
+way (see CHANGELOG). Not adopted, with the reason:
+
+| Candidate | Verdict |
+|-----------|---------|
+| becquerel `AutoCalibrator` | **Not usable.** It fits a zero-offset linear gain. On the real Radiacode Th-232 and Ra-226 captures it matched the wrong peaks (errors of 100 to 1,600 keV) because the axis has an offset and curvature; on the AlphaHound capture it found no peaks. The AlphaHound axis is a cubic (a quadratic is off by 293 keV), so no linear model can work. |
+| becquerel `xcom`, `nndc`, `materials` | Fetch from the web: unsuitable for an offline instrument. curie has the same XCOM data locally. |
+| becquerel parsers | SpecUtils already reads these formats (once the import was fixed). |
+| becquerel `rebin_like` | Would replace the removed `rebin_spectrum` if spectra of different binning ever need comparing. Untried. |
+| curie `Isotope.dose_rate` | Agrees with the application's constants (0.3 % for Co-60, 13 % at worst), but its Sv path crashes (`KeyError: 'alpha'` in 0.0.33) and unattenuated alpha/beta dose at a distance is meaningless in air. Not used. |
+| curie named compounds (Water, Air, SS_316 ...) | **Broken in 0.0.33** (`ValueError` on load). Materials are defined by formula or NIST composition instead. |
+| PyRIID, GADRAS, Geant4 | Synthetic-spectrum and response tools; the earlier decision to drop PyRIID stands. |
+| NASA-gamma, InterSpec, xraydb, PyNE, paceENSDF | Could not be verified from here (their pages did not load); nothing adopted. |
+
+Open idea with evidence: **gain drift.** Three long captures of the same thoriated lens on the same axis put the Th-232 583 keV line at
+569.6 to 579.5 keV (fit errors below 1 keV), 1.7 % apart; the 239 keV line 1.6 % apart. A correction that tracks known background lines
+(K-40 1461 keV, Tl-208 2615 keV) would be worth building, but the captures carry no temperature, so what causes it is not established.
+The method is described in [arXiv 2603.03461](https://arxiv.org/abs/2603.03461) (no code released that I could find).
+
 ## Manual verification backlog
 
 `TODO.md` still lists about 25 items that need a person or hardware (live Radiacode and AlphaHound readings, themes on

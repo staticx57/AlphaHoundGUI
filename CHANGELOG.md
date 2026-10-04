@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [Session 2026-10-04] - Audit tiers A and B, spectrum formats, shielding
+
+### Fixed
+- **Every extended spectrum format (.pcf, .spc, .cnf, .tka, ...) was refused.** The reader imported `SandiaSpecUtils`; the package installs the
+  module `SpecUtils`. It is rewritten on the real API (several spectra in one file are totalled, the calibration is read exactly).
+- **Ortec CHN files were misread.** The channel count and offset (two 16-bit fields at bytes 28-31) were read as one 32-bit field and the
+  calibration floats were read from the wrong place in the trailer. Neither CHN nor SPE had a test; both are now checked against files
+  written by SpecUtils.
+- `calculate_mda` accepted a confidence level and ignored it (every request got the 95 % limit).
+
+### Added
+- **PCF and CHN export** (buttons next to N42 in the export group; `POST /export/pcf`, `/export/chn`).
+- **Shielding and emissions** (header button *Shielding*; `GET /analyze/shielding/materials`, `POST /analyze/shielding`, `GET /analyze/emissions`):
+  half- and tenth-value layers, transmission, thickness for a target; for an isotope, each gamma line and the whole emission; alpha range
+  in air and beta range in air and aluminium. NIST XCOM coefficients from curie, checked against published values. Narrow-beam, stated as such.
+
+### Removed (audit tiers A and B, see TECHNICAL_DEBT.md)
+- About 1,400 lines of unreferenced Python and JavaScript (and two obsolete files), four uncalled routes (`/analyze/identify-source`, `/analyze/multiplet`,
+  `/device/capabilities`, `/radiacode/configuration`), 24 dead CSS selectors, `install.bat`, five unused icons, `uncertainties`.
+
 ## [Session 2026-10-03 evening] - Technical debt and repository sprawl
 
 ### Changed - layout

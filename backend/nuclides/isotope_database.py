@@ -25,7 +25,6 @@ try:
     from nuclides.curie_integration import (
         get_element_xrays as _get_element_xrays,
         get_all_xrays_for_isotope as _get_all_xrays_for_isotope,
-        calculate_attenuation,
         HAS_CURIE
     )
     logger.info(f"[Isotope Database] Curie X-ray integration loaded (curie available: {HAS_CURIE})")
@@ -33,7 +32,6 @@ except ImportError:
     HAS_CURIE = False
     _get_element_xrays = lambda *args, **kwargs: []
     _get_all_xrays_for_isotope = lambda *args, **kwargs: []
-    calculate_attenuation = lambda *args, **kwargs: {'error': 'curie not installed'}
     logger.warning("[Isotope Database] Curie integration not available")
 
 

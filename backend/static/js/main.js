@@ -21,6 +21,7 @@ initA11y();
 import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
 import { setupDeviceTabs } from './device_tabs.js';
 import { setupExports } from './exports_ui.js';
+import { setupShieldingTool } from './shielding_ui.js';
 import { setupAnalysisPanels } from './analysis_panels.js';
 import { setupSettingsAndHistory } from './settings_history.js';
 import { setupThemeAndChartControls } from './chart_controls.js';
@@ -654,6 +655,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('btn-run-decay').addEventListener('click', runDecayPrediction);
     }
     loadDecayEngines();
+    setupShieldingTool();
     isotopeUI.init();
 });
 
