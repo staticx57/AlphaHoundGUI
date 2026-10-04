@@ -1899,29 +1899,35 @@ function applyAnalysis(data) {
 }
 
 /**
- * Applies energy calibration to the current spectrum.
- * Recalculates energies using linear formula: E = slope * channel + intercept.
+ * Applies a hand-made linear energy calibration (E = slope * channel + intercept) to the current spectrum: the server analyses it again on the
+ * new axis, so the peaks, isotopes and chains follow it (they used to keep the energies of the old axis while the chart showed the new one).
  * @param {number} slope - Energy per channel (keV/ch)
  * @param {number} intercept - Energy offset (keV)
- * @returns {void}
+ * @returns {Promise<void>}
  */
-function applyCalibration(slope, intercept) {
+async function applyCalibration(slope, intercept) {
     if (!currentData) return;
-    // Recalculate energies: E = Slope * Ch + Intercept
-    // Assuming currentData.counts corresponds to channels 0..N
-    const channels = Array.from({ length: currentData.counts.length }, (_, i) => i);
-    const newEnergies = channels.map(ch => slope * ch + intercept);
-
-    currentData.energies = newEnergies;
-    currentData.is_calibrated = true;
-    currentData.metadata = currentData.metadata || {};
-    currentData.metadata.calibration = { slope, intercept };
-
-    // Rerender
-    if (backgroundData) {
-        refreshChartWithBackground();
-    } else {
-        chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
+    const energies = currentData.counts.map((_, ch) => slope * ch + intercept);
+    try {
+        const response = await fetch('/analyze/reanalyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                energies,
+                counts: currentData.counts,
+                metadata: { ...(currentData.metadata || {}), calibration: { slope, intercept } },
+                live_time: Number(currentData.metadata?.live_time) || 0,
+            }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const detail = Array.isArray(body.detail) ? body.detail.map((d) => d.msg).join('; ') : body.detail;
+            throw new Error(detail || `Request failed (${response.status})`);
+        }
+        applyAnalysis(body);
+        showToast(`Calibration applied: E = ${slope.toFixed(4)} * Ch + ${intercept.toFixed(4)}`, 'success');
+    } catch (err) {
+        showToast(`Could not apply the calibration: ${err.message}`, 'error');
     }
 }
 

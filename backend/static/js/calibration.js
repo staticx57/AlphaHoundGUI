@@ -108,7 +108,6 @@ export class CalibrationUI {
         });
         document.dispatchEvent(event);
         this.hide();
-        notifyAuto(`Calibration Applied: E = ${this.tempResult.params.slope.toFixed(4)} * Ch + ${this.tempResult.params.intercept.toFixed(4)}`);
     }
 }
 

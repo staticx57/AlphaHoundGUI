@@ -3,6 +3,7 @@
 ## [Session 2026-10-04] - Audit tiers A and B, spectrum formats, shielding
 
 ### Fixed
+- **The calibration dialog changed the chart but not the analysis.** *Apply* replaced the energies and redrew the chart only, so the peak list, isotopes and chains kept the energies of the old axis. It now has the server analyse the spectrum again on the new axis (`POST /analyze/reanalyze`), the same path as the axis-correction notice; the success message comes after the server answers. A browser test checks that peaks at 300 and 660 keV become 330 and 726 keV with nothing left at the old positions. The dialog's request is also validated (matching lists, two different channels).
 - **No peak above about 600 keV was ever reported for the AlphaHound.** The peak fit used a fixed 30 keV window and gave up when fewer than 10
   channels fell in it; the AlphaHound's channels are 1.7 keV wide at the bottom of its axis and 18 keV at the top, so above roughly 0.7 MeV every fit
   failed silently. All three real thoriated-lens captures reported nothing above 576 keV (Ac-228 911 and Tl-208 2615 are what identify the chain);

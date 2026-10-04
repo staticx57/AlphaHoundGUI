@@ -1067,6 +1067,36 @@ with sync_playwright() as p:
     check("X Dismiss hides the notice", px.evaluate("document.getElementById('cal-notice').hidden"))
     check("X no JS errors or native dialogs", not errs_x, "; ".join(errs_x[:3]))
     ctx_x.close()
+
+    # Y: the calibration dialog re-analyses on the new axis (the peak list used to keep the old energies while the chart showed the new ones)
+    ctx_y = browser.new_context(viewport={"width": 1400, "height": 1000})
+    py = ctx_y.new_page()
+    errs_y = []
+    py.on("pageerror", lambda e: errs_y.append(f"pageerror: {e}"))
+    py.on("dialog", lambda d: (errs_y.append("native dialog: " + d.message), d.dismiss()))
+    py.goto(URL, wait_until="load")
+    import math
+    rows = "\n".join(f"{3.0 * i:.1f},{40 + int(3000 * math.exp(-0.5 * ((i - 100) / 6.0) ** 2)) + int(3000 * math.exp(-0.5 * ((i - 220) / 6.0) ** 2))}" for i in range(512))
+    py.set_input_files("#file-input", files=[{"name": "two_peaks.csv", "mimeType": "text/csv", "buffer": ("Energy (keV),Counts\n" + rows + "\n").encode()}])
+    py.wait_for_selector("#result-summary", state="visible", timeout=20000)
+    py.wait_for_function("document.querySelectorAll('#peaks-tbody tr').length >= 2", timeout=15000)
+
+    def peak_energies():
+        return sorted(float(t.split()[0]) for t in py.evaluate("[...document.querySelectorAll('#peaks-tbody tr')].map(r => r.cells[0].textContent.trim())") if t.split()[0].replace('.', '', 1).isdigit())
+
+    before = peak_energies()
+    check("Y the file's own axis puts the peaks at 300 and 660 keV", any(abs(e - 300) < 15 for e in before) and any(abs(e - 660) < 15 for e in before), str(before))
+    py.evaluate("document.getElementById('btn-calibrate-mode').click()")
+    py.evaluate("window.calibrationUI.points = [{id: 1, channel: 100, energy: 330}, {id: 2, channel: 220, energy: 726}]; window.calibrationUI.renderTable()")
+    py.evaluate("window.calibrationUI.calculate()")
+    py.wait_for_function("document.getElementById('btn-cal-apply').style.display !== 'none' && document.getElementById('btn-cal-apply').style.display !== ''", timeout=10000)
+    py.click("#btn-cal-apply")
+    py.wait_for_function("[...document.querySelectorAll('#peaks-tbody tr')].some(r => Math.abs(parseFloat(r.cells[0].textContent) - 726) < 15)", timeout=20000)
+    after = peak_energies()
+    check("Y Apply analyses again on the new axis: the peak list now says 330 and 726 keV and nothing is left at the old energies",
+          any(abs(e - 330) < 16 for e in after) and any(abs(e - 726) < 16 for e in after) and not any(abs(e - 660) < 15 for e in after), str(after))
+    check("Y no JS errors or native dialogs in the calibration flow", not errs_y, "; ".join(errs_y[:3]))
+    ctx_y.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]
