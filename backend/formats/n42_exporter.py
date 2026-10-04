@@ -15,6 +15,10 @@ from typing import Dict, List
 # readers that do not know the extension simply ignore it): metadata key -> (XML tag, numeric?)
 ACQUISITION_FIELDS = {
     'device_duration_s': ('DeviceDurationS', True),
+    'temperature_c': ('TemperatureC', True),
+    'temperature_min_c': ('TemperatureMinC', True),
+    'temperature_max_c': ('TemperatureMaxC', True),
+    'compensation_factor': ('CompensationFactor', True),
     'exposure_uSv': ('ExposureUSv', True),
     'mean_dose_rate_uSv_h': ('MeanDoseRateUSvH', True),
     'max_dose_rate_uSv_h': ('MaxDoseRateUSvH', True),

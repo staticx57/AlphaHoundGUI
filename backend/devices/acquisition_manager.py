@@ -9,6 +9,7 @@ Author: AlphaHoundGUI
 """
 
 import asyncio
+import math
 import time
 import os
 from datetime import datetime, timezone
@@ -55,6 +56,11 @@ class AcquisitionState:
     last_dose_rate: Optional[float] = None
     last_dose_time: Optional[float] = None
     device_duration_s: Optional[float] = None  # accumulation time as reported by the instrument
+    # Instrument temperature (deg C) and its own temperature compensation factor, as last reported (the AlphaHound sends them with a spectrum)
+    temperature_c: Optional[float] = None
+    temperature_min_c: Optional[float] = None
+    temperature_max_c: Optional[float] = None
+    compensation_factor: Optional[float] = None
     # Per-channel count rates seen during this acquisition (AlphaHound AB+G: gamma / beta / alpha)
     cps_samples: int = 0
     cps_sum_gamma: float = 0.0
@@ -156,6 +162,7 @@ class AcquisitionManager:
             elapsed_seconds=0.0
         )
         
+        self._record_device_readings()    # what the instrument last reported, before the run
         # Clear device spectrum (device I/O can block, e.g. Bluetooth: keep it off the event loop)
         await asyncio.to_thread(device.clear_spectrum)
         
@@ -340,6 +347,7 @@ class AcquisitionManager:
                 self.state.last_spectrum_energies, energy_source = energies_from_device_spectrum(spectrum)
                 if energy_source != SOURCE_DEVICE:
                     logger.warning("[AcquisitionManager] " + fallback_warning())
+                self._record_device_readings()
                 dur = getattr(self._device, 'device_duration_s', None)
                 if isinstance(dur, (int, float)) and dur >= 0:
                     self.state.device_duration_s = float(dur)
@@ -374,6 +382,7 @@ class AcquisitionManager:
                     'source': self._source_name,
                     **self._instrument,
                     **self._exposure_metadata(),
+                    **self._device_metadata(),
                 },
                 'peaks': result.get('peaks', []),
                 'isotopes': result.get('isotopes', [])
@@ -423,6 +432,7 @@ class AcquisitionManager:
                     'source': self._source_name,
                     **self._instrument,
                     **self._exposure_metadata(),
+                    **self._device_metadata(),
                 },
                 'peaks': result.get('peaks', []),
                 'isotopes': result.get('isotopes', [])
@@ -486,6 +496,7 @@ class AcquisitionManager:
             'metadata': {
                 'source': self._source_name,
                 **self._instrument,
+                **self._device_metadata(),
                 'channels': len(self.state.last_spectrum_counts),
                 'count_time_minutes': self.state.elapsed_seconds / 60,
                 'acquisition_time': self.state.elapsed_seconds,
@@ -517,6 +528,28 @@ class AcquisitionManager:
             return {}
         return {k: c[k] for k in ("mean_cps_gamma", "mean_cps_beta", "mean_cps_alpha", "max_cps_total")}
 
+    def record_device_readings(self, temperature_c, compensation_factor=None) -> None:
+        """Keep the instrument's temperature (latest, lowest, highest) and compensation factor; unusable readings are ignored."""
+        st = self.state
+        if _is_reading(temperature_c):
+            t = float(temperature_c)
+            st.temperature_c = t
+            st.temperature_min_c = t if st.temperature_min_c is None else min(st.temperature_min_c, t)
+            st.temperature_max_c = t if st.temperature_max_c is None else max(st.temperature_max_c, t)
+        if _is_reading(compensation_factor):
+            st.compensation_factor = float(compensation_factor)
+
+    def _record_device_readings(self) -> None:
+        """From the device object, when it has them (the AlphaHound driver does; the Radiacode adapter does not)."""
+        self.record_device_readings(getattr(self._device, 'temperature', None), getattr(self._device, 'comp_factor', None))
+
+    def _device_metadata(self) -> Dict[str, Any]:
+        """The readings seen during this run, for the spectrum's metadata: how far the axis can be trusted depends on them."""
+        st = self.state
+        out = {'temperature_c': st.temperature_c, 'temperature_min_c': st.temperature_min_c,
+               'temperature_max_c': st.temperature_max_c, 'compensation_factor': st.compensation_factor}
+        return {k: round(v, 4) for k, v in out.items() if v is not None}
+
     def _exposure_metadata(self) -> Dict[str, Any]:
         e = self.exposure_summary()
         if not e:
@@ -530,6 +563,11 @@ class AcquisitionManager:
             "exposure_covered_s": e["covered_seconds"],
             "exposure_method": e["method"],
         }
+
+
+def _is_reading(value) -> bool:
+    """A finite number (a bool is an int to Python but never a reading)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def format_exposure(e: Dict[str, Any]) -> str:

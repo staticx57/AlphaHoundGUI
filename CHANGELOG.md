@@ -16,6 +16,10 @@
 - `calculate_mda` accepted a confidence level and ignored it (every request got the 95 % limit).
 
 ### Added
+- **The AlphaHound's temperature and compensation factor are saved with every spectrum** (`temperature_c`, `compensation_factor`; for a managed
+  acquisition also the lowest and highest temperature seen during the run). They were parsed and shown in the device panel but never reached the
+  spectrum, so no saved capture could be matched to the temperature it was taken at. They travel in the N42 extension (`TemperatureC`,
+  `TemperatureMinC`, `TemperatureMaxC`, `CompensationFactor`) and are read back from it. The plain two-column CSV export is unchanged.
 - **Energy-axis check from the lines themselves** (`spectroscopy/calibration_check.py`, `calibration_check` in the analysis result). It fits the clean
   lines of the sources found (Th-232 238/583/2615, Ra-226 series 609/1120/1764/2204, K-40, Cs-137, Co-60), accepts only clean ones, and
   reports a shift only when they agree, with the gain and offset that would correct it. Checked on synthetic spectra with an injected

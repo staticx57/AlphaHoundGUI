@@ -263,6 +263,7 @@ async def acquire_spectrum(request: SpectrumRequest):
             "source": "AlphaHound Device",
             "channels": len(counts),
             "energy_calibration": energy_source,
+            **device_readings(),
             "count_time_minutes": (actual_duration_seconds / 60),
             # N42 export fields
             "acquisition_time": actual_duration_seconds,
@@ -287,6 +288,12 @@ class ManagedAcquisitionRequest(BaseModel):
 
 
 UREM_TO_USV = 0.01  # AlphaHound reports dose rate in uRem/h (1 uRem = 0.01 uSv)
+
+
+def device_readings():
+    """The AlphaHound's temperature (deg C) and temperature compensation factor, as sent with the spectrum just read."""
+    values = {"temperature_c": alphahound_device.get_temperature(), "compensation_factor": alphahound_device.get_comp_factor()}
+    return {k: v for k, v in values.items() if v is not None}
 
 
 def alphahound_cps():
