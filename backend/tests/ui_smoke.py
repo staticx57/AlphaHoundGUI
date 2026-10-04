@@ -1013,6 +1013,30 @@ with sync_playwright() as p:
           and pv.evaluate("document.activeElement.id") == "btn-shield-tool")
     check("V no JS errors or native dialogs in the modal", not errs_v, "; ".join(errs_v[:3]))
     ctx_v.close()
+
+    # W: CHN holds only a quadratic energy axis, so its button says so for an AlphaHound-style cubic axis
+    ctx_w = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pw = ctx_w.new_page()
+    errs_w = []
+    pw.on("pageerror", lambda e: errs_w.append(f"pageerror: {e}"))
+    pw.on("dialog", lambda d: (errs_w.append("native dialog: " + d.message), d.dismiss()))
+    pw.goto(URL, wait_until="load")
+
+    def axis_csv(energy_of):
+        rows = "\n".join(f"{energy_of(i):.3f},{40 + (600 if 150 < i < 160 else 0)}" for i in range(256))
+        return {"name": "axis.csv", "mimeType": "text/csv", "buffer": ("Energy (keV),Counts\n" + rows + "\n").encode()}
+
+    pw.set_input_files("#file-input", files=[axis_csv(lambda i: 15.0 + 1.68372 * i - 4.75865e-05 * i * i + 5.49654e-06 * i ** 3 * 16.0)])
+    pw.wait_for_selector("#result-summary", state="visible", timeout=20000)
+    pw.wait_for_function("document.getElementById('btn-export-chn').disabled", timeout=8000)
+    title_w = pw.get_attribute("#btn-export-chn", "title")
+    check("W the CHN button is disabled for a cubic energy axis and says why",
+          "PCF or N42" in title_w and "keV off" in title_w and not pw.evaluate("document.getElementById('btn-export-pcf').disabled"), title_w[:120])
+    pw.set_input_files("#file-input", files=[axis_csv(lambda i: 15.0 + 3.0 * i)])
+    pw.wait_for_function("!document.getElementById('btn-export-chn').disabled", timeout=8000)
+    check("W a linear axis enables CHN again and restores its tooltip", pw.get_attribute("#btn-export-chn", "title") == "Ortec CHN file")
+    check("W no JS errors or native dialogs", not errs_w, "; ".join(errs_w[:3]))
+    ctx_w.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

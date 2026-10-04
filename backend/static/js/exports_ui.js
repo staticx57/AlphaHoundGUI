@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { notifyAuto } from './dialogs.js';
 import { n42MetadataEditor } from './n42_editor.js';
+import { chnAvailability } from './export_support.js';
 
 /**
  * PDF and N42 export and the N42 metadata editor buttons.
@@ -105,6 +106,16 @@ export function setupExports({ ui, getCurrentData } = {}) {
             btn.innerHTML = originalHTML;
             btn.disabled = false;
         }
+    });
+
+    // CHN holds only a quadratic energy axis: say so on the button before it is clicked, for the AlphaHound's cubic axis
+    const chnButton = document.getElementById('btn-export-chn');
+    const defaultChnTitle = chnButton?.title || '';
+    document.addEventListener('spectrum-rendered', (e) => {
+        if (!chnButton) return;
+        const { ok, reason } = chnAvailability(e.detail?.energies);
+        chnButton.disabled = !ok;
+        chnButton.title = ok ? defaultChnTitle : reason;
     });
 
     // PCF (GADRAS, InterSpec) and CHN (Ortec) export

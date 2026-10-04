@@ -166,10 +166,11 @@ way (see CHANGELOG). Not adopted, with the reason:
 | PyRIID, GADRAS, Geant4 | Synthetic-spectrum and response tools; the earlier decision to drop PyRIID stands. |
 | NASA-gamma, InterSpec, xraydb, PyNE, paceENSDF | Could not be verified from here (their pages did not load); nothing adopted. |
 
-Open idea with evidence: **gain drift.** Three long captures of the same thoriated lens on the same axis put the Th-232 583 keV line at
-569.6 to 579.5 keV (fit errors below 1 keV), 1.7 % apart; the 239 keV line 1.6 % apart. A correction that tracks known background lines
-(K-40 1461 keV, Tl-208 2615 keV) would be worth building, but the captures carry no temperature, so what causes it is not established.
-The method is described in [arXiv 2603.03461](https://arxiv.org/abs/2603.03461) (no code released that I could find).
+Gain drift, done: three long captures of the same lens on the same axis put the Th-232 583 keV line at 569.6 to 579.5 keV (fit errors below
+1 keV), so the axis does move. The existing whole-spectrum gain estimate was not the way to find it (it was wrong on every AlphaHound capture
+and on synthetic spectra with no shift), so `calibration_check.py` measures the lines directly. What is still open: the captures carry no
+temperature, so what causes the movement is not established; logging the device temperature next to a few long spectra would settle it.
+Method after [arXiv 2603.03461](https://arxiv.org/abs/2603.03461) (no code released that I could find).
 
 ## Manual verification backlog
 

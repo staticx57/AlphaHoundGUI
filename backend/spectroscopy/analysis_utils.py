@@ -90,14 +90,19 @@ def _reconcile_with_template_fit(result: dict, energies, counts, peaks, decay_ch
         fit = fit_source_templates(energies, counts, result.get("metadata"))
         if fit:
             result["source_fit"] = fit
-            # If identified sources anchor the fit, report a clearly-off energy calibration
-            if any(src["present"] for src in fit["sources"].values()):
-                shift = fit["gain"] + fit["offset_keV"] / 662.0 - 1.0
-                if abs(shift) > 0.025:
-                    result["warnings"] = result.get("warnings", []) + [
-                        f"Energy calibration looks about {abs(shift) * 100:.1f}% {'low' if shift < 0 else 'high'} "
-                        "(identified lines sit at shifted energies). Recalibrate for accurate peak energies."
-                    ]
+            # Where the clean lines of the sources found actually sit: reports a clearly-off energy calibration. (The fit's own gain
+            # estimate is not used for this: on real AlphaHound captures it reported 4-5 % low when the lines were within 1-3 %.)
+            try:
+                from spectroscopy.calibration_check import check_calibration
+                from spectroscopy.source_templates import _resolution
+                present = [name for name, src in fit["sources"].items() if src["present"]]
+                check = check_calibration(energies, counts, present, _resolution(fit["detector"]))
+                if check["lines"]:
+                    result["calibration_check"] = check
+                if check["message"]:
+                    result["warnings"] = result.get("warnings", []) + [check["message"]]
+            except Exception as e:
+                logger.warning(f"[Analysis] Calibration check failed: {e}")
             decay_chains, isotopes = reconcile_with_fit(
                 fit, decay_chains, isotopes, current_settings.get("isotope_min_confidence", 30.0), peaks)
     except Exception as e:

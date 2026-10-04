@@ -3,6 +3,11 @@
 ## [Session 2026-10-04] - Audit tiers A and B, spectrum formats, shielding
 
 ### Fixed
+- **The "energy calibration looks 4-5 % low" warning was false on real AlphaHound captures** and on synthetic spectra with a correct axis. It
+  came from the gain of the whole-spectrum template fit; the three Takumar captures have lines within 1-3 %, scattered both ways, and
+  applying that gain moved the 2615 keV line by 478 keV. Replaced by the line check above; the template fit keeps its job of deciding which
+  sources are present. A real Radiacode radium capture (lines 2.7 % low, three lines agreeing) is still flagged.
+- The CHN button is disabled, with the reason as its tooltip, for an energy axis a quadratic cannot hold (the AlphaHound's), instead of failing on click.
 - **Every extended spectrum format (.pcf, .spc, .cnf, .tka, ...) was refused.** The reader imported `SandiaSpecUtils`; the package installs the
   module `SpecUtils`. It is rewritten on the real API (several spectra in one file are totalled, the calibration is read exactly).
 - **Ortec CHN files were misread.** The channel count and offset (two 16-bit fields at bytes 28-31) were read as one 32-bit field and the
@@ -11,6 +16,10 @@
 - `calculate_mda` accepted a confidence level and ignored it (every request got the 95 % limit).
 
 ### Added
+- **Energy-axis check from the lines themselves** (`spectroscopy/calibration_check.py`, `calibration_check` in the analysis result). It fits the clean
+  lines of the sources found (Th-232 238/583/2615, Ra-226 series 609/1120/1764/2204, K-40, Cs-137, Co-60), accepts only clean ones, and
+  reports a shift only when they agree, with the gain and offset that would correct it. Checked on synthetic spectra with an injected
+  gain and offset (found and corrected to about 1 keV, no warning when there is none) and on real captures.
 - **PCF and CHN export** (buttons next to N42 in the export group; `POST /export/pcf`, `/export/chn`).
 - **Shielding and emissions** (header button *Shielding*; `GET /analyze/shielding/materials`, `POST /analyze/shielding`, `GET /analyze/emissions`):
   half- and tenth-value layers, transmission, thickness for a target; for an isotope, each gamma line and the whole emission; alpha range

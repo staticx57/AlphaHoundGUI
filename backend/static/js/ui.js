@@ -116,6 +116,7 @@ export class AlphaHoundUI {
             window.chartManager.displayMinKeV = (typeof data?.display_min_keV === 'number') ? data.display_min_keV : null;
         }
         this.elements.dashboard.style.display = 'block';
+        document.dispatchEvent(new CustomEvent('spectrum-rendered', { detail: data }));   // export buttons that depend on the data listen
         // A different spectrum invalidates the AI answer; a live acquisition growing only makes it outdated.
         const signature = spectrumSignature(data.counts);
         if (!live || spectrumChange(this._sig, signature) === 'new') this.aiState = { status: 'idle' };
