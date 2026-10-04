@@ -3,6 +3,13 @@
 ## [Session 2026-10-04] - Audit tiers A and B, spectrum formats, shielding
 
 ### Fixed
+- **No peak above about 600 keV was ever reported for the AlphaHound.** The peak fit used a fixed 30 keV window and gave up when fewer than 10
+  channels fell in it; the AlphaHound's channels are 1.7 keV wide at the bottom of its axis and 18 keV at the top, so above roughly 0.7 MeV every fit
+  failed silently. All three real thoriated-lens captures reported nothing above 576 keV (Ac-228 911 and Tl-208 2615 are what identify the chain);
+  an axis labelled 5 % too high emptied the peak list of any spectrum. The window is now widened to 12 channels, and only where it used to be too
+  narrow, so every fit that used to succeed is unchanged (Radiacode and the Cs-137 verification file give identical peaks). The night capture now
+  reports Ac-228 at 909 keV and the Tl-208 single-escape peak; `Uraninite Ore.csv`, which gave no peaks at all, now gives U-238 with Pb-214, Bi-214
+  and Ra-226. Real benchmark: 29 of 29 checks still pass. Covered by `tests/test_peak_window.py`.
 - **Three routes turned their own 4xx into a 500.** `POST /analyze/roi` with an unknown isotope, `/analyze/snip-background` with no counts and `/analyze/ml-identify` without scikit-learn raised a deliberate `HTTPException` inside a `try` whose `except Exception` caught it and answered 500 ("400: Unknown isotope ..."). They now answer 400, 400 and 501. A test scans every route for the pattern.
 - **Uploads froze the live dose stream.** `/upload` read the file asynchronously but then parsed and analysed it on the event loop, so every
   analysis stopped the dose WebSocket and every other request for its whole length (gaps of up to 2.9 s on the live AlphaHound under four parallel

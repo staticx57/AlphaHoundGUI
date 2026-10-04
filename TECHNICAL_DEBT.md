@@ -166,6 +166,12 @@ way (see CHANGELOG). Not adopted, with the reason:
 | PyRIID, GADRAS, Geant4 | Synthetic-spectrum and response tools; the earlier decision to drop PyRIID stands. |
 | NASA-gamma, InterSpec, xraydb, PyNE, paceENSDF | Could not be verified from here (their pages did not load); nothing adopted. |
 
+Axis reads low at high energy: on all three thoriated-lens captures the lines sit at -0.7 to +1.7 % at 239 keV, about -2 % at 583 keV and
+-8 % at 2615 keV (2390-2416 keV), a trend no single gain and offset can express, which is why the calibration check calls them inconsistent. The usual
+suspects are non-proportional light yield and silicon photomultiplier saturation, which make high-energy lines read low (the paper below models both). It
+means the AlphaHound's Tl-208 line is found at about 2.4 MeV, not 2.6; matching tolerances and the `C` calibration command (four polynomial terms) are
+the places to look.
+
 Gain drift: three long captures of the same lens on the same axis put the Th-232 583 keV line at 569.6 to 579.5 keV (fit errors below
 1 keV), so the axis does move. The existing whole-spectrum gain estimate was not the way to find it (it was wrong on every AlphaHound capture
 and on synthetic spectra with no shift), so `calibration_check.py` measures the lines directly. The device does report its temperature (about

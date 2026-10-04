@@ -55,7 +55,7 @@
 #### Machine Learning (scikit-learn MLP)
 - **Neural Network Classifier**: MLP trained on 90+ isotopes from IAEA/NNDC databases
 - **Multi-Isotope Mixtures**: Recognizes complex sources (UraniumGlass, ThoriumMantle, MedicalWaste, IndustrialGauge)
-- **Energy-grid resampling**: spectra are resampled onto the model's energy grid using the device's own calibration (Radiacode ~2.4 keV/channel, AlphaHound ~3 keV/channel)
+- **Energy-grid resampling**: spectra are resampled onto the model's energy grid using the device's own calibration (Radiacode about 2.7 keV/channel, AlphaHound a cubic axis of 1.7 to 18 keV/channel); the model's grid is about 3 keV/channel
 - **Real-data augmentation** (opt-in, `ML_USE_REAL_DATA=1`): filename-labelled local spectra; off by default because labels and calibration are not checked
 - **Environmental Background**: Trained on K-40, Bi-214, Tl-208 environmental peaks for background immunity
 - **Calibration Jitter**: one ±3% gain / ±8 keV offset error per training spectrum (not per line), plus resolution and count-level variation

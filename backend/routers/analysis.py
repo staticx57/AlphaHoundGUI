@@ -71,6 +71,14 @@ class CalibrationRequest(BaseModel):
             raise ValueError('Energies must be positive')
         return v
 
+    @model_validator(mode='after')
+    def _points_make_a_line(self):
+        if len(self.channels) != len(self.known_energies):
+            raise ValueError('channels and known_energies must have the same length')
+        if len(set(self.channels)) < 2:
+            raise ValueError('need at least two different channels')
+        return self
+
 
 class BackgroundSubtractionRequest(BaseModel):
     """Request model for background subtraction."""
@@ -976,6 +984,36 @@ def isotope_emissions(isotope: str = Query(..., max_length=20), min_intensity: f
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# === Analysis on a given energy axis (calibration dialog, axis correction) ===
+
+def _analyze_on_axis(energies, counts, metadata: dict, live_time: float) -> dict:
+    """The full analysis of a spectrum whose energy axis is already decided (calibrated, since someone chose it)."""
+    result = {"counts": counts, "energies": energies, "metadata": metadata}
+    return sanitize_for_json(analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time))
+
+
+class ReanalysisRequest(BaseModel):
+    """A spectrum and the energy axis to analyse it on."""
+    energies: List[float] = Field(..., min_length=1, max_length=MAX_SPECTRUM_CHANNELS)
+    counts: List[float] = Field(..., min_length=1, max_length=MAX_SPECTRUM_CHANNELS)
+    metadata: dict = Field(default={})
+    live_time: float = Field(default=0.0, ge=0.0)
+
+    @model_validator(mode='after')
+    def _axis_is_usable(self):
+        if len(self.energies) != len(self.counts):
+            raise ValueError("energies and counts must have the same length")
+        if any(b <= a for a, b in zip(self.energies, self.energies[1:])):
+            raise ValueError("energies must increase from channel to channel")
+        return self
+
+
+@router.post("/analyze/reanalyze")
+def reanalyze(request: ReanalysisRequest):
+    """Analyse the spectrum again on the energy axis given (after the user calibrated it by hand)."""
+    return _analyze_on_axis(request.energies, request.counts, request.metadata, request.live_time)
+
+
 # === Energy axis correction (from the calibration check) ===
 
 class AxisCorrectionRequest(BaseModel):
@@ -1001,10 +1039,5 @@ def correct_axis(request: AxisCorrectionRequest):
     axis, and analyse the spectrum again on the corrected axis. The correction is recorded in metadata.energy_correction.
     """
     energies = [(e - request.offset_keV) / request.gain for e in request.energies]
-    result = {
-        "counts": request.counts,
-        "energies": energies,
-        "metadata": {**request.metadata, "energy_correction": {"gain": request.gain, "offset_keV": request.offset_keV}},
-    }
-    result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=request.live_time)
-    return sanitize_for_json(result)
+    metadata = {**request.metadata, "energy_correction": {"gain": request.gain, "offset_keV": request.offset_keV}}
+    return _analyze_on_axis(energies, request.counts, metadata, request.live_time)

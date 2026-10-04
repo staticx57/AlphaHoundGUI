@@ -25,6 +25,10 @@ def gaussian_with_baseline(x, amplitude, center, sigma, bg_slope, bg_intercept):
     return gaussian + baseline
 
 
+MIN_FIT_POINTS = 10      # channels a fit needs inside its window
+MIN_FIT_CHANNELS = 12    # channels a window that was too narrow is widened to
+
+
 def fit_single_peak(
     energies: np.ndarray,
     counts: np.ndarray,
@@ -39,13 +43,22 @@ def fit_single_peak(
         counts: Count array
         center_guess: Approximate peak center (keV)
         window_kev: Width of fitting window (keV)
-        
+
     Returns:
         Dictionary with fit results or None if fit failed
     """
+    # The window must hold enough channels to fit: on a coarse or nonlinear axis (the AlphaHound's channels are 17 keV wide at the top) a fixed
+    # 30 keV window held fewer than the 10 a fit needs, every fit failed and no peak in that part of the spectrum was ever reported. It is
+    # widened only in that case: wherever a fit used to succeed the window is what it always was, so those results do not change.
+    nearest = int(np.argmin(np.abs(energies - center_guess)))
+    lo, hi = max(nearest - 1, 0), min(nearest + 1, len(energies) - 1)
+    local_width = (energies[hi] - energies[lo]) / max(hi - lo, 1)
+    if window_kev < MIN_FIT_POINTS * local_width:
+        window_kev = MIN_FIT_CHANNELS * local_width
+
     # Extract fitting region
     mask = (energies >= center_guess - window_kev/2) & (energies <= center_guess + window_kev/2)
-    if np.sum(mask) < 10:
+    if np.sum(mask) < MIN_FIT_POINTS:
         return None
     
     x = energies[mask]

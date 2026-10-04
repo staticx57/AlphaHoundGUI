@@ -27,8 +27,8 @@ coexist with this app, and it only supplied an MLP; the spectrum synthesis was a
    Natural-series daughters (Pb-214, Ac-228, ...) are *not* standalone classes: they never occur alone, and
    training them alone made a thorium lens read as "Pb-214".
 3. **Identification.** The input spectrum is resampled onto the model's energy grid using its own channel
-   energies (`MLIdentifier.resample`), so a Radiacode (~2.4 keV/channel) and an AlphaHound (~3 keV/channel)
-   both land on the right channels. Features are `sqrt(counts)`, L2-normalised. Without energies the input
+   energies (`MLIdentifier.resample`), so a Radiacode (about 2.7 keV/channel, slightly quadratic) and an AlphaHound (a cubic axis, 1.7 to
+   18 keV/channel) both land on the right channels of the model's own grid (about 3 keV/channel, 0-3 MeV). Features are `sqrt(counts)`, L2-normalised. Without energies the input
    is assumed to be on the model grid (much less reliable). `POST /analyze/ml-identify` accepts `energies`.
 
 ## Checking it

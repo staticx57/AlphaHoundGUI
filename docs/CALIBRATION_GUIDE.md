@@ -21,7 +21,7 @@ Energy (keV) = Slope × Channel + Intercept
 ```
 
 For a 1024-channel spectrometer:
-- **AlphaHound**: ~7.39 keV/channel, 15 keV offset → Range: 15-7572 keV
+- **AlphaHound**: not linear. The device sends its own axis, a cubic polynomial of four coefficients (`15.0001 + 1.68372·ch − 4.76e-5·ch² + 5.50e-6·ch³` keV on the unit used for testing, the same on different days): about 1.7 keV/channel at the bottom, 5.8 at channel 500, 18 at the top, 7.39 on average → Range: 15-7572 keV
 - **Typical NaI**: ~3.0 keV/channel, 0 keV offset → Range: 0-3069 keV
 
 ### Calibration Procedure
@@ -58,7 +58,7 @@ flowchart LR
 > **Verified AlphaHound Calibration:**
 > - Channels: 1024
 > - Energy Range: 15 - 7572 keV
-> - Slope: ~7.39 keV/channel
+> - Axis: a cubic polynomial, 7.39 keV/channel on average (see above)
 > - Crystal: CsI(Tl), 1.1 cm³
 > - Resolution: ≤10% FWHM at 662 keV
 
@@ -72,6 +72,10 @@ A 6-hour uranium glass spectrum (190,623 counts) was used to verify calibration:
 | Wrong (3 keV/ch) | 165 keV | 111 keV | 48 keV | ✅ HIGH | ⚠️ 75% FALSE |
 
 **Conclusion**: Device calibration is CORRECT. Do NOT use 3 keV/channel assumption.
+
+Where the two numbers come from: 7.4 keV/channel is only the *average* slope of the device's own cubic axis, and 3.0 keV/channel is a forced
+linear axis that older versions of this application wrote into saved N42 files (`tools/recalibrate_n42.py` restores the device axis).
+On the device axis the Th-232 lines of a thoriated lens land within 1-3 % of their nominal energies.
 
 ### Detector Specifications
 
