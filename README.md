@@ -431,9 +431,11 @@ AlphaHoundGUI/
 │   ├── main.py                          # FastAPI application entry point
 │   ├── core.py                          # Shared settings and utilities
 │   ├── routers/
-│   │   ├── analysis.py                  # File upload, peak detection, ML endpoints
+│   │   ├── analysis.py                  # File upload, peak detection, ML, shielding and emissions, axis correction
 │   │   ├── device.py                    # AlphaHound device control
 │   │   ├── device_radiacode.py          # Radiacode device control
+│   │   ├── export.py                    # PDF, N42, PCF and CHN export, N42 metadata editing
+│   │   ├── nuclear.py                   # Nuclear data, decay prediction, dose rate
 │   │   └── isotopes.py                  # Custom isotope CRUD
 │   ├── formats/                         # File formats: parsers, N42 export and editor, PDF report
 │   │   ├── n42_parser.py                # N42/XML file parser (multi-namespace)
@@ -441,7 +443,8 @@ AlphaHoundGUI/
 │   │   ├── chn_spe_parser.py            # Ortec CHN and Maestro SPE parser
 │   │   ├── iaea_parser.py               # IAEA LiveChart gamma data parser
 │   │   ├── radiacode_xml_parser.py      # Radiacode XML spectrum parser
-│   │   ├── specutils_parser.py          # SandiaSpecUtils wrapper for 100+ formats
+│   │   ├── specutils_parser.py          # SpecUtils reader for PCF, SPC, CNF, TKA and 100+ other formats
+│   │   ├── spectrum_export.py           # PCF (GADRAS) and CHN (Ortec) export through SpecUtils
 │   │   ├── n42_exporter.py              # N42/XML file exporter
 │   │   ├── n42_metadata_editor.py       # N42 metadata editing (UI integration)
 │   │   └── report_generator.py          # PDF export with matplotlib plots
@@ -462,7 +465,8 @@ AlphaHoundGUI/
 │   │   ├── spectrum_algebra.py          # Spectrum math operations with error propagation
 │   │   ├── source_analysis.py           # Source-specific analysis (lenses, dials, ore)
 │   │   ├── source_identification.py     # Auto-suggest source type from isotopes
-│   │   └── source_templates.py          # Full-spectrum fit of U-238 / Th-232 source templates
+│   │   ├── source_templates.py          # Full-spectrum fit of U-238 / Th-232 source templates
+│   │   └── calibration_check.py         # Energy-axis check from where known lines actually sit
 │   ├── nuclides/                        # Isotope database, decay chains and decay engines
 │   │   ├── isotope_database.py          # 100+ isotopes from IAEA/NNDC databases
 │   │   ├── isotope_validation.py        # Validation rules, incompatible-isotope lists
@@ -473,6 +477,8 @@ AlphaHoundGUI/
 │   │   ├── decay_data.py                # Half-lives and branching fractions (ICRP 107 table)
 │   │   ├── bateman.py                   # Branching Bateman solver for decay chains
 │   │   ├── curie_compat.py              # Thread-safety shim for the Curie library
+│   │   ├── shielding.py                 # Gamma shielding: HVL, TVL, transmission (NIST XCOM via curie)
+│   │   ├── emissions.py                 # Alpha and beta emissions and how far they travel
 │   │   └── curie_integration.py         # Nuclear decay data via curie library
 │   ├── devices/                         # AlphaHound and Radiacode drivers, acquisition manager
 │   │   ├── alphahound_serial.py         # AlphaHound serial communication driver
@@ -483,6 +489,8 @@ AlphaHoundGUI/
 │   ├── ml/                              # AI identification (scikit-learn) and its training data
 │   │   ├── ml_analysis.py               # ML identification (scikit-learn)
 │   │   └── ml_data_loader.py            # Real data augmentation for ML training
+│   ├── tools/                           # Scripts: devctl (server and device control), recalibrate_n42, download_iaea_data,
+│   │                                    #   generate_decay_table, generate_test_spectra
 │   └── static/
 │       ├── index.html                   # Main HTML interface
 │       ├── style.css                    # Application styling with CSS variables
@@ -496,7 +504,9 @@ AlphaHoundGUI/
 │           ├── calibration.js           # Energy calibration UI
 │           ├── isotopes_ui.js           # Custom isotope library UI
 │           ├── n42_editor.js            # N42 metadata editor UI
-│           └── themes.js                # Theme switching logic
+│           ├── themes.js                # Theme switching logic
+│           └── ...                      # About 35 smaller modules, one per page section or concern: device panels and controls,
+│                                        #   exports_ui, shielding_ui, calibration_notice, alerts, units, axis, channels, dialogs, toast
 ├── docs/
 │   ├── ALPHAHOUND_SERIAL_COMMANDS.md    # Device command reference
 │   ├── ANALYSIS_CONDITIONS.md           # Analysis mode documentation
