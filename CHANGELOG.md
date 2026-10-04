@@ -3,6 +3,12 @@
 ## [Session 2026-10-04] - Audit tiers A and B, spectrum formats, shielding
 
 ### Fixed
+- **Uploads froze the live dose stream.** `/upload` read the file asynchronously but then parsed and analysed it on the event loop, so every
+  analysis stopped the dose WebSocket and every other request for its whole length (gaps of up to 2.9 s on the live AlphaHound under four parallel
+  uploads). It now runs in a worker thread: the stream keeps its one-second rhythm (largest gap 1.01 s) and the same load finishes about twice
+  as many uploads. Found by the new live check; covered by `tests/test_upload_event_loop.py`.
+- **Every closed or reloaded tab was logged as an error.** The dose WebSocket logged `ERROR [WebSocket] Error:` (an empty message) whenever a
+  client left. A client leaving is now normal; an unexpected failure is still an error and names its exception type.
 - **The "energy calibration looks 4-5 % low" warning was false on real AlphaHound captures** and on synthetic spectra with a correct axis. It
   came from the gain of the whole-spectrum template fit; the three Takumar captures have lines within 1-3 %, scattered both ways, and
   applying that gain moved the 2615 keV line by 478 keV. Replaced by the line check above; the template fit keeps its job of deciding which

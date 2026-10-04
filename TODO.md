@@ -34,10 +34,10 @@ Done and verified on the live AB+G (COM8): `P` polling and CPS parsing, dose str
 
 ### UI/UX round of 2026-10-03: needs your eyes / hardware to confirm
 Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit.py`, `ui_channels_sweep.py`, `ui_theme_sweep.py`) pass, but these need a person or a device:
-- [ ] AlphaHound channel panel with the real `P` stream (meters, history chart, CPS/CPM) in your favourite themes
-- [ ] Alerts on real readings: banner, beep (browsers only allow sound after a click on the page), desktop notification permission prompt
+- [ ] AlphaHound channel panel with the real `P` stream (meters, history chart, CPS/CPM) in your favourite themes *(live AlphaHound, 2026-10-04: Dark theme checked on the real stream: the numbers match the API and change every second. The other themes still need your eyes.)*
+- [ ] Alerts on real readings: banner, beep (browsers only allow sound after a click on the page), desktop notification permission prompt *(live AlphaHound, 2026-10-04: The banner appears for a limit below the real reading and goes away with the default one. Sound and the notification prompt need a person.)*
 - [ ] Radiacode "Device alarm limits" in Advanced Diagnostics with real registers (shape tested with a mock only)
-- [ ] Dose unit preference across both devices (Settings > Dose readings and alerts)
+- [ ] Dose unit preference across both devices (Settings > Dose readings and alerts) *(live AlphaHound, 2026-10-04: AlphaHound checked: uSv/h and uRem/h change the readout, 0.85 uSv/h = 85 uRem/h. The Radiacode side was not available.)*
 - [ ] Screen reader pass (NVDA / VoiceOver): dialogs, the result summary, the alert banner
 - [ ] Open the app from a phone on the LAN (`http://<computer-ip>:3200`) with the computer offline
 - Ideas not done: sticky section navigation, auto-running the AI check after each upload (optional setting), linking the AI/line-matching disagreement to the peaks it is based on.
@@ -53,17 +53,17 @@ Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit
 - [ ] Upload a real CSV spectrum and confirm peaks/isotopes look the same as before (parser-level detection removed; only automated tests ran, on tiny synthetic CSVs)
 - [ ] `POST /upload` with a malformed CSV now returns 400 (was 500); confirm the UI shows a sensible error toast
 - [ ] Full UI/UX visual sweep across themes and mobile widths (needs a real browser)
-- [ ] Run a long upload/analysis while the live dose sparkline is running; confirm the sparkline no longer stalls (analysis and Radiacode routes now run in the threadpool)
-- [ ] Confirm the UI still works with CORS off (same-origin, incl. from another LAN device); set `ALPHAHOUND_CORS_ORIGINS` if a separate frontend is used
-- [ ] Refresh the page while an AlphaHound is connected; device should stay connected (10s WebSocket reconnect grace)
+- [x] Run a long upload/analysis while the live dose sparkline is running; confirm the sparkline no longer stalls (analysis and Radiacode routes now run in the threadpool) *(live AlphaHound, 2026-10-04: Not as stated at first: uploads still analysed on the event loop and froze the dose stream for up to 2.9 s. Now in a worker thread: under four parallel uploads the stream keeps its 1 s rhythm (largest gap 1.01 s) and throughput doubled.)*
+- [x] Confirm the UI still works with CORS off (same-origin, incl. from another LAN device); set `ALPHAHOUND_CORS_ORIGINS` if a separate frontend is used *(live AlphaHound, 2026-10-04: Loaded from this computer's LAN address (192.168.1.152) with the device panel populated and no console errors; a separate physical device was not tried.)*
+- [x] Refresh the page while an AlphaHound is connected; device should stay connected (10s WebSocket reconnect grace) *(live AlphaHound, 2026-10-04: 28 of 28 status polls stayed connected across a reload, and the panel came back.)*
 - [ ] ROI results show "activity ± uncertainty Bq" (new `activity_uncertainty_bq`, 1σ counting uncertainty; `main.js` ~line 1941) and render correctly when the field is absent
 - [ ] PDF export button downloads a working report (`/export/pdf` was broken: missing import; also forced matplotlib to headless `Agg`)
 - [ ] Dose-rate calculator in the UI still works (`/analyze/dose-rate` now enforces the validated request model: activity ≥ 0, distance 0.01–1000 m)
-- [ ] Exports (N42/CSV/checkpoint) and N42 metadata editor still work after moving to `routers/export.py`
-- [ ] Server console output looks sane after switching ~180 `print` calls to `logging` (set `ALPHAHOUND_LOG_LEVEL=DEBUG` for more); live-device log lines (Radiacode/AlphaHound) appear at the right levels
-- [ ] With a real AlphaHound: `POST /device/spectrum` acquire works (was an UnboundLocalError; verified only with a mocked device)
-- [ ] AlphaHound live dose: readout updates, sparkline moves, and the >2000 µRem/hr safety alert appears (`ui.js` was writing to nonexistent `dose-display`, so the WebSocket callback threw on every message; now points at `rc-dose-display`)
-- [ ] Background subtraction: Load Background File / Use Current as BG shows the "● ACTIVE" badge and the Clear BG button, and refreshes the chart (previously threw on missing `bg-active-indicator`)
+- [ ] Exports (N42/CSV/checkpoint) and N42 metadata editor still work after moving to `routers/export.py` *(live AlphaHound, 2026-10-04: N42 export of a live spectrum and the checkpoint write and delete work; CSV export and the metadata editor are covered by the automated tests only.)*
+- [x] Server console output looks sane after switching ~180 `print` calls to `logging` (set `ALPHAHOUND_LOG_LEVEL=DEBUG` for more); live-device log lines (Radiacode/AlphaHound) appear at the right levels *(live AlphaHound, 2026-10-04: Only INFO lines from the live device. Every client disconnect was logged as an ERROR with an empty message; fixed, and a real error now names its type.)*
+- [ ] With a real AlphaHound: `POST /device/spectrum` acquire works (was an UnboundLocalError; verified only with a mocked device) *(live AlphaHound, 2026-10-04: The read path (count_minutes 0) works on the real device, including temperature in the metadata. A timed acquire clears the device spectrum, so it was not run.)*
+- [x] AlphaHound live dose: readout updates, sparkline moves, and the >2000 µRem/hr safety alert appears (`ui.js` was writing to nonexistent `dose-display`, so the WebSocket callback threw on every message; now points at `rc-dose-display`) *(live AlphaHound, 2026-10-04: Readout and rates change every second and agree with the API; the alert banner was checked with a limit below the real reading, since the default 2000 uRem/h cannot be reached on this source.)*
+- [ ] Background subtraction: Load Background File / Use Current as BG shows the "● ACTIVE" badge and the Clear BG button, and refreshes the chart (previously threw on missing `bg-active-indicator`) *(live AlphaHound, 2026-10-04: Use Current as BG and Clear BG checked on a live spectrum (badge shows and hides, the device's own spectrum untouched); Load Background File was not.)*
 - [ ] Nothing depended on the deleted `js/main_restored_temp.js` (was unreferenced; recoverable from git history)
 
 ### ML & Analysis

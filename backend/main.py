@@ -8,7 +8,7 @@ logging.basicConfig(
     format="%(levelname)s [%(name)s] %(message)s",
 )
 
-from fastapi import FastAPI, WebSocket, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -183,8 +183,10 @@ async def websocket_dose_stream(websocket: WebSocket):
             else:
                 await websocket.send_json({"dose_rate": None, "status": "disconnected"})
             await asyncio.sleep(1)
+    except WebSocketDisconnect:
+        pass                                  # the tab was closed or reloaded: normal, and reported below as a disconnect
     except Exception as e:
-        logger.error(f"[WebSocket] Error: {e}")
+        logger.error(f"[WebSocket] Error: {type(e).__name__}: {e}")
     finally:
         # Remove from active connections
         active_websockets.discard(websocket)

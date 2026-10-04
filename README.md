@@ -676,6 +676,10 @@ The browser checks (headless Chrome, with the server running) are scripts in `ba
 `ALPHAHOUND_URL=http://127.0.0.1:3201` to run them against a second instance while a device is connected to the first
 (set `PYTHONIOENCODING=utf-8` on Windows). `tests/test_repo_layout.py` keeps the repository tidy: new root files, backup or
 temporary files, large or unreferenced images, broken document links, tracked user data and loose backend modules fail it.
+
+With an AlphaHound connected, `python backend/tests/live_alphahound_check.py` checks it through the real UI and API (live panel, page reload,
+dose stream during heavy uploads, alert banner, dose units, background subtraction, LAN address, checkpoint export, server log). It is
+read-only: it never clears the device's spectrum or starts a timed acquisition.
 New backend code goes into `formats/`, `spectroscopy/`, `nuclides/`, `devices/`, `ml/` or `routers/` (see the project structure above).
 
 **Areas for Contribution:**

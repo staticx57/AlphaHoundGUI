@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, File, UploadFile, HTTPException, Query, Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, field_validator, model_validator, Field
 from typing import List, Optional
 from formats.n42_parser import parse_n42
@@ -293,13 +294,19 @@ async def upload_file(file: UploadFile = File(...)):
             detail=f"File too large. Maximum size: {MAX_FILE_SIZE_MB}MB"
         )
 
+    # Parsing and analysis are CPU work: in a worker thread, so the event loop (the live dose stream, other requests) keeps going
+    return await run_in_threadpool(_analyze_upload, content, filename, file.filename)
+
+
+def _analyze_upload(content: bytes, filename: str, original_filename: str) -> dict:
+    """The parser for the file's type, then the common analysis."""
     if filename.endswith('.n42') or filename.endswith('.xml'):
         return _analyze_n42_upload(content)
     if filename.endswith('.csv'):
         return _analyze_csv_upload(content, filename)
     if filename.endswith('.chn') or filename.endswith('.spe'):
-        return _analyze_chn_spe_upload(content, filename, file.filename)
-    return _analyze_generic_upload(content, filename, file.filename)
+        return _analyze_chn_spe_upload(content, filename, original_filename)
+    return _analyze_generic_upload(content, filename, original_filename)
 
 
 @router.post("/analyze/fit-peaks")

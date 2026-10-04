@@ -176,8 +176,14 @@ axis the device sends is identical on different days). Method after [arXiv 2603.
 
 ## Manual verification backlog
 
-`TODO.md` still lists about 25 items that need a person or hardware (live Radiacode and AlphaHound readings, themes on
-a phone, screen readers). That is verification debt, not code debt, and nothing in this pass touched those paths.
+Done on 2026-10-04 with the AlphaHound connected, read-only (`backend/tests/live_alphahound_check.py` repeats it): the live panel and its numbers,
+a page reload keeping the device, the dose stream under heavy uploads, the alert banner, dose units, background subtraction on a live spectrum,
+access from the LAN address, checkpoint export and the server log. It found and fixed two defects (see the CHANGELOG). The results are noted
+item by item in `TODO.md`.
+
+Still needs a person or other hardware: the themes beyond Dark on the live channel panel, alert sound and the desktop notification prompt,
+a separate physical device on the LAN, the Radiacode items, a screen reader, comparing the replica with the physical screen, and anything that
+clears the device (a timed acquisition, Clear), which was left alone.
 
 ## Good practices
 
