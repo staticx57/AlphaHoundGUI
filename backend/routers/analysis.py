@@ -13,7 +13,7 @@ from spectroscopy.spectral_analysis import fit_gaussian, calibrate_energy, subtr
 from formats.chn_spe_parser import parse_chn_file, parse_spe_file
 from spectroscopy.detector_efficiency import get_detector_names, calculate_mda
 
-from spectroscopy.analysis_utils import analyze_spectrum_peaks
+from spectroscopy.analysis_utils import analyze_spectrum_peaks, sanitize_for_json
 
 
 # Constants for input validation
@@ -961,3 +961,37 @@ def isotope_emissions(isotope: str = Query(..., max_length=20), min_intensity: f
         return particle_emissions(isotope.strip(), min_intensity=min_intensity)
     except ShieldingError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# === Energy axis correction (from the calibration check) ===
+
+class AxisCorrectionRequest(BaseModel):
+    """A spectrum whose energies are to be corrected by the gain and offset the calibration check found."""
+    energies: List[float] = Field(..., min_length=1, max_length=MAX_SPECTRUM_CHANNELS)
+    counts: List[float] = Field(..., min_length=1, max_length=MAX_SPECTRUM_CHANNELS)
+    gain: float = Field(..., gt=0.5, lt=2.0)
+    offset_keV: float = Field(..., ge=-500.0, le=500.0)
+    metadata: dict = Field(default={})
+    live_time: float = Field(default=0.0, ge=0.0)
+
+    @model_validator(mode='after')
+    def _same_length(self):
+        if len(self.energies) != len(self.counts):
+            raise ValueError("energies and counts must have the same length")
+        return self
+
+
+@router.post("/analyze/correct-axis")
+def correct_axis(request: AxisCorrectionRequest):
+    """
+    Map every energy back by the shift the check measured (true = (measured - offset) / gain), which keeps the shape of a nonlinear
+    axis, and analyse the spectrum again on the corrected axis. The correction is recorded in metadata.energy_correction.
+    """
+    energies = [(e - request.offset_keV) / request.gain for e in request.energies]
+    result = {
+        "counts": request.counts,
+        "energies": energies,
+        "metadata": {**request.metadata, "energy_correction": {"gain": request.gain, "offset_keV": request.offset_keV}},
+    }
+    result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=request.live_time)
+    return sanitize_for_json(result)

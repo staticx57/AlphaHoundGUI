@@ -22,6 +22,7 @@ import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette
 import { setupDeviceTabs } from './device_tabs.js';
 import { setupExports } from './exports_ui.js';
 import { setupShieldingTool } from './shielding_ui.js';
+import { setupCalibrationNotice } from './calibration_notice.js';
 import { setupAnalysisPanels } from './analysis_panels.js';
 import { setupSettingsAndHistory } from './settings_history.js';
 import { setupThemeAndChartControls } from './chart_controls.js';
@@ -656,6 +657,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     loadDecayEngines();
     setupShieldingTool();
+    setupCalibrationNotice({ getCurrentData: () => currentData, isAcquiring: () => isAcquiring, applyAnalysis });
     isotopeUI.init();
 });
 
@@ -1878,6 +1880,21 @@ async function refreshChartWithBackground() {
         }
     } else {
         chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
+    }
+}
+
+/**
+ * Takes a spectrum that the server analysed again (the energy axis was corrected) as the current one and shows it.
+ * @param {object} data - the analysis result
+ * @returns {void}
+ */
+function applyAnalysis(data) {
+    currentData = data;
+    ui.renderDashboard(data);
+    if (backgroundData) {
+        refreshChartWithBackground();
+    } else {
+        chartManager.render(data.energies, data.counts, data.peaks || [], chartManager.getScaleType());
     }
 }
 

@@ -361,6 +361,22 @@ internet. To keep it to this computer, start the server on the loopback address 
 `python -m uvicorn main:app --host 127.0.0.1 --port 3200`. Cross-origin browser access is off unless
 `ALPHAHOUND_CORS_ORIGINS` lists the origins.
 
+### Environment variables
+
+All optional; the defaults give the interactive behaviour.
+
+| Variable | Effect |
+|----------|--------|
+| `ALPHAHOUND_LOG_LEVEL` | Log level (`INFO` by default). |
+| `ALPHAHOUND_CORS_ORIGINS` | Comma-separated origins allowed to call the API from another site; none by default. |
+| `ALPHAHOUND_AUTOCONNECT_PORT` | Serial port (e.g. `COM8`) to connect to at startup, retried while it is busy. |
+| `ALPHAHOUND_AUTORECONNECT` | `1`: with the port above, keep it connected and reconnect after a USB drop or a silent device (a deliberate Disconnect is respected until the next Connect). Implies `ALPHAHOUND_KEEP_CONNECTED`. |
+| `ALPHAHOUND_KEEP_CONNECTED` | `1`: do not release the AlphaHound when the last browser tab closes. |
+| `ALPHAHOUND_DOSE_LOG` | `off`: keep the dose history in memory only. By default it is saved to `backend/data/dose_log.jsonl` and survives restarts. |
+| `ML_USE_REAL_DATA` | `1`: train the AI identifier on augmented real spectra from `backend/data/acquisitions/` as well as synthetic ones. |
+| `ALPHAHOUND_URL` | Which server `backend/tools/devctl.py` and the browser tests (`tests/ui_*.py`) talk to (`http://127.0.0.1:3200` by default); set it to run the tests against a second instance while a device is connected to the first. |
+| `REAL_BENCHMARK_EXTRA` | Folder with `hw_thorium.csv` and `hw_uranium.csv` (Radiacode 110) that `tests/real_benchmark.py` adds to its real-spectrum cases; they are not committed. |
+
 **Use Cases**:
 - Control detector remotely from tablet/phone
 - View spectrum analysis from multiple screens

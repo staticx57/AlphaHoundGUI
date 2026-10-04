@@ -1037,6 +1037,36 @@ with sync_playwright() as p:
     check("W a linear axis enables CHN again and restores its tooltip", pw.get_attribute("#btn-export-chn", "title") == "Ortec CHN file")
     check("W no JS errors or native dialogs", not errs_w, "; ".join(errs_w[:3]))
     ctx_w.close()
+
+    # X: the energy-axis notice (a real Radiacode radium capture whose lines sit 2.7 % low, a thorium one within the threshold)
+    import pathlib
+    real = pathlib.Path(__file__).resolve().parent / "data" / "radiacode_fisicas"
+    ctx_x = browser.new_context(viewport={"width": 1400, "height": 1000})
+    px = ctx_x.new_page()
+    errs_x = []
+    px.on("pageerror", lambda e: errs_x.append(f"pageerror: {e}"))
+    px.on("dialog", lambda d: (errs_x.append("native dialog: " + d.message), d.dismiss()))
+    px.goto(URL, wait_until="load")
+    px.set_input_files("#file-input", str(real / "Th-232.xml"))
+    px.wait_for_selector("#result-summary", state="visible", timeout=20000)
+    px.wait_for_function("window.Chart && Chart.getChart(document.getElementById('spectrumChart'))", timeout=10000)
+    check("X a capture within the threshold shows no axis notice", px.evaluate("document.getElementById('cal-notice').hidden"))
+    px.set_input_files("#file-input", str(real / "Ra-226.xml"))
+    px.wait_for_function("!document.getElementById('cal-notice').hidden", timeout=20000)
+    notice = px.inner_text("#cal-notice-text")
+    check("X a clearly shifted capture shows the notice with the gain and offset", "Energy calibration looks low" in notice and "gain 0.97" in notice, notice[:140])
+    first_x_before = px.evaluate("Chart.getChart(document.getElementById('spectrumChart')).data.datasets[0].data[200].x")
+    px.click("#btn-apply-axis-correction")
+    px.wait_for_function("document.getElementById('cal-notice').hidden", timeout=20000)
+    first_x_after = px.evaluate("Chart.getChart(document.getElementById('spectrumChart')).data.datasets[0].data[200].x")
+    check("X applying the correction moves the energies up by about 2.7 % and the notice goes away",
+          1.02 < first_x_after / first_x_before < 1.04, f"{first_x_before:.1f} -> {first_x_after:.1f} keV")
+    px.set_input_files("#file-input", str(real / "Ra-226.xml"))
+    px.wait_for_function("!document.getElementById('cal-notice').hidden", timeout=20000)
+    px.click("#btn-dismiss-axis-notice")
+    check("X Dismiss hides the notice", px.evaluate("document.getElementById('cal-notice').hidden"))
+    check("X no JS errors or native dialogs", not errs_x, "; ".join(errs_x[:3]))
+    ctx_x.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

@@ -147,8 +147,8 @@ Each has no reference anywhere in code, tests or scripts. Most are leftovers of 
 
 ### D. Housekeeping found on the way
 
-* `download_iaea_data.py` sits in the repository root and writes `backend/data/idb`: it belongs in `backend/tools/`.
-* `ALPHAHOUND_DOSE_LOG` is read by `main.py` but documented only in the CHANGELOG; `REAL_BENCHMARK_EXTRA` (benchmark helper) is not documented anywhere.
+Done: `download_iaea_data.py` moved to `backend/tools/` (its output folder no longer depends on where it is started, and importing it no
+longer downloads anything); `ALPHAHOUND_DOSE_LOG`, `REAL_BENCHMARK_EXTRA` and the other environment variables are in the README.
 
 ## Library review (2026-10-04): unused but useful features
 
@@ -171,7 +171,7 @@ Gain drift: three long captures of the same lens on the same axis put the Th-232
 and on synthetic spectra with no shift), so `calibration_check.py` measures the lines directly. The device does report its temperature (about
 30 C, steps of 0.125 C) and a compensation factor that moves about -0.1 % per C; from now on both are saved with each spectrum. The older
 captures have neither. What is still open is the cause: take a few long captures at different temperatures and see whether the 583 keV
-line follows the temperature or the compensation factor. Whether the factor acts on the counts or the dose figures is not known (the energy
+line follows the temperature or the compensation factor. The check's correction can be applied from the notice above the results. Whether the factor acts on the counts or the dose figures is not known (the energy
 axis the device sends is identical on different days). Method after [arXiv 2603.03461](https://arxiv.org/abs/2603.03461) (no code released that I could find).
 
 ## Manual verification backlog

@@ -1,4 +1,7 @@
-"""Download gamma radiation data from IAEA LiveChart API for priority isotopes."""
+"""Download gamma radiation data from IAEA LiveChart API for priority isotopes into backend/data/idb/isotopes.
+
+Run from anywhere:  python backend/tools/download_iaea_data.py
+"""
 import urllib.request
 import os
 import time
@@ -26,9 +29,8 @@ PRIORITY_ISOTOPES = [
     "ir192", "se75", "yb169",
 ]
 
-# Output directory
-OUTPUT_DIR = "backend/data/idb/isotopes"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Output directory (relative to this file, not to where the script is started)
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "idb", "isotopes")
 
 def download_gamma_data(isotope):
     """Download gamma radiation data for a single isotope."""
@@ -54,27 +56,32 @@ def download_gamma_data(isotope):
     except Exception as e:
         return f"ERROR: {e}"
 
-# Download all isotopes
-print("="*60)
-print("DOWNLOADING IAEA GAMMA DATA")
-print("="*60)
+def main():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    print("="*60)
+    print("DOWNLOADING IAEA GAMMA DATA")
+    print("="*60)
 
-success_count = 0
-total_gammas = 0
+    success_count = 0
+    total_gammas = 0
 
-for isotope in PRIORITY_ISOTOPES:
-    result = download_gamma_data(isotope)
-    if isinstance(result, int):
-        print(f"  {isotope:10} - {result:4} gamma lines")
-        success_count += 1
-        total_gammas += result
-    else:
-        print(f"  {isotope:10} - {result}")
+    for isotope in PRIORITY_ISOTOPES:
+        result = download_gamma_data(isotope)
+        if isinstance(result, int):
+            print(f"  {isotope:10} - {result:4} gamma lines")
+            success_count += 1
+            total_gammas += result
+        else:
+            print(f"  {isotope:10} - {result}")
     
-    # Rate limiting - be nice to IAEA servers
-    time.sleep(0.5)
+        # Rate limiting - be nice to IAEA servers
+        time.sleep(0.5)
 
-print("="*60)
-print(f"SUCCESS: {success_count}/{len(PRIORITY_ISOTOPES)} isotopes downloaded")
-print(f"TOTAL: {total_gammas} gamma lines")
-print(f"OUTPUT: {OUTPUT_DIR}/")
+    print("="*60)
+    print(f"SUCCESS: {success_count}/{len(PRIORITY_ISOTOPES)} isotopes downloaded")
+    print(f"TOTAL: {total_gammas} gamma lines")
+    print(f"OUTPUT: {OUTPUT_DIR}/")
+
+
+if __name__ == "__main__":
+    main()

@@ -2755,6 +2755,21 @@ pre.app-dialog-body {
     animation: safety-pulse 2s infinite;
 }
 .safety-banner[hidden] { display: none; }
+.cal-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1rem;
+    margin-bottom: 1rem;
+    padding: 0.7rem 1.1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--warning-color, #f59e0b);
+    border-left-width: 4px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+.cal-notice[hidden] { display: none; }
+.cal-notice span { flex: 1 1 24rem; min-width: 0; }
 .safety-line { display: flex; flex-direction: column; gap: 0.1rem; }
 .safety-line strong { font-size: 0.9rem; letter-spacing: 0.04em; text-transform: uppercase; }
 .safety-value { font-family: var(--ch-font); font-size: 1.05rem; font-weight: 700; }

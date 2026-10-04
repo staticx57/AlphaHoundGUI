@@ -97,3 +97,54 @@ def test_real_radiacode_radium_capture_is_flagged_with_the_gain_three_lines_agre
     assert check["consistent"] and len(check["lines"]) == 3
     assert check["correction"]["gain"] == pytest.approx(0.974, abs=0.005)
     assert any("calibration looks low" in w for w in result["warnings"])
+
+
+# ---- applying the correction the check found ----
+
+from fastapi.testclient import TestClient  # noqa: E402
+from main import app  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def client():
+    return TestClient(app)
+
+
+def correct(client, seen, counts, check, **extra):
+    corr = check["correction"]
+    return client.post("/analyze/correct-axis", json={"energies": seen.tolist(), "counts": counts.tolist(), "gain": corr["gain"],
+                                                      "offset_keV": corr["offset_keV"], "metadata": {"source": "AlphaHound Device"}, **extra})
+
+
+@pytest.mark.parametrize("gain_error, offset", [(0.95, 0), (1.04, 0), (0.98, 12)])
+def test_applying_the_correction_restores_the_axis_and_the_check_then_agrees(client, gain_error, offset):
+    seen, counts = thorium_spectrum(gain_error, offset)
+    check = check_calibration(seen, counts, ["thorium_series"], 0.10)
+    assert check["message"]
+    response = correct(client, seen, counts, check, live_time=3600.0)
+    assert response.status_code == 200
+    body = response.json()
+    assert np.allclose(body["energies"], TRUE_AXIS, atol=3.0)                 # the axis the counts were really made on
+    assert body["metadata"]["energy_correction"]["gain"] == pytest.approx(check["correction"]["gain"])
+    assert not [w for w in body.get("warnings", []) if "calibration looks" in w]
+    assert abs(body["calibration_check"]["shift_percent"]) < 0.5
+    assert "Th-232" in [c["parent"] for c in body["decay_chains"]]
+
+
+def test_correction_keeps_the_shape_of_a_nonlinear_axis(client):
+    cubic = (15.0001 + 1.68372 * np.arange(1024) - 4.75865e-05 * np.arange(1024) ** 2 + 5.49654e-06 * np.arange(1024) ** 3)
+    counts = np.full(1024, 30.0)
+    body = client.post("/analyze/correct-axis", json={"energies": cubic.tolist(), "counts": counts.tolist(), "gain": 0.97, "offset_keV": 5.0}).json()
+    expected = (cubic - 5.0) / 0.97
+    assert np.allclose(body["energies"], expected, atol=1e-6)
+    assert np.all(np.diff(body["energies"]) > 0)
+
+
+@pytest.mark.parametrize("payload", [
+    {"energies": [1.0, 2.0], "counts": [1.0], "gain": 1.0, "offset_keV": 0.0},                 # lengths differ
+    {"energies": [1.0, 2.0], "counts": [1.0, 2.0], "gain": 3.0, "offset_keV": 0.0},            # a gain no real drift reaches
+    {"energies": [1.0, 2.0], "counts": [1.0, 2.0], "gain": 1.0, "offset_keV": 1000.0},
+    {"energies": [], "counts": [], "gain": 1.0, "offset_keV": 0.0},
+])
+def test_unreasonable_corrections_are_refused(client, payload):
+    assert client.post("/analyze/correct-axis", json=payload).status_code == 422

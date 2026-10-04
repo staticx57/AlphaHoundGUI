@@ -29,6 +29,14 @@
   half- and tenth-value layers, transmission, thickness for a target; for an isotope, each gamma line and the whole emission; alpha range
   in air and beta range in air and aluminium. NIST XCOM coefficients from curie, checked against published values. Narrow-beam, stated as such.
 
+### Changed
+- **Apply the correction the energy-axis check found.** When the check finds the lines consistently off, a notice above the results says so
+  and offers *Apply correction* (`POST /analyze/correct-axis`): every energy is mapped back by the measured gain and offset, which keeps the
+  shape of a nonlinear axis (the older calibration dialog re-draws a linear axis only), and the spectrum is analysed again; the correction is
+  recorded in `metadata.energy_correction`. Not offered while a recording runs.
+- `download_iaea_data.py` moved from the repository root to `backend/tools/`; it works from any folder and no longer downloads when imported.
+- The environment variables are documented in one table in the README.
+
 ### Removed (audit tiers A and B, see TECHNICAL_DEBT.md)
 - About 1,400 lines of unreferenced Python and JavaScript (and two obsolete files), four uncalled routes (`/analyze/identify-source`, `/analyze/multiplet`,
   `/device/capabilities`, `/radiacode/configuration`), 24 dead CSS selectors, `install.bat`, five unused icons, `uncertainties`.
