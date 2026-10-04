@@ -1,5 +1,70 @@
 # CHANGELOG
 
+## [Session 2026-10-04 evening] - Analysis engine tuned on real spectra, automatic energy-axis correction
+
+Every analysis route was run against the live AlphaHound and the RadiaCode N42 captures, then the identification engine was tuned on 44
+labelled real spectra: the repository benchmark, the local thoriated-lens captures, the live spectrum and 21 public RadiaCode spectra now
+vendored in `backend/tests/data/web_spectra/` (ckuethe/radiacode-tools and dmamontov/periodic-table, MIT; becquerel samples, LBNL licence;
+licences and a README with what each sample is). Scorecard on those 44: 801/818 checks and 31/44 spectra fully right before, 844/844 and
+44/44 after. Thresholds were set from tables of true and false sources, not by taste; the scorecard was tuned on the same spectra.
+
+### Fixed
+- **Isotope confidences did not depend on the spectrum.** The enhanced rescoring read `matched_energy` / `energy`, keys the line matcher never
+  writes, so every isotope was scored as a perfect match of a line at 0 keV: Th-232 and U-238 were always 74 %, any isotope missing from a
+  small intensity table (Tl-201, Tc-99m, F-18, U-234) 71 %, Ba-133 53.5 %, Am-241 43.5 %. A backscatter bump made Tl-201 outrank the three
+  strong lines of a real Ba-133 source. It now scores the isotope's own matched lines (energy, share of its emission seen, peak quality,
+  how many lines), and keeps the ceilings the validation rules put on a multi-line isotope seen through too few lines, which the rescoring
+  used to overwrite.
+- **One peak could stand for several lines of the same isotope** (a 164 keV bump "matched" both Tl-201 lines; 305 keV both Ba-133 276 and
+  303). Matching is one-to-one, strongest lines first.
+- **The matching tolerance was wider than a peak at low energy** (a fixed 20-30 keV): Pb X-rays from a lead shield (74 keV) read as
+  Am-241, Am-241 read as Ba-133. It narrows to what the detector resolves (half FWHM, calibration error, floor) where that is smaller.
+- **Required lines counted lines no detector would show:** Pb-212, the strongest thorium line, was dropped for lack of its 3 % line at
+  300 keV; four thorium captures listed no isotope at all. Only lines with at least a fifth of the strongest line's expected counts count.
+- **Eu-152 was reported as the Th-232 series** (244.7/344.3/964 keV on 238.6/338.3/969), Co-60 was missed beside Cs-137 (share of counts
+  0.053 under a 0.07 bar tuned for multi-line series), and radium sources gained Ba-133 (its lines coincide with Pb-214's). The template fit
+  has Eu-152 and Ba-133 templates; artificial sources need a 0.02 share (true ones had >= 0.053 at z >= 30, false ones <= 0.008 at
+  z <= 5.7); Ba-133 needs no radium series and a peak at 81 keV.
+- **Uranium glazes were called Tl-201** (U-235 143.8/163.3 keV on Tl-201 135/167): a template the fit uses at z >= 5 explains peaks away.
+  **Uranium glass listed Ra-226**: with uranium but no radium series, the radium daughters are demoted and U-235 is listed.
+- **A uraninite ore lost its radium daughters:** one coincidental line (I-131 364.5 keV on Pb-214 352 keV) demoted the whole natural
+  series. The template fit runs before the confidence filter and lifts that demotion from members of a series it confirms.
+- **Germanium spectra that name no detector were analysed as an AlphaHound CsI** and read as Na-22 with no series. The resolution is
+  measured from the peaks; germanium-narrow peaks get an HPGe profile (germanium tolerance, no scintillator template search), and
+  environmental HPGe backgrounds now show both natural series.
+- **The calibration check stayed silent on the live AlphaHound's drift** (lines 4-12 % low): two lines that disagree on one gain were
+  "inconsistent" and nothing was said. When every line is clearly off the same way, it warns (without a correction to apply).
+- **Fit Peaks returned slivers:** a fixed +-10 keV window held less than one FWHM of a scintillator peak, so widths came out 0.1-0.7 %
+  and areas 10-100 times too small, and AlphaHound peaks above ~400 keV were dropped. The window follows each peak's measured width;
+  fits that end on a limit or are not significant are skipped. InterSpec agrees within a few percent on the main peaks.
+- **The enrichment check called Cs-137 sources and thoriated lenses "Ra-226 interference":** Cs-137 662 and Tl-208 583 keV fall in the
+  Bi-214 609 keV window. Bi-214 counts as radium only when the template fit does not attribute that peak to thorium or Cs-137 and the
+  peak does not sit nearer their line.
+- The anomaly check ran the ML model without the energy axis (3/9 right on the real benchmark instead of 8/9).
+- SPE files: a unit after the `$MCA_CAL` coefficients (GammaVision) was refused; all-zero coefficients (digiBASE, "not calibrated") gave
+  every channel 0 keV. Same guard for CHN.
+- **InterSpec and SpecUtils read the app's N42 files on a default 0-3000 keV axis** (the List/ChannelEnergies pair is not N42-2012).
+  Exports also carry a standard `EnergyCalibration` (channel boundaries) that the spectrum references; files saved before this still open
+  on the wrong axis elsewhere.
+
+### Added
+- **Automatic energy-axis correction** (`spectroscopy/auto_calibration.py`). Line matching proposes corrections, only from sources with
+  several lines (thorium, radium, Eu-152, Co-60 with K-40), so one line can never move the axis; the template fit, run on each corrected
+  axis, must confirm that source clearly ahead of every other proposal and of the uncorrected axis. Applied beyond 2.5 %, never on germanium,
+  never on an axis the user chose (`/analyze/reanalyze`, `/analyze/correct-axis`). The result carries `auto_calibration`,
+  `original_energies` and `metadata.energy_correction` (`automatic: true`); the notice above the results offers *Undo*. Saved acquisitions
+  keep the device's own axis. On every labelled spectrum drifted by 0.90-1.10 the series verdict went from 267/307 to 286/307, none was
+  made worse, and no correction named the wrong source. On the live AlphaHound (5.7 % lower gain than in December 2025) it moves 238.6 keV
+  from 229 to 236.9 and 583.2 keV from 537 to 582.7.
+- Tests: `test_auto_calibration.py`, `test_web_spectra.py`, `test_confidence_scoring.py`, `test_fit_peaks.py`, `test_anomaly_detection.py`,
+  browser section X2 (automatic correction and Undo). 857 backend tests, 192 browser checks, real benchmark 29/29, ML 8/9.
+
+### Not done
+- The correction declines short captures with few clear peaks, single-line sources (Cs-137 or Am-241 alone) and Ba-133 alone (its lines
+  merge into two peaks at this resolution); 21 of the 307 drifted cases are still read wrongly.
+- Old N42 files with the forced 3 keV/channel axis still need `tools/recalibrate_n42.py`: a real Cs-137 file with the same axis and labels
+  is correct, so the two cannot be told apart safely.
+
 ## [Session 2026-10-04] - Audit tiers A and B, spectrum formats, shielding
 
 ### Fixed
