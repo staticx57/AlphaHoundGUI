@@ -3,6 +3,7 @@
 ## [Session 2026-10-04] - Audit tiers A and B, spectrum formats, shielding
 
 ### Fixed
+- **Three routes turned their own 4xx into a 500.** `POST /analyze/roi` with an unknown isotope, `/analyze/snip-background` with no counts and `/analyze/ml-identify` without scikit-learn raised a deliberate `HTTPException` inside a `try` whose `except Exception` caught it and answered 500 ("400: Unknown isotope ..."). They now answer 400, 400 and 501. A test scans every route for the pattern.
 - **Uploads froze the live dose stream.** `/upload` read the file asynchronously but then parsed and analysed it on the event loop, so every
   analysis stopped the dose WebSocket and every other request for its whole length (gaps of up to 2.9 s on the live AlphaHound under four parallel
   uploads). It now runs in a worker thread: the stream keeps its one-second rhythm (largest gap 1.01 s) and the same load finishes about twice

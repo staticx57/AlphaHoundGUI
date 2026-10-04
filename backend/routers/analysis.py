@@ -411,6 +411,8 @@ def ml_identify(request: MLIdentifyRequest):
             "quality": quality,
             "top_confidence": results[0]['confidence'] if results else 0
         }
+    except HTTPException:
+        raise                                  # a deliberate 4xx/501 is the answer, not a failure to turn into a 500
     except ImportError:
         raise HTTPException(status_code=501, detail="scikit-learn not installed")
     except Exception as e:
@@ -491,6 +493,8 @@ def snip_background_endpoint(request: dict):
         
         return response
         
+    except HTTPException:
+        raise                                  # a deliberate 4xx/501 is the answer, not a failure to turn into a 500
     except Exception as e:
         logger.error(f"SNIP background error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -548,6 +552,8 @@ def analyze_roi_endpoint(request: ROIAnalysisRequest):
         
         return response
         
+    except HTTPException:
+        raise                                  # a deliberate 4xx/501 is the answer, not a failure to turn into a 500
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
