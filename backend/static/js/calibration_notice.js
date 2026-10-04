@@ -11,7 +11,7 @@
  * @param {() => boolean} deps.isAcquiring
  * @param {(data: object) => void} deps.applyAnalysis
  */
-import { notifyAuto } from './dialogs.js';
+import { notify, notifyAuto } from './dialogs.js';
 
 export function setupCalibrationNotice({ getCurrentData, isAcquiring, applyAnalysis } = {}) {
     const notice = document.getElementById('cal-notice');
@@ -62,7 +62,7 @@ export function setupCalibrationNotice({ getCurrentData, isAcquiring, applyAnaly
                 throw new Error(detail || `Request failed (${response.status})`);
             }
             applyAnalysis(body);
-            notifyAuto(`Energy axis corrected (gain ${correction.gain.toFixed(3)}, offset ${correction.offset_keV.toFixed(1)} keV) and analysed again.`);
+            notify(`Energy axis corrected (gain ${correction.gain.toFixed(3)}, offset ${correction.offset_keV.toFixed(1)} keV) and analysed again.`, 'success');
         } catch (err) {
             notifyAuto(`Error: could not correct the energy axis: ${err.message}`);
         } finally {
