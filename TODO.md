@@ -34,7 +34,7 @@ Done and verified on the live AB+G (COM8): `P` polling and CPS parsing, dose str
 
 ### UI/UX round of 2026-10-03: needs your eyes / hardware to confirm
 Automated checks (mocked devices, headless Chrome: `ui_smoke.py`, `ui_a11y_audit.py`, `ui_channels_sweep.py`, `ui_theme_sweep.py`) pass, but these need a person or a device:
-- [ ] AlphaHound channel panel with the real `P` stream (meters, history chart, CPS/CPM) in your favourite themes *(live AlphaHound, 2026-10-04: Dark theme checked on the real stream: the numbers match the API and change every second. The other themes still need your eyes.)*
+- [x] AlphaHound channel panel with the real `P` stream (meters, history chart, CPS/CPM) in your favourite themes *(2026-10-04: numbers match the API and change every second (checked live in Dark); the themes were checked by eye by the owner and work.)*
 - [ ] Alerts on real readings: banner, beep (browsers only allow sound after a click on the page), desktop notification permission prompt *(live AlphaHound, 2026-10-04: The banner appears for a limit below the real reading and goes away with the default one. Sound and the notification prompt need a person.)*
 - [ ] Radiacode "Device alarm limits" in Advanced Diagnostics with real registers (shape tested with a mock only)
 - [ ] Dose unit preference across both devices (Settings > Dose readings and alerts) *(live AlphaHound, 2026-10-04: AlphaHound checked: uSv/h and uRem/h change the readout, 0.85 uSv/h = 85 uRem/h. The Radiacode side was not available.)*
