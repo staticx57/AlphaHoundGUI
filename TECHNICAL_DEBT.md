@@ -65,7 +65,7 @@ Still open:
 | `innerHTML` | 68 uses; the untrusted-text sites are escaped, the rest build markup from numbers and constants | Prefer `textContent` / DOM construction for new code. |
 | No authentication | The server binds `0.0.0.0:3200` for LAN access and exposes device control and file endpoints. Now stated plainly in the README ("Security" under LAN Access) with the loopback command; still no login | An opt-in token would be the next step. |
 | Remaining `console.log` filter | `log.js` hides diagnostics by default; nothing yet shows them in the UI | |
-| `ml_analysis` | Module-level `_ml_identifiers` cache; the first AI request after a restart trains the model on a request thread | |
+| `ml_analysis` | Module-level `_ml_identifiers` cache; the first AI request after a restart trains the model: measured 2026-10-04 at 5.3 s, then instant. The route runs in the thread pool, so nothing else stalls. | Left as it is: a warm-up at startup would spend that 5 s of CPU on every start, also for people who never press the button. |
 
 ## Documentation
 
