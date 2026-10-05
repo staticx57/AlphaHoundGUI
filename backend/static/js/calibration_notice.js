@@ -12,19 +12,33 @@
  * @param {() => object} deps.getCurrentData
  * @param {() => boolean} deps.isAcquiring
  * @param {(data: object) => void} deps.applyAnalysis
+ * @param {() => void} deps.openCalibration - opens the calibration tool (offered for a placeholder axis, in every UI mode)
  */
 import { notify, notifyAuto } from './dialogs.js';
 
-export function setupCalibrationNotice({ getCurrentData, isAcquiring, applyAnalysis } = {}) {
+export function setupCalibrationNotice({ getCurrentData, isAcquiring, applyAnalysis, openCalibration } = {}) {
     const notice = document.getElementById('cal-notice');
     if (!notice) return;
     const text = document.getElementById('cal-notice-text');
     const apply = document.getElementById('btn-apply-axis-correction');
     const dismiss = document.getElementById('btn-dismiss-axis-notice');
     const undo = document.getElementById('btn-undo-auto-correction');
+    const openTool = document.getElementById('btn-open-calibration');
     let dismissed = null;                              // the message the user dismissed: a different one shows again
 
     const refresh = (data) => {
+        // No usable calibration (none at all, or the 0, 3, 6 ... keV placeholder in a file that names a real detector): nothing
+        // to correct automatically, so the notice says what to do and opens the calibration tool, which Simple mode shows nowhere else
+        const needed = data?.calibration_needed?.message;
+        if (openTool) openTool.hidden = !needed;
+        if (needed) {
+            const show = needed !== dismissed && !isAcquiring();
+            notice.hidden = !show;
+            apply.hidden = true;
+            if (undo) undo.hidden = true;
+            if (show) text.textContent = needed;
+            return;
+        }
         const auto = data?.auto_calibration;
         const automatic = Boolean(auto?.applied && Array.isArray(data?.original_energies));
         const check = data?.calibration_check;
@@ -37,6 +51,8 @@ export function setupCalibrationNotice({ getCurrentData, isAcquiring, applyAnaly
     };
 
     document.addEventListener('spectrum-rendered', (e) => refresh(e.detail));
+
+    openTool?.addEventListener('click', () => openCalibration?.());
 
     dismiss.addEventListener('click', () => {
         dismissed = text.textContent || null;          // whichever message is showing (automatic correction or check)

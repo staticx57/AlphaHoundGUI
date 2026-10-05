@@ -122,5 +122,6 @@ def check_calibration(energies: Sequence[float], counts: Sequence[float], presen
         # straight line maps it back, so there is a warning and no correction to apply.
         direction = "low" if shifts[worst] < 0 else "high"
         result["message"] = (f"Energy calibration looks {direction}, by {abs(shifts).min() * 100:.1f} to {abs(shifts).max() * 100:.1f}% "
-                             f"({listed}). The lines do not agree on one gain and offset, so use Calibrate with known lines.")
+                             f"({listed}). The lines do not agree on one gain and offset, so assign the energies from known "
+                             f"lines with Open Calibration Tool.")
     return result

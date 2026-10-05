@@ -87,7 +87,7 @@ def test_lines_all_clearly_off_the_same_way_are_reported_without_a_correction():
     check = check_calibration(TRUE_AXIS * drift, counts, ["thorium_series"], 0.10)
     assert len(check["lines"]) >= 2 and all(m["shift_percent"] < -2.5 for m in check["lines"])
     assert not check["consistent"] and check["correction"] is None   # no straight line to offer
-    assert check["message"] and "low" in check["message"] and "Calibrate" in check["message"]
+    assert check["message"] and "low" in check["message"] and "Open Calibration Tool" in check["message"]
 
 
 def test_a_real_alphahound_capture_with_the_gain_drift_seen_live_is_flagged(tmp_path):

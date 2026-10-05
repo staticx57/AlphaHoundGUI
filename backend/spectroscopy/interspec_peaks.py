@@ -35,6 +35,17 @@ FWHM_PER_SIGMA = 2.354820045
 SOURCE = "InterSpec"
 
 
+def _hidden() -> Dict:
+    """Arguments that keep InterSpec_batch (a console program) out of sight on Windows. The server runs detached, without a
+    console, so Windows gave every run a new console window over the user's desktop."""
+    if not hasattr(subprocess, "CREATE_NO_WINDOW"):
+        return {}
+    info = subprocess.STARTUPINFO()
+    info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    info.wShowWindow = 0                                  # SW_HIDE
+    return {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": info}
+
+
 def batch_path() -> Optional[str]:
     path = os.environ.get("ALPHAHOUND_INTERSPEC_BATCH", DEFAULT_BATCH)
     return path if path and os.path.isfile(path) else None
@@ -97,7 +108,7 @@ def find_peaks(energies, counts, r662: float, live_time: float = 0.0, min_energy
                                       "metadata": {"live_time": live, "real_time": live, "source": "AlphaHoundGUI"}}))
         done = subprocess.run([exe, "--batch-peak-fit", "--fit-all-peaks", "--input-file", spectrum, "--out-dir", work,
                                "--overwrite-output-files", "--file-report-template", "none", "--summary-report-template", "none"],
-                              capture_output=True, text=True, timeout=TIMEOUT_S, cwd=os.path.dirname(exe))
+                              capture_output=True, text=True, timeout=TIMEOUT_S, cwd=os.path.dirname(exe), **_hidden())
         result = os.path.join(work, "s.n42.CSV")
         if not os.path.exists(result):
             logger.warning("InterSpec wrote no peaks (exit %s): %s", done.returncode, (done.stderr or done.stdout)[-300:])

@@ -1,6 +1,7 @@
 """InterSpec as the peak finder (spectroscopy/interspec_peaks.py). Skipped where InterSpec is not installed."""
 import asyncio
 import math
+import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -86,3 +87,20 @@ def test_a_missing_interspec_falls_back_to_the_builtin_detector(monkeypatch):
     monkeypatch.setenv("ALPHAHOUND_INTERSPEC_BATCH", r"C:\nowhere\InterSpec_batch.exe")
     result = analyze_spectrum_peaks({"counts": spectrum().tolist(), "energies": AXIS.tolist(), "metadata": {}}, True, 3600.0)
     assert result["analysis_mode"] != "interspec" and result["peaks"]
+
+
+@pytest.mark.skipif(not hasattr(subprocess, "CREATE_NO_WINDOW"), reason="Windows only")
+def test_interspec_runs_without_a_window(monkeypatch):
+    """The server runs detached (no console), so Windows gave every InterSpec run a new console window over the desktop."""
+    seen = {}
+    real_run = subprocess.run
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real_run(*args, **kwargs)
+
+    monkeypatch.setattr(interspec_peaks.subprocess, "run", spy)
+    assert interspec_peaks.find_peaks(AXIS, spectrum(), 0.10)
+    assert seen.get("creationflags", 0) & subprocess.CREATE_NO_WINDOW
+    info = seen.get("startupinfo")
+    assert info is not None and info.dwFlags & subprocess.STARTF_USESHOWWINDOW and info.wShowWindow == 0   # SW_HIDE

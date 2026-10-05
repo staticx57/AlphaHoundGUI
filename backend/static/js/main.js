@@ -654,7 +654,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     loadDecayEngines();
     setupShieldingTool();
-    setupCalibrationNotice({ getCurrentData: () => currentData, isAcquiring: () => isAcquiring, applyAnalysis });
+    setupCalibrationNotice({ getCurrentData: () => currentData, isAcquiring: () => isAcquiring, applyAnalysis, openCalibration: () => calUI.show() });
     isotopeUI.init();
 
     // Last, once every control works: a request here must not delay the listeners (a file dropped at once was lost)

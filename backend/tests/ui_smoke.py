@@ -1138,6 +1138,29 @@ with sync_playwright() as p:
           any(abs(e - 330) < 16 for e in after) and any(abs(e - 726) < 16 for e in after) and not any(abs(e - 660) < 15 for e in after), str(after))
     check("Y no JS errors or native dialogs in the calibration flow", not errs_y, "; ".join(errs_y[:3]))
     ctx_y.close()
+
+    # Z: a file whose axis is the old placeholder (0, 3, 6 ... keV) gets a notice that stays, naming the tool by its real name
+    # and opening it from the notice in any UI mode. The message said "use Calibrate": no button has that name, and in Simple
+    # mode (the default) the calibration tool is not on screen at all.
+    ctx_z = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pz = ctx_z.new_page()
+    errs_z = []
+    pz.on("pageerror", lambda e: errs_z.append(f"pageerror: {e}"))
+    pz.on("dialog", lambda d: (errs_z.append("native dialog: " + d.message), d.dismiss()))
+    pz.add_init_script("localStorage.setItem('analysisSettings', JSON.stringify({uiMode: 'simple'}))")
+    pz.goto(URL, wait_until="load")
+    pz.set_input_files("#file-input", os.path.join(HERE, "data", "real_spectra", "takumar 942pm to 558am.n42"))
+    pz.wait_for_selector("#cal-notice:not([hidden])", timeout=30000)
+    notice = pz.inner_text("#cal-notice-text")
+    check("Z a placeholder axis gets a notice that stays and says what to do", "placeholder" in notice and "Open Calibration Tool" in notice, notice[:160])
+    check("Z the message names no button that does not exist", "use Calibrate" not in notice, notice[:160])
+    check("Z in Simple mode the notice has its own Open Calibration Tool button", pz.is_visible("#btn-open-calibration")
+          and not pz.is_visible("#btn-apply-axis-correction") and not pz.is_visible("#btn-undo-auto-correction"))
+    pz.click("#btn-open-calibration")
+    pz.wait_for_timeout(500)
+    check("Z the button opens the calibration tool", pz.is_visible("#calibration-modal"))
+    check("Z no JS errors or native dialogs", not errs_z, "; ".join(errs_z[:3]))
+    ctx_z.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

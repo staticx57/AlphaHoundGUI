@@ -294,9 +294,8 @@ PLACEHOLDER_AXIS_WARNING = (
     "This file says it was recorded by {device}, but its energy axis is exactly 3 keV per channel from zero (0, 3, 6 ... keV): "
     "the placeholder that older AlphaHoundGUI builds saved instead of the detector's own axis, so the energies are probably "
     "wrong (on one such file a thoriated lens read as Eu-152). Isotope and decay-chain identification is skipped. The counts "
-    "are fine: repair the file with the "
-    "real axis of the device it came from (backend/tools/recalibrate_n42.py with a spectrum CSV from that device), or use "
-    "Calibrate.")
+    "are fine: repair the file with the real axis of the device it came from (backend/tools/recalibrate_n42.py with a spectrum "
+    "CSV from that device), or assign the energies here with Open Calibration Tool.")
 
 
 def claimed_detector(metadata) -> str:
@@ -353,9 +352,13 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     if not is_calibrated:
         result["isotopes"] = []
         result["decay_chains"] = []
-        result["warnings"] = result.get("warnings", []) + [PLACEHOLDER_AXIS_WARNING.format(device=device) if placeholder else (
-            "No energy calibration: isotope and decay-chain identification skipped. "
-            "Energies are channel numbers or an assumed 3 keV/channel; use Calibrate to assign real energies.")]
+        message = PLACEHOLDER_AXIS_WARNING.format(device=device) if placeholder else (
+            "No energy calibration: isotope and decay-chain identification skipped. Energies are channel numbers or an "
+            "assumed 3 keV/channel; assign real energies with Open Calibration Tool.")
+        # the page shows this in the axis notice, with a button to the calibration tool: in Simple mode (the default) the
+        # tool is on screen nowhere else, and the message used to send people to a "Calibrate" button that does not exist
+        result["calibration_needed"] = {"message": message, "placeholder_axis": bool(placeholder), "device": device or None}
+        result["warnings"] = result.get("warnings", []) + [message]
         return result
 
     if not peaks:
