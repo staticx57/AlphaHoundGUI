@@ -79,6 +79,7 @@ CORPUS = [
     ("ah_takumar_90m", REAL / "spectrum_2025-12-15_takumar_90min.n42", "n42_recal", "AlphaHound CsI", series("Th-232")),
     ("ah_takumar_8h_dec", REAL / "spectrum_takumar_8hr_reference.n42", "n42_recal", "AlphaHound CsI", series("Th-232")),
     ("ah_takumar_night_dec", REAL / "takumar 942pm to 558am.n42", "n42_recal", "AlphaHound CsI", series("Th-232")),
+    ("ah_takumar_live20m", REAL / "takumar_live_2026-10-05_20min_thinned.n42", "n42", "AlphaHound CsI", series("Th-232")),
     ("ah_cs137", BACKEND / "Cs137_Verification_Spectra.n42", "n42", "AlphaHound CsI", single("Cs-137")),
     ("ah_u_glaze_bowl", COMM / "7.5 x 4 Deep Red Uranium Glaze Bowl.csv", "csv", "AlphaHound CsI", series("U-238")),
     ("ah_uraninite", COMM / "Uraninite Ore.csv", "csv", "AlphaHound CsI", series("U-238")),
@@ -160,6 +161,20 @@ def score(result, truth):
         out["margin"] = None
     fit = result.get("source_fit") or {}
     out["chi2_dof"] = fit.get("chi2_dof")
+    out["levels"] = {c["parent"]: c.get("confidence_level") for c in result.get("decay_chains", []) if c["parent"] in (truth["chains"] or ())}
+    src = {k: v.get("z") for k, v in (fit.get("sources") or {}).items()}
+    kind, fam = truth["kind"], truth["family"]
+    true_names = set()
+    if kind == "series":
+        if "Th-232" in (truth["chains"] or ()):
+            true_names.add("thorium_series")
+        if "U-238" in (truth["chains"] or ()):
+            true_names |= {"radium_series", "fresh_uranium"}
+    elif kind == "single":
+        true_names |= {n for n in truth.get("isotopes", ())}
+    out["src_z"] = {k: round(v, 1) for k, v in src.items() if v is not None}
+    out["z_true_max"] = round(max((src[n] for n in true_names if n in src), default=0.0), 1) if true_names else None
+    out["z_false_max"] = round(max((v for k, v in src.items() if k not in true_names and v is not None), default=0.0), 1) if kind in ("series", "single") else None
     wanted = truth["chains"] or set()
     zs = [fit.get("chains", {}).get(c, {}).get("z") for c in wanted]
     out["z"] = min((z for z in zs if z is not None), default=None)
@@ -273,6 +288,11 @@ def main():
         "chi2_dof_median": (lambda cs: round(sorted(cs)[len(cs) // 2], 1) if cs else None)([r["chi2_dof"] for r in ok if r.get("chi2_dof") is not None]),
         "z_by_spectrum": {k: rows[k].get("z") for k in series_ids},
         "chi2_by_spectrum": {k: rows[k].get("chi2_dof") for k in series_ids},
+        "z_true_min": min((r["z_true_max"] for r in ok if r.get("z_true_max")), default=None),
+        "z_false_max": max((r["z_false_max"] for r in ok if r.get("z_false_max") is not None), default=None),
+        "z_false_worst": max(((r["z_false_max"], k) for k, r in rows.items() if "error" not in r and r.get("z_false_max") is not None), default=None),
+        "z_true_worst": min(((r["z_true_max"], k) for k, r in rows.items() if "error" not in r and r.get("z_true_max")), default=None),
+        "series_high": f"{sum(1 for k in series_ids if rows[k].get('levels') and all(v == 'HIGH' for v in rows[k]['levels'].values()))}/{len(series_ids)}",
         "order_changes": order_changed, "axis_changes": len(axis_changed), "axis_changed_ids": axis_changed,
     }
     if not args.quiet:

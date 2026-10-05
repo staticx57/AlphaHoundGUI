@@ -46,7 +46,12 @@ MIN_SIGNIFICANCE = 5.0        # fitted peak amplitude over its error, for a peak
 DETECTABLE = 0.05             # a line counts in a hypothesis's recall when it is this share of its strongest line (intensity x efficiency)
 CURVATURE_SLACK = 0.015       # a straight gain+offset cannot follow a scintillator's curved axis exactly: this share of the energy
 GAIN_RANGE = (0.85, 1.15)
-OFFSET_RANGE = (-20.0, 20.0)  # every real axis seen (AlphaHound, RadiaCode 102/103/110) was within +-15 keV
+OFFSET_RANGE = (-30.0, 30.0)  # the axes seen first (AlphaHound, RadiaCode 102/103/110) were within +-15 keV; the AlphaHound at 28.8 deg C in
+                              # October 2026 needs +20.8 keV on top of a 12 % gain error, which the old +-20 refused by 0.8 keV
+OFFSET_PROVEN = 20.0          # beyond this the proposal has to be confirmed strongly (FAR_CONFIRM_Z): more freedom, more proof. Widening the
+                              # range alone let a drifted Co-60 + Cs-137 source be "corrected" as Eu-152 (4 lines, offset 21-22 keV) on a
+                              # fit z of 7.4, barely over the bar; the thorium capture that needs the range is confirmed at z 20.9
+FAR_CONFIRM_Z = 15.0
 MIN_LINES = 3
 MARGIN = 1.3                  # best score over the best score of any other hypothesis
 APPLY_SHIFT = 0.025           # the calibration check's warning threshold: smaller corrections are left to it
@@ -247,7 +252,10 @@ def auto_calibrate(energies, counts, detector: str, r662: float, peaks: Optional
             fit = fit_source_templates(corrected, c, metadata)
             if not fit:
                 continue
-            judged.append((_confirmation(fit, TEMPLATE_OF[name]), name, a, b, pairs, score))
+            confirmed = _confirmation(fit, TEMPLATE_OF[name])
+            if abs(a / b) > OFFSET_PROVEN and confirmed < FAR_CONFIRM_Z:
+                continue
+            judged.append((confirmed, name, a, b, pairs, score))
     if not judged or max(j[0] for j in judged) <= 0:
         return {"applied": False, "reason": "no proposed correction is confirmed by the spectrum fit"}
 

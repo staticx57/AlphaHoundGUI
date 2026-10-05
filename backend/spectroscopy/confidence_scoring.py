@@ -16,7 +16,7 @@ import math
 
 # Import activity estimation
 try:
-    from spectroscopy.detector_efficiency import estimate_activity
+    from spectroscopy.detector_efficiency import estimate_activity, interpolate_efficiency
     HAS_ACTIVITY_ESTIMATION = True
 except ImportError:
     HAS_ACTIVITY_ESTIMATION = False
@@ -62,6 +62,43 @@ GAMMA_INTENSITIES = {
     'Eu-152': {121.8: 28.6, 344.3: 26.6, 1408.0: 21.0},
     'Na-22': {511.0: 180.7, 1274.5: 99.9},  # 511 is annihilation
 }
+
+
+# What a line really emits: the emission probability (%) the activity estimate divides by. A series parent lists lines its daughters emit
+# (IAEA_DATA has no entry for Th-232, and its own 63.8 keV line is 0.26 %), so the daughter in its chain is looked up too.
+_OWN_EMISSION = {"Th-232": {63.8: 0.26}}
+_EMISSION_CACHE: Dict = {}
+
+
+def line_emission(isotope: str, energy: float) -> Optional[float]:
+    """Emission probability (%) of the gamma line near `energy` that `isotope`'s list means; None when no data says."""
+    key = (isotope, round(energy, 1))
+    if key in _EMISSION_CACHE:
+        return _EMISSION_CACHE[key]
+    found = None
+    for e, i in _OWN_EMISSION.get(isotope, {}).items():
+        if abs(e - energy) <= 1.0:
+            found = i
+    if found is None:
+        try:
+            from nuclides.isotope_database import IAEA_DATA
+            names = [isotope]
+            try:
+                from nuclides.chain_detection_enhanced import get_decay_chain_members
+                names += [m for m in get_decay_chain_members(isotope) if m != isotope]
+            except Exception:
+                pass
+            best = None
+            for n in names:
+                for e, i in IAEA_DATA.get(n, {}).get("gammas", []):
+                    gap = abs(e - energy)
+                    if gap <= 1.0 and (best is None or gap < best[0]):
+                        best = (gap, i)
+            found = best[1] if best else None
+        except Exception:
+            found = None
+    _EMISSION_CACHE[key] = found
+    return found
 
 
 def get_intensity_weight(isotope: str, energy: float, tolerance: float = 5.0) -> float:
@@ -428,7 +465,9 @@ def get_confidence_label(score: float) -> str:
 
 def enhance_isotope_identifications(
     identifications: List[Dict],
-    peaks: List[Dict]
+    peaks: List[Dict],
+    live_time: float = 0.0,
+    detector: Optional[str] = None,
 ) -> List[Dict]:
     """
     Enhance isotope identification list with improved confidence scores.
@@ -497,28 +536,39 @@ def enhance_isotope_identifications(
         }
         enhanced_ident['analysis_mode'] = 'enhanced'
         
-        # Add activity estimation if available
-        if HAS_ACTIVITY_ESTIMATION and peak_data:
-            # Get branching ratio from IAEA data
-            branching_ratio = ident.get('branching_ratio', 0.5)  # Default 50% if unknown
-            peak_counts = peak_data.get('area', peak_data.get('counts', 0))
-            # Use a default live_time of 60s if not provided
-            live_time = peak_data.get('live_time', 60)
-            
-            if peak_counts > 0:
-                activity = estimate_activity(
-                    peak_counts=peak_counts,
-                    energy_keV=matched_energy,
-                    branching_ratio=branching_ratio,
-                    live_time_s=live_time
-                )
-                if activity.get('valid'):
-                    enhanced_ident['activity_estimate'] = {
-                        'value_bq': activity['activity_bq'],
-                        'readable': activity['activity_readable'],
-                        'uncertainty_pct': activity['uncertainty_pct']
-                    }
-        
+        # Activity estimate: the peak's NET AREA over (efficiency x the line's emission probability x live time). It used the spectrum height
+        # at the peak (the peak's `counts`), a branching ratio of 50 % for every isotope and a live time of 60 s, whatever the run: 480 times
+        # too much on an 8-hour capture, and the ratio between isotopes only that of their peak heights. With no live time or no emission
+        # data there is no estimate rather than an invented one.
+        if HAS_ACTIVITY_ESTIMATION and live_time > 1.0 and matched:                  # 1 s or less is the pipeline's 'live time unknown'
+            # the matched line with the most expected counts (emission x efficiency): not the one nearest in energy, which for Th-232 is its
+            # own 63.8 keV line (0.26 %), a peak that is X-rays in every real spectrum
+            detector_name = detector or "AlphaHound CsI(Tl)"
+            candidates = []
+            for m in matched:
+                emission = line_emission(isotope, m['expected'])
+                if emission:
+                    candidates.append(((interpolate_efficiency(detector_name, m['expected']) or 0.0) * emission, emission, m))
+            if candidates:
+                _, emission, line = max(candidates, key=lambda t: t[0])
+                peak = min(peaks, key=lambda p: abs(p.get('energy', 0) - line['observed']), default=None)
+                area = (peak.get('net_area', peak.get('area', 0)) or 0) if peak is not None and abs(peak.get('energy', 0) - line['observed']) < 10 else 0
+                if area > 0:
+                    activity = estimate_activity(
+                        peak_counts=area,
+                        energy_keV=line['expected'],
+                        branching_ratio=emission / 100.0,
+                        live_time_s=live_time,
+                        detector_name=detector_name,
+                    )
+                    if activity.get('valid'):
+                        enhanced_ident['activity_estimate'] = {
+                            'value_bq': activity['activity_bq'],
+                            'readable': activity['activity_readable'],
+                            'uncertainty_pct': activity['uncertainty_pct'],
+                            'line_keV': line['expected'],
+                        }
+
         enhanced.append(enhanced_ident)
     
     # Sort by confidence

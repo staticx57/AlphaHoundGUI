@@ -203,7 +203,7 @@ def _annotate_detector(result: dict, is_calibrated: bool):
             logger.debug('display_min_keV not set', exc_info=True)
 
 
-def _identify(peaks, current_settings: dict, use_enhanced: bool, detector=None):
+def _identify(peaks, current_settings: dict, use_enhanced: bool, detector=None, live_time: float = 0.0):
     """Line-matching isotope identification and decay-chain detection (enhanced when available, with the basic one as fallback)."""
     all_isotopes = identify_isotopes(
         peaks,
@@ -220,7 +220,7 @@ def _identify(peaks, current_settings: dict, use_enhanced: bool, detector=None):
                 min_score=0.25
             )
             # Also enhance isotope confidence scores
-            all_isotopes = enhance_isotope_identifications(all_isotopes, peaks)
+            all_isotopes = enhance_isotope_identifications(all_isotopes, peaks, live_time, detector)
         except Exception as e:
             logger.warning(f"[Analysis] Enhanced chain detection failed: {e}")
             all_chains = identify_decay_chains(
@@ -435,7 +435,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     # Settings by acquisition time: a long calibrated acquisition is judged strictly, an upload or a short one leniently
     current_settings = DEFAULT_SETTINGS if live_time > 30.0 else UPLOAD_SETTINGS
 
-    all_isotopes, all_chains = _identify(peaks, current_settings, use_enhanced, result.get("detector_profile"))
+    all_isotopes, all_chains = _identify(peaks, current_settings, use_enhanced, result.get("detector_profile"), live_time)
 
     weighted_chains = apply_abundance_weighting(all_chains)
     # The simple-mode isotope cap is applied after the spectrum fit below: capping first lets isotopes

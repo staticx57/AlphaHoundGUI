@@ -6,6 +6,8 @@ match of a line at 0 keV: the result was a constant set by table membership (Th-
 intensity table 71 %, Ba-133 53.5 %, Am-241 43.5 %), whatever the spectrum held. A single backscatter bump made Tl-201 (71 %) outrank the
 three strong lines of a real Ba-133 source (53.5 %).
 """
+import pytest
+
 from nuclides.isotope_database import identify_isotopes
 from spectroscopy.confidence_scoring import enhance_isotope_identifications
 
@@ -62,3 +64,47 @@ def test_the_matchers_physics_caps_survive_the_rescoring():
     raw = {i["isotope"]: i for i in identify_isotopes(peaks, energy_tolerance=30.0)}
     assert raw["Tl-201"]["matches"] == 1 and raw["Tl-201"]["confidence"] <= 20.0
     assert scored(peaks)["Tl-201"]["confidence"] <= 20.0
+
+
+# --------------------------------------------------------------------------- the activity estimate
+def _identified(peaks_spec, live_time, detector="AlphaHound CsI(Tl)"):
+    peaks = [{"energy": e, "net_area": a, "counts": 40.0, "fwhm": 30.0} for e, a in peaks_spec]
+    ids = identify_isotopes(peaks, energy_tolerance=20.0)
+    return {i["isotope"]: i for i in enhance_isotope_identifications(ids, peaks, live_time, detector)}
+
+
+def test_activity_uses_the_net_area_the_emission_probability_and_the_live_time():
+    """It used the spectrum height at the peak, 50 % for every isotope and 60 s for every run: wrong by a factor that depends on the run
+    (38 times too high on an 8-hour capture, where the 480 of the live time is partly cancelled by an area 11 times the height)."""
+    from spectroscopy.detector_efficiency import interpolate_efficiency
+    one = _identified([(661.7, 100000.0)], 3600.0)["Cs-137"]["activity_estimate"]
+    expected = 100000.0 / (interpolate_efficiency("AlphaHound CsI(Tl)", 661.7) * 0.851 * 3600.0)          # Cs-137 661.7 keV: 85.1 %
+    assert one["value_bq"] == pytest.approx(expected, rel=1e-6)
+    ten = _identified([(661.7, 100000.0)], 36000.0)["Cs-137"]["activity_estimate"]
+    assert ten["value_bq"] == pytest.approx(one["value_bq"] / 10.0, rel=1e-6)                         # a tenth of the rate over ten times the time
+
+
+def test_no_activity_without_a_live_time_or_without_emission_data():
+    assert "activity_estimate" not in _identified([(661.7, 100000.0)], 0.0)["Cs-137"]
+    assert "activity_estimate" not in _identified([(661.7, 100000.0)], 1.0)["Cs-137"]               # 1 s is the pipeline's "live time unknown"
+    assert "activity_estimate" not in _identified([(140.5, 50000.0)], 3600.0).get("Tc-99m", {})       # no emission data for the line: no invented 50 %
+
+
+def test_a_series_parent_takes_its_activity_from_the_line_with_the_most_expected_counts():
+    """Th-232's nearest line in energy is its own 63.8 keV (0.26 %), X-rays in every real spectrum: the estimate came out 100 times off."""
+    found = _identified([(63.8, 40000.0), (238.6, 200000.0), (583.2, 90000.0), (911.2, 40000.0)], 28800.0)
+    th, pb = found["Th-232"]["activity_estimate"], found["Pb-212"]["activity_estimate"]
+    assert th["line_keV"] == 238.6 and th["value_bq"] == pytest.approx(pb["value_bq"], rel=1e-6)    # Th-232 in equilibrium with Pb-212
+
+
+def test_daughters_of_one_series_agree_within_the_efficiency_tables_on_a_real_thorium_spectrum():
+    from formats.radiacode_xml_parser import parse_radiacode_xml
+    from spectroscopy.analysis_utils import analyze_spectrum_peaks
+    import pathlib
+    path = pathlib.Path(__file__).resolve().parent / "data" / "radiacode_fisicas" / "Th-232.xml"
+    parsed = parse_radiacode_xml(path.read_text(encoding="utf-8"))
+    result = analyze_spectrum_peaks(parsed, True, float(parsed["metadata"].get("live_time") or 0))
+    act = {i["isotope"]: i["activity_estimate"]["value_bq"] for i in result["isotopes"] if i.get("activity_estimate")}
+    assert {"Ac-228", "Pb-212", "Tl-208"} <= set(act)
+    assert 0.4 < act["Pb-212"] / act["Ac-228"] < 4.0                                                 # a mid-thousands ratio was a ratio of peak heights
+    assert 0.2 < (act["Tl-208"] / 0.3594) / act["Pb-212"] < 5.0                                       # Tl-208 is the 35.9 % branch of Bi-212

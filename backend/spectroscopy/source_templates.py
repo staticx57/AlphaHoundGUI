@@ -34,6 +34,13 @@ PRESENT_FRACTION_ARTIFICIAL = 0.02
 ARTIFICIAL_TEMPLATES = ("Cs-137", "Co-60", "Eu-152", "Ba-133")
 HIGH_Z = 25.0
 HIGH_FRACTION = 0.15
+# A series also reads HIGH when it stands clear of everything else, whatever its absolute z: the same thorium series reaches z 33-46 on a
+# RadiaCode and ~20 on an AlphaHound (smaller crystal, wider lines), where the next-best source is at 3-6. On the 18 labelled thorium and
+# uranium spectra it lifts five AlphaHound captures (leads 5.5-8.0) and leaves the 90-minute lens (lead 1.9) and one capture whose share is
+# under HIGH_FRACTION as MEDIUM; every RadiaCode spectrum already reads HIGH by z. The corpus does not pin the lead: anything from 2 to 5
+# gives the same result, 3 is a round number. Only one detector family exercises it: check other crystals before relying on it.
+DOMINANT_Z = 15.0
+DOMINANT_LEAD = 3.0   # times the strongest source that is not part of the same series
 
 EMIN_KEV = 120.0     # below: X-rays, backscatter and detector threshold effects dominate
 EMAX_KEV = 3000.0
@@ -252,7 +259,9 @@ def fit_source_templates(energies, counts, metadata: Optional[dict] = None) -> O
         s = sources[name]
         cur = chains.setdefault(chain, {"present": False, "high": False, "z": 0.0, "fraction": 0.0, "via": []})
         cur["present"] |= s["present"]
-        cur["high"] |= s["high"]
+        others = max((v["z"] for k, v in sources.items() if SERIES_TO_CHAIN.get(k) != chain), default=0.0)
+        dominant = s["present"] and s["z"] >= DOMINANT_Z and s["z"] >= DOMINANT_LEAD * others and s["fraction"] >= HIGH_FRACTION
+        cur["high"] |= s["high"] or dominant
         cur["z"] = max(cur["z"], s["z"])
         cur["fraction"] = round(cur["fraction"] + s["fraction"], 4)
         if s["present"]:

@@ -115,3 +115,41 @@ def test_a_real_uranium_glaze_stays_uranium(peaks, monkeypatch):
 
 
 BACKEND_TESTS = pathlib.Path(__file__).resolve().parent
+
+
+# --------------------------------------------------------------------------- an offset beyond +-20 keV, and the level a clear series earns
+def _analyse_fixture(name, kind="n42"):
+    import scoring_eval as se
+    parsed = se.load(kind, se.REAL / name)
+    return se.analyse(parsed, "n42")
+
+
+def test_a_capture_whose_correction_needs_an_offset_beyond_20_kev_is_corrected():
+    """The live AlphaHound in October 2026 (28.8 deg C): thorium lines at 230/318/536/841 keV for 236/336/583/928, a gain error of 12 %
+    and an offset of +20.8 keV. The right solution (residual 0.2 keV, fit z 20.9 against 3.2) was refused by 0.8 keV against the old +-20 limit."""
+    result = _analyse_fixture("takumar_live_2026-10-05_20min_thinned.n42")
+    assert result["auto_calibration"]["applied"] and result["auto_calibration"]["source"] == "thorium_series"
+    assert {c["parent"] for c in result["decay_chains"]} == {"Th-232"}
+    assert result["isotopes"][0]["isotope"] == "Th-232"
+
+
+def test_a_series_that_stands_clear_of_everything_else_reads_high_whatever_its_absolute_z():
+    """An AlphaHound reaches z ~20 on the same thorium a RadiaCode puts at 33-46, with the next source at 3-6: HIGH by dominance. The weak
+    90-minute lens (lead 1.9) stays MEDIUM."""
+    live = _analyse_fixture("takumar_live_2026-10-05_20min_thinned.n42")
+    chain = next(c for c in live["decay_chains"] if c["parent"] == "Th-232")
+    assert chain["spectrum_fit"]["z"] < 25.0 and chain["confidence_level"] == "HIGH"
+    weak = _analyse_fixture("spectrum_2025-12-15_takumar_90min.n42", "n42_recal")
+    assert next(c for c in weak["decay_chains"] if c["parent"] == "Th-232")["confidence_level"] == "MEDIUM"
+
+
+def test_a_drifted_co60_cs137_source_is_not_corrected_as_eu152():
+    """Widening the offset range alone let this mixture, drifted 6-10 %, be corrected as Eu-152 (4 lines, offset 21-22 keV, fit z 7.4, barely over
+    the bar) and lose its Cs-137 and Co-60. Beyond +-20 keV a correction must be confirmed at z >= 15; the thorium capture that needs the range
+    is confirmed at 20.9."""
+    import scoring_eval as se
+    parsed = se.load("rcxml", se.WEB / "ckuethe" / "Co60_a+Cs137_b.xml")
+    for gain in (1.06, 1.10):
+        result = se.analyse(parsed, "n42", gain)
+        assert not (result.get("auto_calibration") or {}).get("applied"), gain
+        assert {"Cs-137", "Co-60"} <= {i["isotope"] for i in result["isotopes"]}, gain
