@@ -146,3 +146,52 @@ def test_upload_of_real_files_reports_detector_profile_and_chain_fields():
     assert body.status_code == 200, body.text
     assert body.json()["detector_profile"].startswith("AlphaHound")
     assert body.json()["decay_chains"] == []
+
+
+# --------------------------------------------------------------------------- the card and the isotope table say the same thing
+def _card(parent, **extra):
+    detected = {"Ac-228": [{"energy": 911.0}] * 2, "Th-228": [{"energy": 84.0}], "Ra-224": [{"energy": 241.0}]}
+    return {"parent": parent, "chain_sequence": chains.get_chain_sequence_info(parent), "detected_members": detected, **extra}
+
+
+def test_one_decision_per_member_table_first_then_the_chains_own_lines():
+    from spectroscopy.analysis_utils import _attach_member_status
+    chain = _card("Th-232")
+    _attach_member_status([chain], [{"isotope": "Th-232", "matches": 3, "total_lines": 5}, {"isotope": "Ac-228", "matches": 3, "total_lines": 4}])
+    st = chain["member_status"]
+    assert st["Th-232"] == {"state": "detected", "matches": 3, "total_lines": 5, "source": "isotope table"}      # no line of its own, same as Ac-228
+    assert st["Ac-228"]["state"] == "detected" and st["Ac-228"]["source"] == "isotope table"
+    assert st["Th-228"]["source"] == "chain lines" and st["Th-228"]["state"] == "detected"                          # not in the database: the chain's lines
+    assert st["Ra-228"] == {"state": "inferred", "from": "Ac-228"}                                                  # no line, not identified: only implied
+    assert "Po-212" not in st and "Bi-212" not in st and "Pb-208" not in st   # a sibling branch or a downstream member is never implied
+    assert "Pb-208" not in st                                                                                       # nothing is said about the rest
+
+
+def test_a_member_the_table_can_judge_but_did_not_list_is_not_ticked_whatever_the_lines_say():
+    from spectroscopy.analysis_utils import _attach_member_status
+    chain = _card("Th-232")
+    _attach_member_status([chain], [{"isotope": "Ac-228", "suppressed": True}])
+    assert "Ac-228" not in chain["member_status"]                                                                   # in the database, suppressed by the table
+
+
+def test_the_member_states_agree_with_the_isotope_table_on_real_spectra():
+    """The invariant, on every real Th/U spectrum: a nuclide the table can judge is ticked on the card exactly when the table lists it."""
+    from nuclides.isotope_database import ISOTOPE_DATABASE
+    from routers.analysis import _analyze_upload
+    data = os.path.join(os.path.dirname(__file__), "data")
+    paths = [os.path.join(data, "real_spectra", f) for f in ("spectrum_2025-12-15_takumar_90min.n42", "spectrum_takumar_8hr_reference.n42")]
+    paths += [os.path.join(data, "radiacode_fisicas", f) for f in ("Th-232.xml", "Ra-226.xml", "U-238-U-235-FiestaWare.xml")]
+    checked = 0
+    for path in paths:
+        with open(path, "rb") as handle:
+            result = _analyze_upload(handle.read(), os.path.basename(path), os.path.basename(path))
+        listed = {i["isotope"] for i in result.get("isotopes", []) if not i.get("suppressed")}
+        for chain in result.get("decay_chains", []):
+            status = chain["member_status"]
+            for entry in chain["chain_sequence"]:
+                name = entry["nuclide"]
+                if name in ISOTOPE_DATABASE:
+                    assert (status.get(name, {}).get("state") == "detected") == (name in listed), f"{os.path.basename(path)} {name}"
+                    checked += 1
+                assert status.get(name, {}).get("state") != "detected" or status[name]["total_lines"], f"no line count for {name}"
+    assert checked

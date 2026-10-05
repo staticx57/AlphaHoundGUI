@@ -2,7 +2,8 @@ import { notifyAuto } from './dialogs.js';
 
 export class CalibrationUI {
     constructor() {
-        this.points = []; // Array of {channel, energy, rowId}
+        this.points = []; // Array of {id, channel, energy}
+        this.nextId = 1;
         this.elements = {
             modal: document.getElementById('calibration-modal'),
             tbody: document.getElementById('cal-points-tbody'),
@@ -30,8 +31,13 @@ export class CalibrationUI {
         this.elements.modal.style.display = 'none';
     }
 
+    /** True while the dialog is showing; the chart then takes clicks as calibration points. */
+    isOpen() {
+        return this.elements.modal.style.display !== 'none';
+    }
+
     addPoint(channel, energy = '') {
-        const id = Date.now();
+        const id = this.nextId++;
         this.points.push({ id, channel, energy });
         this.renderTable();
     }

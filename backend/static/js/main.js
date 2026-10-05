@@ -771,19 +771,13 @@ if (btnDisplayPrev) {
 
 // Clear Spectrum: handled once, device-aware, in setupEventListeners() (api.clearSpectrumUnified)
 
-// Chart Click for Calibration
+// Chart Click for Calibration: while the dialog is open (it is docked beside the chart, not over it), a click adds the nearest channel
 const chartCanvas = document.getElementById('spectrumChart');
 if (chartCanvas) {
     chartCanvas.onclick = (evt) => {
-        if (document.getElementById('calibration-modal').style.display === 'block') {
-            const chart = chartManager.chart;
-            const points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
-            if (points.length) {
-                const index = points[0].index; // This is the channel index
-                // Suggest this channel
-                calUI.addPoint(index);
-            }
-        }
+        if (!calUI.isOpen() || !chartManager.chart) return;
+        const points = chartManager.chart.getElementsAtEventForMode(evt, 'index', { intersect: false, axis: 'x' }, true);
+        if (points.length) calUI.addPoint(points[0].index); // the data index is the channel
     };
 }
 

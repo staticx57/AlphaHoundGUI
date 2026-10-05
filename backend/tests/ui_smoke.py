@@ -18,6 +18,23 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "ui_smoke_out")
 os.makedirs(OUT, exist_ok=True)
 URL = os.environ.get("ALPHAHOUND_URL", "http://localhost:3200").rstrip("/") + "/"   # another port: ALPHAHOUND_URL
+
+def _settle_before_choosing_a_file():
+    """A file chosen the moment the page has loaded can beat the page's own upload handler (seen offline, and on an unchanged build):
+    every set_input_files waits for the network to go quiet first, for at most 3 s (a page that polls never goes quiet)."""
+    from playwright.sync_api import Page, Error as _PwError
+    original = Page.set_input_files
+
+    def settled(self, *args, **kwargs):
+        try:
+            self.wait_for_load_state("networkidle", timeout=3000)
+        except _PwError:
+            pass
+        return original(self, *args, **kwargs)
+    Page.set_input_files = settled
+
+
+_settle_before_choosing_a_file()
 SPEC = os.path.join(HERE, "..", "data", "test_spectra", "synthetic_cesium137.n42")
 results = []
 
@@ -1128,6 +1145,11 @@ with sync_playwright() as p:
     before = peak_energies()
     check("Y the file's own axis puts the peaks at 300 and 660 keV", any(abs(e - 300) < 15 for e in before) and any(abs(e - 660) < 15 for e in before), str(before))
     py.evaluate("document.getElementById('btn-calibrate-mode').click()")
+    # a real mouse click on the chart picks a point: the dialog is docked beside the chart, not a full-screen overlay over it
+    box = py.evaluate("(() => { const c = window.Chart.getChart(document.getElementById('spectrumChart')); const r = c.canvas.getBoundingClientRect(); return {x: r.left + c.scales.x.getPixelForValue(300), y: r.top + (c.chartArea.top + c.chartArea.bottom) / 2}; })()")
+    py.mouse.click(box["x"], box["y"])
+    picked = py.evaluate("window.calibrationUI.points.map(p => p.channel)")
+    check("Y clicking the chart with the calibration dialog open adds the channel under the cursor (about 100)", len(picked) == 1 and abs(picked[0] - 100) <= 2, str(picked))
     py.evaluate("window.calibrationUI.points = [{id: 1, channel: 100, energy: 330}, {id: 2, channel: 220, energy: 726}]; window.calibrationUI.renderTable()")
     py.evaluate("window.calibrationUI.calculate()")
     py.wait_for_function("document.getElementById('btn-cal-apply').style.display !== 'none' && document.getElementById('btn-cal-apply').style.display !== ''", timeout=10000)

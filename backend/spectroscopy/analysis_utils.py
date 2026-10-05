@@ -235,6 +235,41 @@ def _identify(peaks, current_settings: dict, use_enhanced: bool, detector=None):
     return all_isotopes, all_chains
 
 
+def _attach_member_status(decay_chains, isotopes):
+    """Decide, in ONE place, what the chain card says about every member, so the card and the isotope table cannot disagree.
+
+    The table can judge a nuclide only if it is in ISOTOPE_DATABASE; the chain engine matches lines for every member (Th-228 and Ra-224
+    are not in the database). So: a member the table can judge takes the table's verdict, with its line count (listed: detected;
+    absent or suppressed: not ticked, whatever the chain's line matching says); one it cannot judge keeps the chain's own line matches,
+    counted the same way. A member with no gamma line of its own (Ra-228, Rn-220) that feeds a ticked one further down is inferred.
+
+    chain['member_status'] = {nuclide: {'state': 'detected' | 'inferred', 'matches', 'total_lines', 'source', 'from'}}
+    """
+    from nuclides.isotope_database import ISOTOPE_DATABASE
+    from nuclides.chain_detection_enhanced import get_expected_spectrum
+    listed = {i.get("isotope"): i for i in isotopes if not i.get("suppressed")}
+    for chain in decay_chains:
+        members = [entry["nuclide"] for entry in chain.get("chain_sequence", [])]
+        expected = get_expected_spectrum(chain.get("parent"))
+        by_lines = chain.get("detected_members", {})
+        status = {}
+        for name in members:
+            if name in listed:
+                status[name] = {"state": "detected", "matches": listed[name].get("matches"), "total_lines": listed[name].get("total_lines"),
+                                "source": "isotope table"}
+            elif name in by_lines and name not in ISOTOPE_DATABASE:
+                status[name] = {"state": "detected", "matches": len(by_lines[name]), "total_lines": len(expected.get(name, [])),
+                                "source": "chain lines"}
+        feeder = {entry["nuclide"]: entry.get("feeder") for entry in chain.get("chain_sequence", [])}
+        for name in [m for m in members if status.get(m, {}).get("state") == "detected"]:
+            ancestor = feeder.get(name)                       # walk up the real feeding links (a sibling branch like Po-212 is not an ancestor)
+            while ancestor:
+                if ancestor not in status and ancestor not in expected:
+                    status[ancestor] = {"state": "inferred", "from": name}
+                ancestor = feeder.get(ancestor)
+        chain["member_status"] = status
+
+
 def _add_equilibrium_status(decay_chains, result: dict, energies, counts, live_time: float):
     """Secular equilibrium of each reported series, measured on the spectrum with the ROI engine (the peak list is too coarse)."""
     try:
@@ -396,6 +431,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     decay_chains, isotopes = _reconcile_with_template_fit(
         result, energies, counts, peaks, decay_chains, isotopes, current_settings, fit)
     _add_equilibrium_status(decay_chains, result, energies, counts, live_time)
+    _attach_member_status(decay_chains, isotopes)
 
     if current_settings.get("mode") == "simple":
         isotopes = sorted(isotopes, key=lambda i: i.get("confidence", 0), reverse=True)[:current_settings.get("max_isotopes", 999)]

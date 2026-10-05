@@ -742,17 +742,20 @@ export class AlphaHoundUI {
                 const chainMembers = chainSequence.length > 0
                     ? chainSequence.map(s => s.nuclide)
                     : this.getChainMembers(chain.chain_name);
-                const detectedSet = new Set(Object.keys(chain.detected_members));
+                const memberStatus = chain.member_status;   // decided on the server, from the isotope table and the chain's lines (see _attach_member_status)
+                const legacyDetected = new Set(Object.keys(chain.detected_members));   // a chain saved before member_status existed
 
                 const chainGraphic = chainMembers.map((member, idx) => {
-                    const isDetected = detectedSet.has(member);
+                    const entry = memberStatus ? memberStatus[member] : null;
+                    const isDetected = memberStatus ? entry?.state === 'detected' : legacyDetected.has(member);
                     const isStable = idx === chainMembers.length - 1;
 
                     // Get half-life and branching from sequence data
                     const seqInfo = chainSequence[idx] || {};
                     const halfLife = seqInfo.half_life || '';
 
-                    const statusClass = isDetected ? 'detected' : (isStable ? 'stable' : '');
+                    const inferredFrom = entry?.state === 'inferred' ? entry.from : null;
+                    const statusClass = isDetected ? 'detected' : (inferredFrom ? 'inferred' : (isStable ? 'stable' : ''));
 
                     // Between two entries: an arrow (with the branching share when the decay has alternatives), or, when the next
                     // entry is the OTHER product of the same parent (Bi-212 -> Po-212 or Tl-208), "or" and its share
@@ -781,12 +784,13 @@ export class AlphaHoundUI {
 
                     return `
                         <div style="display: flex; align-items: center;">
-                            <div class="decay-step-box ${statusClass}">
+                            <div class="decay-step-box ${statusClass}"${inferredFrom ? ` title="${member} has no gamma line of its own and was not identified. It is inferred because ${inferredFrom}, which it feeds, was detected (assumes the series was not chemically split)."` : (isDetected && entry?.source ? ` title="${entry.matches}/${entry.total_lines} gamma lines matched (${entry.source})"` : '')}>
                                 <div style="font-weight: ${isDetected ? '700' : '500'}; font-size: 0.85rem;">
                                     ${member}
                                 </div>
                                 ${halfLife ? `<div style="font-size: 0.55rem; color: var(--text-secondary); margin-top: 1px;">${halfLife}</div>` : ''}
-                                ${isDetected ? '<div style="font-size: 0.65rem; margin-top: 2px;"><img src="/static/icons/check.svg" class="icon" style="width: 10px; height: 10px; vertical-align: middle;"> DETECTED</div>' : ''}
+                                ${isDetected ? `<div style="font-size: 0.65rem; margin-top: 2px;"><img src="/static/icons/check.svg" class="icon" style="width: 10px; height: 10px; vertical-align: middle;"> DETECTED${entry?.total_lines ? ` ${entry.matches}/${entry.total_lines}` : ''}</div>` : ''}
+                                ${inferredFrom ? '<div style="font-size: 0.65rem; margin-top: 2px;">INFERRED</div>' : ''}
                                 ${isStable ? '<div style="font-size: 0.65rem; margin-top: 2px;">STABLE</div>' : ''}
                             </div>
                             ${arrow}
@@ -813,6 +817,7 @@ export class AlphaHoundUI {
                             </div>
                             <div style="margin-top: 0.75rem; font-size: 0.7rem; color: var(--text-secondary); display: flex; gap: 1rem;">
                                 <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.detected}; vertical-align: middle;"></span> Detected</span>
+                                ${Object.values(memberStatus || {}).some(m => m.state === 'inferred') ? `<span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px dotted ${colors.detected}; vertical-align: middle; box-sizing: border-box;"></span> Inferred (not measured: implied by a detected member it feeds)</span>` : ''}
                                 <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.stable}; vertical-align: middle;"></span> Stable End Product</span>
                                 <span><span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${colors.undetected}; vertical-align: middle;"></span> Not Detected</span>
                             </div>
