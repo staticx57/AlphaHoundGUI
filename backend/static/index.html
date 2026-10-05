@@ -518,6 +518,11 @@
                                 <button id="btn-start-acquire" class="btn-primary" style="padding: 0.4rem 0.8rem;">
                                     <img alt="" src="/static/icons/play.svg" class="icon"> Acquire
                                 </button>
+                                <button id="btn-resume-acquisition" class="btn-primary"
+                                    style="display: none; padding: 0.4rem 0.8rem;"
+                                    title="The acquisition is still running on the server: show its live spectrum again">
+                                    Back to acquisition
+                                </button>
                                 <button id="btn-stop-acquire" class="btn-stop"
                                     style="display: none; padding: 0.4rem 0.8rem; background: var(--warning-color); color: white;">
                                     <img alt="" src="/static/icons/stop.svg" class="icon"> Stop
@@ -1020,10 +1025,13 @@
         <div id="history-modal" class="modal" style="display: none;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>File History</h3>
+                    <h3>History</h3>
                     <button id="close-history" class="close-btn"><img alt="" src="/static/icons/close.svg" class="icon"
                             style="width: 16px; height: 16px;"></button>
                 </div>
+                <h4 class="history-section-title">Saved on the server</h4>
+                <div id="saved-runs-list"></div>
+                <h4 class="history-section-title">Opened in this browser</h4>
                 <div id="history-list"></div>
             </div>
         </div>

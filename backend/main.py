@@ -20,6 +20,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from devices.alphahound_serial import device as alphahound_device
+from devices.acquisition_manager import acquisition_manager, recover_interrupted_checkpoints
 from routers import device, analysis, isotopes, device_radiacode, nuclear, export
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(_app):
     """Startup work (on_event handlers are deprecated). The functions are defined below; they are looked up when the server starts."""
+    await _startup_recover_runs()
     await _startup_dose_log()
     await _startup_autoconnect()
     yield
@@ -150,6 +152,11 @@ async def _startup_dose_log():
         alphahound_device.enable_log_persistence(DOSE_LOG_FILE)
 
 
+async def _startup_recover_runs():
+    # A run cut short by the last shutdown (crash, restart, power loss) left its partial file: keep it as ..._interrupted.n42
+    await asyncio.to_thread(recover_interrupted_checkpoints)
+
+
 async def _startup_autoconnect():
     port = os.environ.get("ALPHAHOUND_AUTOCONNECT_PORT", "").strip()
     if port:
@@ -167,6 +174,10 @@ def read_index():
 
 # Keep WebSocket here for stability (simplest path) or in router
 # Moving it to main.py avoids any router prefix complexity for WS which can be finicky
+def _acquisition_running() -> bool:
+    return acquisition_manager.get_state()["is_active"]
+
+
 @app.websocket("/ws/dose")
 async def websocket_dose_stream(websocket: WebSocket):
     """WebSocket endpoint for real-time dose rate streaming with session management"""
@@ -194,9 +205,11 @@ async def websocket_dose_stream(websocket: WebSocket):
         
         # Auto-disconnect device if no active sessions (prevents zombie connections)
         # Grace period so a page refresh (disconnect then immediate reconnect) keeps the device.
-        if len(active_websockets) == 0 and alphahound_device.is_connected() and not KEEP_CONNECTED:
+        # Never during an acquisition: a stalled server drops every tab's socket at once, and the run must go on.
+        if len(active_websockets) == 0 and alphahound_device.is_connected() and not KEEP_CONNECTED \
+                and not _acquisition_running():
             await asyncio.sleep(WS_DISCONNECT_GRACE_S)
-            if len(active_websockets) == 0 and alphahound_device.is_connected():
+            if len(active_websockets) == 0 and alphahound_device.is_connected() and not _acquisition_running():
                 logger.info("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
                 alphahound_device.disconnect()
         

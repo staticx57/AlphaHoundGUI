@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
 import asyncio
 from datetime import datetime, timezone, timedelta
+import os
 import re
 from devices.alphahound_serial import device as alphahound_device
 from devices.radiacode_driver import radiacode_device
@@ -35,7 +36,7 @@ class SpectrumRequest(BaseModel):
 @router.get("/ports")
 async def list_serial_ports():
     try:
-        ports = alphahound_device.list_ports()
+        ports = await asyncio.to_thread(alphahound_device.list_ports)
         return {"ports": ports}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing ports: {str(e)}")
@@ -48,7 +49,7 @@ async def connect_device(request: ConnectRequest):
     if alphahound_device.is_connected():
         return {"status": "already_connected", "port": port}
     
-    success = alphahound_device.connect(port)
+    success = await asyncio.to_thread(alphahound_device.connect, port)
     if success:
         return {"status": "connected", "port": port}
     else:
@@ -58,7 +59,7 @@ async def connect_device(request: ConnectRequest):
 
 @router.post("/disconnect")
 async def disconnect_device():
-    alphahound_device.disconnect(user=True)
+    await asyncio.to_thread(alphahound_device.disconnect, user=True)
     return {"status": "disconnected"}
 
 
@@ -181,10 +182,10 @@ async def change_display_mode(direction: str):
         raise HTTPException(status_code=400, detail="Device not connected")
     
     if direction == "next":
-        alphahound_device.send_command("E")
+        await asyncio.to_thread(alphahound_device.send_command, "E")
         return {"status": "ok", "action": "display_next"}
     elif direction == "prev":
-        alphahound_device.send_command("Q")
+        await asyncio.to_thread(alphahound_device.send_command, "Q")
         return {"status": "ok", "action": "display_prev"}
     else:
         raise HTTPException(status_code=400, detail="Invalid direction. Use 'next' or 'prev'")
@@ -198,7 +199,7 @@ async def clear_spectrum():
     if not alphahound_device.is_connected():
         raise HTTPException(status_code=400, detail="Device not connected")
     
-    alphahound_device.clear_spectrum()
+    await asyncio.to_thread(alphahound_device.clear_spectrum)
     return {"status": "ok", "action": "spectrum_cleared"}
 
 @router.post("/spectrum")
@@ -208,12 +209,12 @@ async def acquire_spectrum(request: SpectrumRequest):
     
     count_minutes = request.count_minutes
     if count_minutes > 0:
-        alphahound_device.clear_spectrum()
+        await asyncio.to_thread(alphahound_device.clear_spectrum)
         wait_seconds = count_minutes * 60
         for i in range(int(wait_seconds)):
             await asyncio.sleep(1)
             
-    alphahound_device.request_spectrum()
+    await asyncio.to_thread(alphahound_device.request_spectrum)
     max_wait = 5 if count_minutes == 0 else 30
     waited = 0
     while waited < max_wait:
@@ -242,7 +243,8 @@ async def acquire_spectrum(request: SpectrumRequest):
         }
     }
     # A guessed linear fallback axis is not a calibration: identification is skipped with a warning
-    result = analyze_spectrum_peaks(result, is_calibrated=(energy_source == SOURCE_DEVICE), live_time=float(actual_duration_seconds))
+    result = await asyncio.to_thread(analyze_spectrum_peaks, result, is_calibrated=(energy_source == SOURCE_DEVICE),
+                                     live_time=float(actual_duration_seconds))
     
     # Extract results for backward compatibility in the response
     peaks = result.get("peaks", [])
@@ -279,6 +281,7 @@ async def acquire_spectrum(request: SpectrumRequest):
 # ============================================================
 
 from devices.acquisition_manager import acquisition_manager
+import devices.acquisition_manager as acquisition_files  # SAVE_DIR is read at call time (tests point it elsewhere)
 
 
 class ManagedAcquisitionRequest(BaseModel):
@@ -348,7 +351,7 @@ async def get_current_spectrum():
     if not alphahound_device.is_connected():
         raise HTTPException(status_code=400, detail="Device not connected")
     
-    alphahound_device.request_spectrum()
+    await asyncio.to_thread(alphahound_device.request_spectrum)
     max_wait = 10
     waited = 0
     while waited < max_wait:
@@ -377,7 +380,7 @@ async def get_current_spectrum():
         }
     }
     result["is_calibrated"] = (energy_source == SOURCE_DEVICE)
-    result = analyze_spectrum_peaks(result, is_calibrated=(energy_source == SOURCE_DEVICE))
+    result = await asyncio.to_thread(analyze_spectrum_peaks, result, is_calibrated=(energy_source == SOURCE_DEVICE))
     return result
 
 
@@ -432,7 +435,7 @@ async def get_acquisition_status():
     
     # Include latest spectrum data if acquisition is active
     if state.get("is_active"):
-        data = acquisition_manager.get_latest_data()
+        data = await acquisition_manager.latest_data()
         if data:
             state["spectrum_data"] = data
     
@@ -466,7 +469,59 @@ async def get_acquisition_data():
     Returns:
         Spectrum data dict (counts, energies, peaks, isotopes)
     """
-    data = acquisition_manager.get_latest_data()
+    data = await acquisition_manager.latest_data()
     if not data:
         raise HTTPException(status_code=404, detail="No acquisition data available")
     return data
+
+
+# ============================================================
+# Saved runs (data/acquisitions): finished, in progress and interrupted
+# ============================================================
+
+SAVED_RUN_NAME = re.compile(r"^[\w.-]+\.n42$")
+
+
+def _run_kind(name: str) -> str:
+    if name.endswith(acquisition_files.IN_PROGRESS_SUFFIX):
+        return "in_progress"
+    if "_interrupted" in name:
+        return "interrupted"
+    return "complete"
+
+
+@router.get("/acquisitions")
+def list_saved_runs():
+    """The spectra the server saved, newest first: finished runs, the running one's partial file, interrupted runs."""
+    folder = acquisition_files.SAVE_DIR
+    runs = []
+    if os.path.isdir(folder):
+        for name in os.listdir(folder):
+            if not SAVED_RUN_NAME.match(name):
+                continue
+            try:
+                st = os.stat(os.path.join(folder, name))
+            except OSError:
+                continue
+            runs.append({"name": name, "kind": _run_kind(name), "size_bytes": st.st_size, "mtime": st.st_mtime,
+                         "modified": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat()})
+    runs.sort(key=lambda r: r["mtime"], reverse=True)
+    for r in runs:
+        del r["mtime"]
+    return {"runs": runs}
+
+
+@router.get("/acquisitions/{name}")
+def open_saved_run(name: str):
+    """One saved run, parsed and analysed exactly like an uploaded file."""
+    from routers.analysis import _analyze_upload
+    if not SAVED_RUN_NAME.match(name) or os.path.basename(name) != name:
+        raise HTTPException(status_code=400, detail="Not a saved spectrum name")
+    path = os.path.join(acquisition_files.SAVE_DIR, name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail=f"No saved spectrum named {name}")
+    with open(path, 'rb') as f:
+        content = f.read()
+    result = _analyze_upload(content, name.lower(), name)
+    result.setdefault("metadata", {})["filename"] = name
+    return result

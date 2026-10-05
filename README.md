@@ -267,9 +267,11 @@
 #### Auto-Save Features
 - **Automatic N42 Saves**: After device acquisitions to `data/acquisitions/`
 - **Timestamped Filenames**: `spectrum_YYYY-MM-DD_HH-MM-SS.n42`
-- **Checkpoint Files**: `acquisition_in_progress.n42` updated every 5 minutes
+- **Partial Files**: each run writes `spectrum_<start>_in_progress.n42` from its first spectrum on, every minute; the final file replaces it
+- **Interrupted Runs Kept**: a partial file left by a crash or restart is renamed `spectrum_<start>_interrupted.n42` when the server starts
 - **Toast Confirmations**: Visual notification with filename on save
-- **History Management**: Load previous analyses (last 10 files in localStorage)
+- **History Management**: History lists the runs saved on the server (finished, in progress, interrupted) and the last 10 files opened in this browser
+- **Runs Outlive the Page**: an acquisition runs on the server; a reload or another computer shows it again, and opening a file during a run leaves it running ("Back to acquisition" returns to it)
 
 ---
 

@@ -1,5 +1,7 @@
 import { setupDoseAndAlertSettings } from './dose_alert_settings.js';
 import { showToast } from './toast.js';
+import { escapeHtml } from './html.js';
+import { describeSavedRun } from './saved_runs.js';
 
 /**
  * The settings modal (mode, sliders, apply, reset) and the history modal.
@@ -14,8 +16,11 @@ import { showToast } from './toast.js';
  * @param {*} deps.loadFromHistory
  * @param {*} deps.getCurrentData
  * @param {*} deps.getSettings
+ * @param {*} deps.listSavedRuns - () => Promise of the runs the server saved
+ * @param {*} deps.openSavedRun - (name) => Promise<boolean>, true when it was loaded
  */
-export function setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFromHistory, getCurrentData, getSettings } = {}) {
+export function setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFromHistory, getCurrentData, getSettings,
+                                          listSavedRuns, openSavedRun } = {}) {
     // Settings Modal
     document.getElementById('btn-settings').addEventListener('click', () => {
         document.getElementById('settings-modal').style.display = 'flex';
@@ -101,6 +106,7 @@ export function setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFrom
         const modal = document.getElementById('history-modal');
         const historyList = document.getElementById('history-list');
         const history = JSON.parse(localStorage.getItem('fileHistory') || '[]');
+        renderSavedRuns(listSavedRuns, openSavedRun);
 
         if (history.length === 0) {
             historyList.innerHTML = '<p style="text-align: center; color: #94a3b8;">No file history yet</p>';
@@ -138,4 +144,39 @@ export function setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFrom
     });
 
     // NOTE: Background subtraction listeners registered below with full set (btn-load-bg, btn-set-current-bg, btn-clear-bg)
+}
+
+// The runs the server saved: every acquisition, finished or not, whichever browser (if any) was watching it
+async function renderSavedRuns(listSavedRuns, openSavedRun) {
+    const box = document.getElementById('saved-runs-list');
+    if (!box || !listSavedRuns) return;
+    box.innerHTML = '<p class="saved-runs-note">Loading…</p>';
+    let runs;
+    try {
+        runs = await listSavedRuns();
+    } catch (e) {
+        box.innerHTML = `<p class="saved-runs-note">${escapeHtml(e.message)}</p>`;
+        return;
+    }
+    if (!runs.length) {
+        box.innerHTML = '<p class="saved-runs-note">No acquisitions saved yet</p>';
+        return;
+    }
+    box.innerHTML = runs.map((run, i) => {
+        const d = describeSavedRun(run);
+        const facts = [d.detail, `${Math.max(1, Math.round(run.size_bytes / 1024))} KB`,
+            `modified ${new Date(run.modified).toLocaleString()}`].filter(Boolean).join(' · ');
+        return `<button type="button" class="history-item saved-run" data-index="${i}" title="Open ${escapeHtml(run.name)}">
+            <span class="history-item-name">${escapeHtml(d.whenLabel ? `${d.whenLabel} ${d.when}` : d.when)}</span>
+            <span class="saved-run-kind saved-run-${escapeHtml(run.kind)}">${escapeHtml(d.kind)}</span>
+            <span class="history-item-date">${escapeHtml(facts)}</span>
+        </button>`;
+    }).join('');
+    box.querySelectorAll('.saved-run').forEach((el) => {
+        el.addEventListener('click', async () => {
+            if (await openSavedRun(runs[Number(el.dataset.index)].name)) {
+                document.getElementById('history-modal').style.display = 'none';
+            }
+        });
+    });
 }

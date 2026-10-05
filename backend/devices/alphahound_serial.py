@@ -72,6 +72,9 @@ def parse_cps_line(line: str) -> Optional[Dict[str, float]]:
     return out
 
 
+WRITE_TIMEOUT_S = 2.0  # a command is a few bytes: a write that takes this long means the link has stalled
+
+
 class AlphaHoundDevice:
     """Manager for AlphaHound serial communication"""
     
@@ -129,7 +132,8 @@ class AlphaHoundDevice:
             logger.info(f"[AlphaHound] Connecting to {port}...")
             self.last_error = None
             self.port_busy = False
-            self.serial_conn = serial.Serial(port, baudrate, timeout=1.0) # Increased timeout for safety
+            # write_timeout: without it a stalled USB link blocks write() for good (_write retries, then disconnects)
+            self.serial_conn = serial.Serial(port, baudrate, timeout=1.0, write_timeout=WRITE_TIMEOUT_S)
             self.stop_event.clear()
             self.read_thread = threading.Thread(target=self._read_worker, daemon=True)
             self.read_thread.start()

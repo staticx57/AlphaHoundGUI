@@ -267,6 +267,29 @@ export class AlphaHoundAPI {
         return await response.json();
     }
 
+    /**
+     * The spectra the server saved (finished, in progress, interrupted), newest first.
+     * @returns {Promise<Array<{name: string, kind: string, size_bytes: number, modified: string}>>}
+     */
+    async listSavedRuns() {
+        const response = await fetch('/device/acquisitions');
+        if (!response.ok) throw new Error(`Could not list saved runs (HTTP ${response.status})`);
+        return (await response.json()).runs || [];
+    }
+
+    /**
+     * One saved run, analysed like an uploaded file.
+     * @param {string} name - file name from listSavedRuns
+     */
+    async openSavedRun(name) {
+        const response = await fetch(`/device/acquisitions/${encodeURIComponent(name)}`);
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || `Could not open ${name}`);
+        }
+        return await response.json();
+    }
+
     // Estimator / Detectors
     async getDetectors() {
         const response = await fetch('/detectors');

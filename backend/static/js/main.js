@@ -16,6 +16,7 @@ import { AlertCenter } from './alerts.js';
 import { initA11y } from './a11y.js';
 import { loadDecayEngines, runDecayPrediction, redrawDecayChart } from './decay_tool.js';
 import { showToast } from './toast.js';
+import { nonOverlapping } from './poll.js';
 
 initA11y();
 import { readThemeColors, screenPalette, DEVICE_SCREEN_PALETTE } from './palette.js';
@@ -83,7 +84,9 @@ function stopRadiacodeDosePolling() {
     }
 }
 
-async function pollRadiacodeDose() {
+// A Bluetooth read per poll: if the device is slow or out of range, skip ticks instead of piling up requests
+const pollRadiacodeDose = nonOverlapping(pollRadiacodeDoseNow);
+async function pollRadiacodeDoseNow() {
     try {
         const result = await api.getRadiacodeDose();
         const doseEl = document.getElementById('rc-dose-display');
@@ -403,13 +406,7 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// [STABILITY] Unload Safeguard
-window.addEventListener('beforeunload', (e) => {
-    if (isAcquiring) {
-        e.preventDefault();
-        e.returnValue = 'Recording in progress. Are you sure you want to leave?';
-    }
-});
+// No leave-page warning during an acquisition: it runs on the server, and the page shows it again when reopened
 
 // ==================== Phase 1: Quick Win Features ====================
 
@@ -659,6 +656,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupShieldingTool();
     setupCalibrationNotice({ getCurrentData: () => currentData, isAcquiring: () => isAcquiring, applyAnalysis });
     isotopeUI.init();
+
+    // Last, once every control works: a request here must not delay the listeners (a file dropped at once was lost)
+    document.getElementById('btn-resume-acquisition')?.addEventListener('click', returnToAcquisition);
+    // A file the user opened while this was loading wins: the run stays reachable through Back to acquisition
+    if (!currentData) {
+        await resumeRunningAcquisition();
+    } else if ((await api.getAcquisitionStatus().catch(() => null))?.is_active) {
+        document.getElementById('btn-resume-acquisition').style.display = 'inline-flex';
+    }
 });
 
 /**
@@ -719,7 +725,8 @@ function setupEventListeners() {
     setupDeviceTabs();
     setupRadiacodeConnection({ DoseRateChart, startRadiacodeDosePolling, getCurrentData: () => currentData, getRcDoseChart: () => rcDoseChart, setRcDoseChart: (value) => { rcDoseChart = value; } });
     setupExports({ ui, getCurrentData: () => currentData });
-    setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFromHistory, getCurrentData: () => currentData, getSettings: () => currentSettings });
+    setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFromHistory, getCurrentData: () => currentData, getSettings: () => currentSettings,
+                              listSavedRuns: () => api.listSavedRuns(), openSavedRun });
     setupThemeAndChartControls({ chartManager, reapplyIsotopeHighlights, updateChartScale, getCurrentData: () => currentData });
     setupDeviceControls({ connectDevice, refreshPorts, showRadiacodeDisconnectedUI, startAcquisition, stopAcquisition, stopRadiacodeDosePolling });
     setupComparisonAndBackground({ chartManager, clearBackground, handleBackgroundFile, handleCompareFile, setBackground, toggleCompareMode, updateOverlayCount, getCurrentData: () => currentData, getOverlaySpectra: () => overlaySpectra, setOverlaySpectra: (value) => { overlaySpectra = value; } });
@@ -1066,41 +1073,64 @@ setNotifier(showToast);
  * @returns {Promise<void>}
  */
 async function handleFile(file) {
-    if (isAcquiring) {
-        if (!(await confirmDialog('A recording is in progress. Stop it and load this file?', { title: 'Recording in progress', okLabel: 'Stop recording', danger: true }))) return;
-        stopAcquisition();
-    }
+    detachAcquisitionView();
     ui.showLoading();
     try {
         const data = await api.uploadFile(file);
-        currentData = data;
-        ui.resetDropZone();
-        ui.renderDashboard(data);
-        toastWarnings(data, 'warning');
-
-        // Auto-populate ROI acquisition time from metadata (if available)
-        autoPopulateROITime(data);
 
         // Store raw XML for N42 files to enable editing
         if (file.name.toLowerCase().endsWith('.n42') || file.name.toLowerCase().endsWith('.xml')) {
             try {
-                currentData._rawXml = await file.text();
-                debug(`[Main] Stored raw XML (${currentData._rawXml.length} chars)`);
+                data._rawXml = await file.text();
+                debug(`[Main] Stored raw XML (${data._rawXml.length} chars)`);
             } catch (e) {
                 console.warn('[Main] Failed to read raw XML for editing:', e);
             }
         }
-
-        if (backgroundData) {
-            await refreshChartWithBackground();
-        } else {
-            if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, 'linear');
-        }
-        // Show zoom scrubber with mini preview
-        chartManager.showScrubber(data.energies, data.counts);
-        saveToHistory(file.name, data);
+        await showLoadedSpectrum(file.name, data);
     } catch (err) {
         ui.showError(err.message);
+    }
+}
+
+/**
+ * Shows an analysed spectrum that came from a file (an upload or a run the server saved).
+ * @param {string} name - shown in the history
+ * @param {Object} data - analysis result
+ */
+async function showLoadedSpectrum(name, data) {
+    currentData = data;
+    ui.resetDropZone();
+    ui.renderDashboard(data);
+    toastWarnings(data, 'warning');
+
+    // Auto-populate ROI acquisition time from metadata (if available)
+    autoPopulateROITime(data);
+
+    if (backgroundData) {
+        await refreshChartWithBackground();
+    } else {
+        if (isPageVisible) chartManager.render(data.energies, data.counts, data.peaks, 'linear');
+    }
+    // Show zoom scrubber with mini preview
+    chartManager.showScrubber(data.energies, data.counts);
+    saveToHistory(name, data);
+}
+
+/**
+ * Opens a run the server saved (History dialog). A running acquisition keeps running (see detachAcquisitionView).
+ * @param {string} name - file name from the saved-runs list
+ * @returns {Promise<boolean>} true when it was loaded
+ */
+async function openSavedRun(name) {
+    detachAcquisitionView();
+    ui.showLoading();
+    try {
+        await showLoadedSpectrum(name, await api.openSavedRun(name));
+        return true;
+    } catch (err) {
+        ui.showError(err.message);
+        return false;
     }
 }
 
@@ -1314,7 +1344,8 @@ function startAlphaHoundMonitoring() {
     startAlphaHoundDetails();
 }
 
-async function refreshAlphaHoundDetails() {
+const refreshAlphaHoundDetails = nonOverlapping(refreshAlphaHoundDetailsNow);
+async function refreshAlphaHoundDetailsNow() {
     try {
         const d = await api.getDeviceDetails();
         ahDetailsFailures = 0;
@@ -1510,35 +1541,76 @@ async function startAcquisition() {
             throw new Error(result.error || 'Failed to start acquisition');
         }
 
-        isAcquiring = true;
+        beginAcquisitionView(seconds);
 
-        document.getElementById('btn-start-acquire').style.display = 'none';
-        document.getElementById('btn-stop-acquire').style.display = 'block';
-        document.getElementById('acquisition-status').style.display = 'block';
+        showToast(`Server-managed acquisition started for ${minutes} minutes`, 'info');
 
-        // Show server-managed acquisition indicators
-        showServerManagedUI();
+    } catch (err) {
+        // Already running (started in another tab, by a script, or before this page loaded): show that run instead
+        if (/already in progress/i.test(err.message) && await resumeRunningAcquisition()) return;
+        notifyAuto(err.message);
+    }
+}
 
-        // Poll server for status updates (timing is server-controlled)
-        acquisitionInterval = setInterval(async () => {
-            try {
-                const status = await api.getAcquisitionStatus();
+/**
+ * Switches the page to the live view of the server's acquisition and polls it every two seconds.
+ * @param {number} seconds - its total duration
+ */
+function beginAcquisitionView(seconds) {
+    isAcquiring = true;
+    const back = document.getElementById('btn-resume-acquisition');
+    if (back) back.style.display = 'none';
 
-                // Update UI timer
-                ui.updateAcquisitionTimer(status.elapsed_seconds, seconds);
+    document.getElementById('btn-start-acquire').style.display = 'none';
+    document.getElementById('btn-stop-acquire').style.display = 'block';
+    document.getElementById('acquisition-status').style.display = 'block';
 
-                // Exposure received during this acquisition (integrated dose rate)
-                const expEl = document.getElementById('acquisition-exposure');
-                if (expEl) {
-                    const ex = status.exposure;
-                    expEl.textContent = ex
-                        ? '· ' + formatDoseTotal(ex.exposure_uSv, resolveUnit(getDosePref(), 'uSv'))
-                        : '';
+    // Show server-managed acquisition indicators
+    showServerManagedUI();
+
+    // Poll server for status updates (timing is server-controlled)
+    // A tick that finds the previous poll unanswered is skipped, so slow replies cannot pile up on the server
+    const pollAcquisitionStatus = nonOverlapping(async () => {
+        try {
+            const status = await api.getAcquisitionStatus();
+
+            // Update UI timer
+            ui.updateAcquisitionTimer(status.elapsed_seconds, seconds);
+
+            // Exposure received during this acquisition (integrated dose rate)
+            const expEl = document.getElementById('acquisition-exposure');
+            if (expEl) {
+                const ex = status.exposure;
+                expEl.textContent = ex
+                    ? '· ' + formatDoseTotal(ex.exposure_uSv, resolveUnit(getDosePref(), 'uSv'))
+                    : '';
+            }
+
+            // Update spectrum display if data available
+            if (status.spectrum_data) {
+                currentData = status.spectrum_data;
+                ui.renderDashboard(currentData, { live: true });
+                if (isPageVisible) {
+                    chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
+                    // Ensure scrubber is visible and updated
+                    chartManager.showScrubber(currentData.energies, currentData.counts);
+                }
+            }
+
+            // Check if acquisition completed or stopped
+            if (status.status === 'complete' || status.status === 'stopped') {
+                stopAcquisitionUI();
+
+                if (status.status === 'complete') {
+                    showToast(`Acquisition complete! Saved: ${status.final_filename}`, 'success');
+                } else {
+                    showToast(`Acquisition stopped. Saved: ${status.final_filename}`, 'info');
                 }
 
-                // Update spectrum display if data available
-                if (status.spectrum_data) {
-                    currentData = status.spectrum_data;
+                // Fetch final data
+                const finalData = await api.getAcquisitionData();
+                if (finalData) {
+                    currentData = finalData;
                     ui.renderDashboard(currentData, { live: true });
                     if (isPageVisible) {
                         chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
@@ -1546,48 +1618,61 @@ async function startAcquisition() {
                         chartManager.showScrubber(currentData.energies, currentData.counts);
                     }
                 }
-
-                // Check if acquisition completed or stopped
-                if (status.status === 'complete' || status.status === 'stopped') {
-                    stopAcquisitionUI();
-
-                    if (status.status === 'complete') {
-                        showToast(`Acquisition complete! Saved: ${status.final_filename}`, 'success');
-                    } else {
-                        showToast(`Acquisition stopped. Saved: ${status.final_filename}`, 'info');
-                    }
-
-                    // Fetch final data
-                    const finalData = await api.getAcquisitionData();
-                    if (finalData) {
-                        currentData = finalData;
-                        ui.renderDashboard(currentData, { live: true });
-                        if (isPageVisible) {
-                            chartManager.render(currentData.energies, currentData.counts, currentData.peaks, chartManager.getScaleType());
-                            // Ensure scrubber is visible and updated
-                            chartManager.showScrubber(currentData.energies, currentData.counts);
-                        }
-                    }
-                    return;
-                }
-
-                // Check for errors
-                if (status.status === 'error') {
-                    stopAcquisitionUI();
-                    showToast(`Acquisition error: ${status.error}`, 'error');
-                    return;
-                }
-
-            } catch (e) {
-                console.error('Status poll error:', e);
+                return;
             }
-        }, 2000);
 
-        showToast(`Server-managed acquisition started for ${minutes} minutes`, 'info');
+            // Check for errors
+            if (status.status === 'error') {
+                stopAcquisitionUI();
+                showToast(`Acquisition error: ${status.error}`, 'error');
+                return;
+            }
 
-    } catch (err) {
-        notifyAuto(err.message);
-    }
+        } catch (e) {
+            console.error('Status poll error:', e);
+        }
+    });
+    pollAcquisitionStatus();
+    acquisitionInterval = setInterval(pollAcquisitionStatus, 2000);
+}
+
+/**
+ * Stops showing the acquisition on this page (to look at a file) without stopping the acquisition itself: it runs on
+ * the server. The live view would otherwise redraw over the file every two seconds. Back to acquisition returns to it.
+ */
+function detachAcquisitionView() {
+    if (!isAcquiring) return;
+    stopAcquisitionUI();
+    const back = document.getElementById('btn-resume-acquisition');
+    if (back) back.style.display = 'inline-flex';
+    showToast('The acquisition keeps running on the server. "Back to acquisition" shows it again.', 'info');
+}
+
+/**
+ * Back to acquisition: the live view of the running acquisition again, or where to find it once it has ended.
+ */
+async function returnToAcquisition() {
+    const back = document.getElementById('btn-resume-acquisition');
+    if (await resumeRunningAcquisition()) return;
+    if (back) back.style.display = 'none';
+    showToast('The acquisition has ended. Its spectrum is in History, under Saved on the server.', 'info');
+}
+
+/**
+ * Shows an acquisition that is already running on the server: it runs whether or not a page watches it,
+ * so a reload, another tab or a run started from a script is picked up here.
+ * @returns {Promise<boolean>} true when one is running and is now shown
+ */
+async function resumeRunningAcquisition() {
+    if (isAcquiring) return true;
+    const status = await api.getAcquisitionStatus().catch(() => null);
+    if (!status || !status.is_active) return false;
+    const input = document.getElementById('count-time');
+    if (input) input.value = String(Math.round(status.duration_seconds / 6) / 10);
+    beginAcquisitionView(status.duration_seconds);
+    const started = status.start_time ? new Date(status.start_time).toLocaleTimeString() : '';
+    showToast(`Showing the acquisition already running${started ? ` (started ${started})` : ''}`, 'info');
+    return true;
 }
 
 /**
@@ -1751,6 +1836,7 @@ function loadFromHistory(index) {
     }
 
     const data = item.data;
+    detachAcquisitionView();
 
     // Restore currentData
     currentData = data;

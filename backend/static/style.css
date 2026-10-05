@@ -1163,6 +1163,50 @@ tbody tr:hover {
     margin-top: 0.25rem;
 }
 
+.history-section-title {
+    margin: 0.75rem 0 0.5rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+
+/* a saved run is a button (keyboard and screen readers), drawn like the other history items */
+.saved-run {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: none;
+}
+
+.saved-run .history-item-date {
+    display: block;
+}
+
+.saved-run-kind {
+    margin-left: 0.5rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid currentColor;
+}
+
+.saved-run-in_progress {
+    color: var(--accent-color);
+}
+
+.saved-run-interrupted {
+    color: var(--warning-color);
+}
+
+.saved-runs-note {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
 /* Device panel */
 #device-quick-panel {
     background: var(--card-bg);

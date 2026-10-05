@@ -23,6 +23,64 @@ from devices.device_calibration import energies_from_device_spectrum, SOURCE_DEV
 import logging
 logger = logging.getLogger(__name__)
 
+# Saved spectra. A run writes spectrum_<start>_in_progress.n42 from its first spectrum on and replaces it with the final
+# spectrum_<end>.n42 when it ends; a partial file left behind (crash, restart, power loss) is kept as ..._interrupted.n42.
+SAVE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'acquisitions')
+IN_PROGRESS_SUFFIX = "_in_progress.n42"
+INTERRUPTED_SUFFIX = "_interrupted.n42"
+LEGACY_CHECKPOINT = "acquisition_in_progress.n42"  # the single shared file of earlier versions
+# Older than this, no server is writing the partial file. A run here rewrites it every minute, but another server on the
+# same folder may run older code that did so every 5 minutes (a test server once relabelled a live run's file at 3 min).
+STALE_CHECKPOINT_S = 15 * 60
+
+
+def _unused_name(save_dir: str, name: str) -> str:
+    """name, or name with _2, _3 ... before the extension when a file of that name already exists."""
+    stem, ext = os.path.splitext(name)
+    candidate, n = name, 2
+    while os.path.exists(os.path.join(save_dir, candidate)):
+        candidate, n = f"{stem}_{n}{ext}", n + 1
+    return candidate
+
+
+def recover_interrupted_checkpoints(save_dir: Optional[str] = None, stale_s: float = STALE_CHECKPOINT_S) -> List[str]:
+    """Renames partial files no acquisition is writing any more to ..._interrupted.n42 and returns the new names.
+
+    A partial file written in the last stale_s seconds is left alone: another server instance may still own it.
+    """
+    save_dir = save_dir or SAVE_DIR
+    if not os.path.isdir(save_dir):
+        return []
+    kept, now = [], time.time()
+    for name in sorted(os.listdir(save_dir)):
+        if not (name == LEGACY_CHECKPOINT or name.endswith(IN_PROGRESS_SUFFIX)):
+            continue
+        path = os.path.join(save_dir, name)
+        try:
+            mtime = os.path.getmtime(path)
+            if now - mtime < stale_s:
+                continue
+            if name == LEGACY_CHECKPOINT:
+                target = f"spectrum_{datetime.fromtimestamp(mtime).strftime('%Y-%m-%d_%H-%M-%S')}{INTERRUPTED_SUFFIX}"
+            else:
+                target = name[:-len(IN_PROGRESS_SUFFIX)] + INTERRUPTED_SUFFIX
+            target = _unused_name(save_dir, target)
+            os.rename(path, os.path.join(save_dir, target))
+        except OSError as e:
+            logger.error(f"[AcquisitionManager] Could not keep interrupted run {name}: {e}")
+            continue
+        logger.warning(f"[AcquisitionManager] Kept an interrupted acquisition as {target}")
+        kept.append(target)
+    return kept
+
+
+def _write_atomic(path: str, text: str) -> None:
+    """Writes text to path through a temporary file, so a crash mid-write cannot leave a truncated spectrum."""
+    tmp = path + ".tmp"
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(text)
+    os.replace(tmp, path)
+
 
 class AcquisitionStatus(str, Enum):
     """Acquisition lifecycle states"""
@@ -46,6 +104,7 @@ class AcquisitionState:
     last_spectrum_energies: Optional[List[float]] = None
     error_message: Optional[str] = None
     final_filename: Optional[str] = None
+    checkpoint_filename: Optional[str] = None  # this run's partial file, named by its start time
     # Exposure during this acquisition, integrated from the instrument's dose-rate readings.
     # Valid regardless of how many sources contributed (unlike isotope identification).
     exposure_uSv: float = 0.0
@@ -84,7 +143,7 @@ class AcquisitionManager:
     
     # Configuration
     POLL_INTERVAL_S = 2.0
-    CHECKPOINT_INTERVAL_S = 5 * 60  # 5 minutes
+    CHECKPOINT_INTERVAL_S = 60  # at most a minute of counts is lost if the server stops mid-run
     
     def __new__(cls):
         if cls._instance is None:
@@ -106,6 +165,10 @@ class AcquisitionManager:
         self._dose_rate_fn = None  # callable -> dose rate in uSv/h (or None)
         self._cps_fn = None  # callable -> {'gamma', 'beta', 'alpha'} counts per second (or None)
         self._instrument: Dict[str, Any] = {}  # e.g. {'instrument_model': 'RadiaCode-110', 'serial_number': ...}
+        # (counts, energies, is_calibrated, result) of the last analysis: polls of an unchanged spectrum reuse it
+        self._analysis_cache = None
+        self._analysis_lock: Optional[asyncio.Lock] = None
+        self._analysis_lock_loop = None
         
     def get_state(self) -> Dict[str, Any]:
         """Get current acquisition state as dict for API response"""
@@ -120,6 +183,7 @@ class AcquisitionManager:
             "last_checkpoint": self.state.last_checkpoint_time.isoformat() if self.state.last_checkpoint_time else None,
             "error": self.state.error_message,
             "final_filename": self.state.final_filename,
+            "checkpoint_file": self.state.checkpoint_filename,
             "exposure": self.exposure_summary(),
             "channels": self.channel_summary(),
         }
@@ -162,6 +226,7 @@ class AcquisitionManager:
             elapsed_seconds=0.0
         )
         
+        await asyncio.to_thread(recover_interrupted_checkpoints)
         self._record_device_readings()    # what the instrument last reported, before the run
         # Clear device spectrum (device I/O can block, e.g. Bluetooth: keep it off the event loop)
         await asyncio.to_thread(device.clear_spectrum)
@@ -201,7 +266,7 @@ class AcquisitionManager:
     
     async def _acquisition_loop(self):
         """Main acquisition loop - runs as background task"""
-        last_checkpoint = datetime.now(timezone.utc)
+        last_checkpoint = None  # the first spectrum is saved at once: a run cut short early still leaves a file
         
         try:
             while not self._stop_requested:
@@ -218,9 +283,9 @@ class AcquisitionManager:
                 await self._poll_spectrum()
                 
                 # Checkpoint save
-                time_since_checkpoint = (datetime.now(timezone.utc) - last_checkpoint).total_seconds()
-                if time_since_checkpoint >= self.CHECKPOINT_INTERVAL_S:
-                    await self._save_checkpoint()
+                due = last_checkpoint is None or \
+                    (datetime.now(timezone.utc) - last_checkpoint).total_seconds() >= self.CHECKPOINT_INTERVAL_S
+                if due and await self._save_checkpoint():
                     last_checkpoint = datetime.now(timezone.utc)
                     self.state.last_checkpoint_time = last_checkpoint
                 
@@ -360,16 +425,20 @@ class AcquisitionManager:
     
 
     
-    async def _save_checkpoint(self):
-        """Save checkpoint to acquisition_in_progress.n42"""
+    def _checkpoint_name(self) -> str:
+        start = self.state.start_time or datetime.now(timezone.utc)
+        return f"spectrum_{start.astimezone().strftime('%Y-%m-%d_%H-%M-%S')}{IN_PROGRESS_SUFFIX}"
+
+    async def _save_checkpoint(self) -> bool:
+        """Saves the spectrum so far to this run's partial file. Returns whether it was written."""
         if not self.state.last_spectrum_counts:
-            return
+            return False
         
         try:
             from formats.n42_exporter import generate_n42_xml
             
             # Run analysis using common enhanced pipeline
-            result = self._analyze()
+            result = await self._analyze_off_loop()
             
             # Build N42 data
             n42_data = {
@@ -388,19 +457,19 @@ class AcquisitionManager:
                 'isotopes': result.get('isotopes', [])
             }
             
-            # Save to checkpoint file
-            save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'acquisitions')
-            os.makedirs(save_dir, exist_ok=True)
-            filepath = os.path.join(save_dir, 'acquisition_in_progress.n42')
-            
+            # Save to this run's partial file
+            os.makedirs(SAVE_DIR, exist_ok=True)
+            name = self._checkpoint_name()
             n42_content = generate_n42_xml(n42_data)
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(n42_content)
-            
-            logger.info(f"[AcquisitionManager] Checkpoint saved at {self.state.elapsed_seconds:.0f}s")
-            
+            await asyncio.to_thread(_write_atomic, os.path.join(SAVE_DIR, name), n42_content)
+            self.state.checkpoint_filename = name
+
+            logger.info(f"[AcquisitionManager] Checkpoint saved at {self.state.elapsed_seconds:.0f}s: {name}")
+            return True
+
         except Exception as e:
             logger.error(f"[AcquisitionManager] Checkpoint error: {e}")
+            return False
     
     async def _finalize(self):
         """Finalize acquisition - save final file and cleanup"""
@@ -419,7 +488,7 @@ class AcquisitionManager:
             from formats.n42_exporter import generate_n42_xml
             
             # Run analysis using common enhanced pipeline
-            result = self._analyze()
+            result = await self._analyze_off_loop()
             
             # Build N42 data
             n42_data = {
@@ -439,7 +508,7 @@ class AcquisitionManager:
             }
             
             # Save to timestamped file
-            save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'acquisitions')
+            save_dir = SAVE_DIR
             os.makedirs(save_dir, exist_ok=True)
             
             # Finalize filename
@@ -448,19 +517,19 @@ class AcquisitionManager:
             filepath = os.path.join(save_dir, filename)
             
             n42_content = generate_n42_xml(n42_data)
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(n42_content)
-            
+            await asyncio.to_thread(_write_atomic, filepath, n42_content)
+
             self.state.final_filename = filename
             self.state.status = AcquisitionStatus.COMPLETE if not self._stop_requested else AcquisitionStatus.STOPPED
             
             logger.info(f"[AcquisitionManager] Finalized: {filename} ({self.state.elapsed_seconds:.1f}s)")
             
-            # Cleanup checkpoint file
-            checkpoint_path = os.path.join(save_dir, 'acquisition_in_progress.n42')
-            if os.path.exists(checkpoint_path):
-                os.remove(checkpoint_path)
-                logger.info("[AcquisitionManager] Checkpoint file cleaned up")
+            # The final file is written: the partial one is no longer needed (kept if anything above failed)
+            if self.state.checkpoint_filename:
+                checkpoint_path = os.path.join(save_dir, self.state.checkpoint_filename)
+                if os.path.exists(checkpoint_path):
+                    os.remove(checkpoint_path)
+                    logger.info(f"[AcquisitionManager] Partial file {self.state.checkpoint_filename} replaced by {filename}")
                 
         except Exception as e:
             logger.error(f"[AcquisitionManager] Finalize error: {e}")
@@ -468,21 +537,45 @@ class AcquisitionManager:
             self.state.error_message = str(e)
     
     def _analyze(self) -> Dict[str, Any]:
-        """Common analysis of the latest spectrum (source name selects the detector model)."""
+        """Common analysis of the latest spectrum (source name selects the detector model).
+
+        Cached per spectrum: each poll stores new lists, so an unchanged spectrum is analysed once.
+        """
+        counts, energies, calibrated = self.state.last_spectrum_counts, self.state.last_spectrum_energies, self._is_calibrated
+        cached = self._analysis_cache
+        if cached and cached[0] is counts and cached[1] is energies and cached[2] == calibrated:
+            return cached[3]
         result = {
-            'counts': self.state.last_spectrum_counts,
-            'energies': self.state.last_spectrum_energies,
+            'counts': counts,
+            'energies': energies,
             'metadata': {'source': self._source_name, **self._instrument},
         }
-        return analyze_spectrum_peaks(result, is_calibrated=self._is_calibrated, live_time=self.state.elapsed_seconds)
+        result = analyze_spectrum_peaks(result, is_calibrated=calibrated, live_time=self.state.elapsed_seconds)
+        self._analysis_cache = (counts, energies, calibrated, result)
+        return result
+
+    async def _analyze_off_loop(self) -> Dict[str, Any]:
+        """_analyze in a worker thread, one at a time. A long acquisition's analysis takes seconds
+        (2 s at 600k counts), which on the event loop starved the acquisition and every request."""
+        loop = asyncio.get_running_loop()
+        if self._analysis_lock_loop is not loop:
+            self._analysis_lock, self._analysis_lock_loop = asyncio.Lock(), loop
+        async with self._analysis_lock:
+            return await asyncio.to_thread(self._analyze)
 
     def get_latest_data(self) -> Optional[Dict[str, Any]]:
-        """Get latest spectrum data for UI updates"""
+        """Get latest spectrum data for UI updates (analyses on the calling thread)"""
         if not self.state.last_spectrum_counts:
             return None
-        
-        result = self._analyze()
-        
+        return self._latest_data(self._analyze())
+
+    async def latest_data(self) -> Optional[Dict[str, Any]]:
+        """get_latest_data for request handlers: the analysis runs off the event loop"""
+        if not self.state.last_spectrum_counts:
+            return None
+        return self._latest_data(await self._analyze_off_loop())
+
+    def _latest_data(self, result: Dict[str, Any]) -> Dict[str, Any]:
         return {
             'counts': result['counts'],
             'energies': result['energies'],

@@ -6,6 +6,13 @@ import os
 # Add backend directory to path so we can import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+@pytest.fixture(autouse=True)
+def _acquisitions_in_tmp(tmp_path, monkeypatch):
+    """No test writes into data/acquisitions: that folder holds the user's real runs (a checkpoint test once did)."""
+    from devices import acquisition_manager
+    monkeypatch.setattr(acquisition_manager, "SAVE_DIR", str(tmp_path / "acquisitions"))
+
+
 @pytest.fixture
 def sample_spectrum():
     """

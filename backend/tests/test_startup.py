@@ -57,3 +57,11 @@ def test_startup_respects_the_switches(recorder, monkeypatch):
         assert wait_until(lambda: recorder["connect"] == ["COM3"])
     assert recorder["watchdog"] == []
     assert not any(t.name == "watchdog" and t.is_alive() for t in threading.enumerate())
+
+
+def test_startup_keeps_runs_interrupted_by_the_last_shutdown(recorder, monkeypatch):
+    kept = []
+    monkeypatch.setattr(main, "recover_interrupted_checkpoints", lambda: kept.append(True) or [])
+    with TestClient(main.app):
+        pass
+    assert kept == [True]
