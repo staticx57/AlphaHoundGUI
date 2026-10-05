@@ -81,3 +81,37 @@ def test_the_correction_is_never_applied_to_germanium():
     parsed["energies"] = [e * 0.95 for e in parsed["energies"]]
     result = analyze_spectrum_peaks(parsed, True, 0)
     assert not result.get("auto_calibration", {}).get("applied")
+
+
+from spectroscopy import interspec_peaks  # noqa: E402
+
+
+@pytest.mark.skipif(not interspec_peaks.enabled(), reason="needs InterSpec's peaks: the built-in detector's high-energy fits there "
+                    "fail validation, so they are no evidence and the fresh-uranium guard cannot act (that path reads U-238, as before)")
+def test_a_lens_whose_correction_missed_is_not_called_uranium():
+    """
+    tests/data/real_spectra/takumar_live_2026-10-05_20min_thinned.n42: the 8 h live AlphaHound capture of the thoriated Takumar lens
+    (2026-10-05) binomially thinned to 20 minutes, the draw on which the automatic correction missed. The template fit then picked the
+    nearest alias and the app reported U-235 at a fixed 80 % with a U-238 chain, with no U-235 line among the peaks (the flip seen
+    live on 2026-10-04). Its peaks above 300 keV contradict uranium.
+    """
+    from formats.n42_parser import parse_n42
+    path = pathlib.Path(__file__).resolve().parent / "data" / "real_spectra" / "takumar_live_2026-10-05_20min_thinned.n42"
+    parsed = parse_n42(path.read_text(encoding="utf-8"))
+    result = analyze_spectrum_peaks(parsed, True, 1200.0, auto_calibrate=False)
+    assert "U-238" not in chains(result)
+    assert not [i for i in result["isotopes"] if i["isotope"] == "U-235" and not i.get("matched_peaks")]
+    assert any("not called uranium" in w for w in result.get("warnings", []))
+
+
+@pytest.mark.parametrize("peaks", ["interspec", "builtin"])
+def test_a_real_uranium_glaze_stays_uranium(peaks, monkeypatch):
+    """The fresh-uranium guard must not touch real uranium: three failed built-in fits above 300 keV (no evidence) once withdrew it."""
+    monkeypatch.setenv("ALPHAHOUND_PEAKS", peaks)
+    parsed = parse_radiacode_xml((BACKEND_TESTS / "data" / "radiacode_fisicas" / "U-238-U-235-FiestaWare.xml").read_text(encoding="utf-8"))
+    result = analyze_spectrum_peaks(parsed, True, float(parsed["metadata"].get("live_time") or 0))
+    assert "U-238" in chains(result)
+    assert not any("not called uranium" in w for w in result.get("warnings", []))
+
+
+BACKEND_TESTS = pathlib.Path(__file__).resolve().parent

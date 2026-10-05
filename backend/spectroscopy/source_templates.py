@@ -374,6 +374,54 @@ def _has_own_evidence(iso, fit, peaks, natural_present):
     return False
 
 
+CONTRADICTION_MIN_KEV = 300.0         # fresh uranium's lines are below 210 keV (and a weak 1001 keV): it explains nothing above this
+CONTRADICTION_SIGNIFICANCE = 5.0
+CONTRADICTION_PEAKS = 2
+
+
+def discount_contradicted_fresh_uranium(fit, peaks) -> Optional[str]:
+    """
+    Withdraw a fresh-uranium verdict that the spectrum's own peaks contradict, and return a warning; None when it stands.
+
+    On a drifted axis the automatic correction can miss, and the template fit, unable to line up the real source, then picks the
+    nearest alias: a thoriated lens 8 % low read as fresh uranium (U-235 and a U-238 chain, with no U-235 line in the peaks). Real
+    fresh uranium (glazes, uranium glass) leaves almost nothing above 300 keV, so two or more significant peaks there that no source
+    of the fit explains mean the verdict is an alias, not a source.
+    """
+    if not fit:
+        return None
+    sources = fit.get("sources") or {}
+    fresh = sources.get("fresh_uranium")
+    if not fresh or not fresh.get("present") or (sources.get("radium_series") or {}).get("present"):
+        return None
+    unexplained = []
+    for p in peaks or []:
+        energy = p.get("energy") or 0.0
+        # a fit that failed validation is no evidence: the built-in detector keeps such peaks with an uncertainty ~6x too small,
+        # which turned three invalid fits on a real uranium glaze (FiestaWare) into "significant" contradictions
+        if energy < CONTRADICTION_MIN_KEV or p.get("fit_valid") is False:
+            continue
+        significance = p.get("significance")
+        if significance is None:
+            area, unc = p.get("net_area"), p.get("net_area_unc") or p.get("uncertainty")
+            significance = area / unc if area and unc else None
+        if significance is not None and significance < CONTRADICTION_SIGNIFICANCE:
+            continue
+        if not _explained_by_fit(energy, fit):
+            unexplained.append(energy)
+    if len(unexplained) < CONTRADICTION_PEAKS:
+        return None
+    fresh["present"] = False
+    fresh["discounted"] = f"peaks at {', '.join(f'{e:.0f}' for e in unexplained[:4])} keV fit no source of the fit"
+    for chain in (fit.get("chains") or {}).values():
+        if "fresh_uranium" in chain.get("via", []):
+            chain["via"] = [v for v in chain["via"] if v != "fresh_uranium"]
+            if not chain["via"]:
+                chain["present"] = False
+    return ("The spectrum's peaks above 300 keV (" + ", ".join(f"{e:.0f}" for e in unexplained[:4]) + " keV) fit no known source at "
+            "this energy calibration, so it is not called uranium. The calibration may be off: check it with Calibrate.")
+
+
 def restore_confirmed_series(fit, isotopes):
     """
     Lift the line matcher's 'a man-made source dominates' demotion from members of a series the full-spectrum fit confirms. One

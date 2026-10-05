@@ -44,3 +44,15 @@ def test_ninety_nine_percent_is_about_forty_percent_higher_than_ninety_five_at_1
 def test_a_confidence_level_outside_the_meaningful_range_is_rejected(level):
     result = calculate_mda(**ARGS, confidence_level=level)
     assert result["valid"] is False and result["mda_bq"] is None
+
+
+def test_the_route_needs_the_lines_emission_probability():
+    """It used to assume Cs-137's 0.85 for any energy: an MDA for Pb-212 238.6 keV (0.436) came out half the true value."""
+    from fastapi.testclient import TestClient
+    from main import app
+    client = TestClient(app)
+    base = {"background_counts": 100.0, "energy_keV": 238.6, "live_time_s": 600.0, "detector": "AlphaHound CsI(Tl)"}
+    assert client.post("/analyze/mda", json=base).status_code == 400
+    with_br = client.post("/analyze/mda", json={**base, "branching_ratio": 0.436}).json()
+    as_cs137 = client.post("/analyze/mda", json={**base, "branching_ratio": 0.851}).json()
+    assert with_br["mda_bq"] / as_cs137["mda_bq"] == __import__("pytest").approx(0.851 / 0.436, rel=1e-6)

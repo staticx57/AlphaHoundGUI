@@ -46,6 +46,7 @@ export class EstimatorUI {
             bgCounts: document.getElementById('est-bg-counts'),
             mdaTime: document.getElementById('est-mda-time'),
             mdaEnergy: document.getElementById('est-mda-energy'),
+            mdaBranching: document.getElementById('est-mda-br'),
             btnCalcMDA: document.getElementById('btn-calc-mda'),
             mdaResult: document.getElementById('mda-result'),
             mdaValue: document.getElementById('mda-value')
@@ -75,6 +76,10 @@ export class EstimatorUI {
         this.elements.btnShowOverlay?.addEventListener('click', () => {
             if (this.callbacks.onShowProjection) {
                 const factor = this.calculateFactor();
+                if (factor === null) {
+                    notifyAuto('This spectrum has no live time, so there is nothing to project it from.');
+                    return;
+                }
                 this.callbacks.onShowProjection(factor);
                 this.modal.style.display = 'none';
             }
@@ -173,16 +178,22 @@ export class EstimatorUI {
         }
     }
 
+    /** Target time over the spectrum's live time; null when the spectrum has none (it used to be taken as 1 s: a 3600x projection). */
     calculateFactor() {
-        const current = parseFloat(this.elements.currentTime.value) || 1;
+        const current = parseFloat(this.elements.currentTime.value);
+        if (!(current > 0)) return null;
         const targetMin = parseFloat(this.elements.targetTime.value) || 1;
-        const targetSec = targetMin * 60;
-        return targetSec / current;
+        return (targetMin * 60) / current;
     }
 
     updateProjectionStats() {
         const factor = this.calculateFactor();
-        this.elements.factorDisplay.textContent = factor.toFixed(2) + 'x';
+        if (factor === null) {
+            this.elements.factorDisplay.textContent = 'no live time';
+            this.elements.projCountsDisplay.textContent = '—';
+            return;
+        }
+        this.elements.factorDisplay.textContent = formatFactor(factor);
 
         if (this.callbacks.getCurrentData) {
             const data = this.callbacks.getCurrentData();
@@ -239,6 +250,13 @@ export class EstimatorUI {
             this.elements.mdaEnergy?.focus();
             return;
         }
+        // the line's emission probability: it was never sent, and the server assumed Cs-137's 0.85 for every energy
+        const brPercent = parseFloat(this.elements.mdaBranching?.value);
+        if (!(brPercent > 0 && brPercent <= 100)) {
+            notifyAuto('Enter the emission probability of that line in percent (85.1 for Cs-137 at 662 keV).');
+            this.elements.mdaBranching?.focus();
+            return;
+        }
 
         try {
             this.elements.btnCalcMDA.textContent = 'Calculating...';
@@ -246,7 +264,8 @@ export class EstimatorUI {
                 background_counts: bg,
                 live_time_s: time,
                 detector: detector,
-                energy_keV: isoEnergy
+                energy_keV: isoEnergy,
+                branching_ratio: brPercent / 100
             });
 
             this.elements.mdaResult.style.display = 'block';
@@ -261,6 +280,11 @@ export class EstimatorUI {
             this.elements.btnCalcMDA.textContent = 'Calculate MDA';
         }
     }
+}
+
+/** "0.12x", "3600.00x": the one format for a projection factor (the panel and the overlay's name) */
+export function formatFactor(factor) {
+    return factor.toFixed(2) + 'x';
 }
 
 export const estimatorUI = new EstimatorUI();

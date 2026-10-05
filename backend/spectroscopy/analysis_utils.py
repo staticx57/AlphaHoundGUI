@@ -47,6 +47,18 @@ def _detect_peaks(result: dict, energies, counts, use_enhanced: bool) -> list:
     """
     # Preserve any peaks already detected by the parser
     parser_peaks = result.get("peaks", [])
+
+    # InterSpec, when installed (spectroscopy/interspec_peaks.py); the built-in detectors below stay as the fallback
+    from spectroscopy import interspec_peaks
+    if interspec_peaks.enabled():
+        from spectroscopy.source_templates import resolve_detector, _resolution, detector_min_energy
+        metadata = result.get("metadata")
+        peaks = interspec_peaks.find_peaks(energies, counts, _resolution(resolve_detector(metadata)),
+                                           min_energy=detector_min_energy(metadata))
+        if peaks:
+            result["analysis_mode"] = "interspec"
+            result["peaks"] = peaks
+            return peaks
     
     # Use enhanced peak detection if available
     if use_enhanced and HAS_ENHANCED_ANALYSIS:
@@ -333,6 +345,13 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     # The template fit decides the series: run it before the confidence filter, so members of a confirmed series that the line
     # matcher demoted on a single coincidental line are not filtered out first
     fit = _fit_templates(result, energies, counts)
+    try:
+        from spectroscopy.source_templates import discount_contradicted_fresh_uranium
+        note = discount_contradicted_fresh_uranium(fit, peaks)
+        if note:
+            result["warnings"] = result.get("warnings", []) + [note]
+    except Exception as e:
+        logger.warning(f"[Analysis] Fresh-uranium check failed: {e}")
     try:
         from spectroscopy.source_templates import restore_confirmed_series
         all_isotopes = restore_confirmed_series(fit, all_isotopes)

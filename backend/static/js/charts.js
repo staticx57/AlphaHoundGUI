@@ -209,8 +209,16 @@ export class AlphaHoundChart {
             }
         }
 
+        // The comparison view leaves a different chart behind (a category axis, its own datasets, labels and legend). Updating
+        // that in place drew the spectrum's peak markers at channel positions instead of energies (a marker for 246 keV landed
+        // near 600 keV on an AlphaHound) and kept the overlays and the projection's name: rebuild instead.
+        if (this.chart && this.kind !== 'spectrum') {
+            this.chart.destroy();
+            this.chart = null;
+        }
+
         if (this.chart) {
-            // [STABILITY] Non-destructive update 
+            // [STABILITY] Non-destructive update
             this.chart.data.datasets[0].data = chartData;
 
             // Handle Peaks as Annotations (as done in git version, but theme-aware)
@@ -350,6 +358,7 @@ export class AlphaHoundChart {
             }
 
             const th = chartTheme();
+            this.kind = 'spectrum';
             this.chart = new Chart(this.ctx, {
                 type: 'line',
                 plugins: [themeGlowPlugin],
@@ -457,9 +466,12 @@ export class AlphaHoundChart {
         if (!this.ctx) return;
         if (this.chart) this.chart.destroy();
 
+        // Each spectrum at its own energies on one energy axis. It was a category axis labelled with the FIRST spectrum's energies,
+        // so every other spectrum was drawn channel by channel against them: one with another calibration (another detector, a
+        // drifted or corrected axis) had its peaks at the wrong energies.
         const datasets = overlaySpectra.map(spectrum => ({
             label: spectrum.name,
-            data: spectrum.counts,
+            data: spectrum.counts.map((c, i) => ({ x: Number(spectrum.energies[i]), y: c })),
             borderColor: spectrum.color,
             backgroundColor: 'transparent',
             borderWidth: 2,
@@ -468,19 +480,35 @@ export class AlphaHoundChart {
             tension: 0.1
         }));
 
-        const labels = overlaySpectra.length > 0 ? overlaySpectra[0].energies : [];
+        // the range with counts in it, as the main chart does: an AlphaHound's axis runs to ~8000 keV, nearly all of it empty
+        let xMax = 0;
+        overlaySpectra.forEach(s => {
+            const total = s.counts.reduce((a, c) => a + Math.max(c, 0), 0);
+            let run = 0;
+            for (let i = 0; i < s.counts.length; i++) {
+                run += Math.max(s.counts[i], 0);
+                if (run >= 0.995 * total) { xMax = Math.max(xMax, Number(s.energies[i]) * 1.15); break; }
+            }
+        });
+        const axisTop = Math.max(...overlaySpectra.map(s => Number(s.energies[s.energies.length - 1]) || 0));
+        xMax = xMax > 0 ? Math.min(xMax, axisTop) : axisTop;
 
         const th = chartTheme();
+        this.kind = 'comparison';
         this.chart = new Chart(this.ctx, {
             plugins: [themeGlowPlugin],
             type: 'line',
-            data: { labels: labels, datasets: datasets },
+            data: { datasets: datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: { intersect: false, mode: 'index' },
+                interaction: { intersect: false, mode: 'nearest', axis: 'x' },
+                parsing: false,
                 scales: {
                     x: {
+                        type: 'linear',
+                        min: 0,
+                        max: xMax,
                         title: { display: true, text: 'Energy (keV)', color: th.textSecondary },
                         grid: { color: th.grid, borderDash: th.gridDash },
                         ticks: { color: th.textSecondary, font: { family: th.font } }

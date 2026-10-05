@@ -6,7 +6,7 @@ import { ui } from './ui.js?v=3.0';
 import { chartManager, DoseRateChart } from './charts.js?v=4.6';
 import { calUI } from './calibration.js';
 import { isotopeUI } from './isotopes_ui.js';
-import { estimatorUI } from './estimator_ui.js';
+import { estimatorUI, formatFactor } from './estimator_ui.js';
 import { updateDeviceUI, resetDeviceUI, getActiveDevice } from './device_features.js';
 import { DeviceScreen, SCREEN_MODES } from './device_screen.js';
 import { notifyAuto, confirmDialog, setNotifier } from './dialogs.js';
@@ -1863,23 +1863,31 @@ function loadFromHistory(index) {
  * @returns {void}
  */
 function toggleCompareMode() {
-    compareMode = !compareMode;
-    const panel = document.getElementById('compare-panel');
-    const btn = document.getElementById('btn-compare');
-    if (compareMode) {
-        panel.style.display = 'flex';
-        btn.classList.add('active');
-        if (currentData) {
-            overlaySpectra.push({ name: 'Current', energies: currentData.energies, counts: currentData.counts, color: colors[0] });
-            updateOverlayCount();
-            chartManager.renderComparison(overlaySpectra, 'linear');
-        }
-    } else {
-        panel.style.display = 'none';
-        btn.classList.remove('active');
-        overlaySpectra = [];
-        if (currentData) chartManager.render(currentData.energies, currentData.counts, currentData.peaks, 'linear');
+    if (!compareMode) {
+        enterCompareMode();
+        return;
     }
+    compareMode = false;
+    document.getElementById('compare-panel').style.display = 'none';
+    document.getElementById('btn-compare').classList.remove('active');
+    overlaySpectra = [];
+    updateOverlayCount();
+    if (currentData) chartManager.render(currentData.energies, currentData.counts, currentData.peaks, 'linear');
+}
+
+/**
+ * Compare mode, from the Compare button or the Estimator's projection: always with the current spectrum first. The Estimator
+ * used to switch the view on by itself with only the projection in it, and the next press of Compare then switched it off.
+ */
+function enterCompareMode() {
+    compareMode = true;
+    document.getElementById('compare-panel').style.display = 'flex';
+    document.getElementById('btn-compare').classList.add('active');
+    if (currentData && !overlaySpectra.some(s => s.isCurrent)) {
+        overlaySpectra.unshift({ name: 'Current', energies: currentData.energies, counts: currentData.counts, color: colors[0], isCurrent: true });
+    }
+    updateOverlayCount();
+    if (overlaySpectra.length) chartManager.renderComparison(overlaySpectra, chartManager.getScaleType());
 }
 
 async function handleCompareFile(e) {
@@ -2042,20 +2050,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const color = colors[overlaySpectra.length % colors.length];
 
             overlaySpectra.push({
-                name: `Projection (${factor.toFixed(1)}x)`,
+                name: `Projection (${formatFactor(factor)})`,   // the Estimator's own format: a 0.12x projection read "0.1x"
                 energies: currentData.energies,
                 counts: projectedCounts,
                 color: color
             });
-
-            // Enable Compare Mode UI
-            compareMode = true;
-            document.getElementById('compare-panel').style.display = 'flex';
-            document.getElementById('btn-compare').classList.add('active');
-            updateOverlayCount();
-
-            // Render
-            chartManager.renderComparison(overlaySpectra, chartManager.getScaleType());
+            enterCompareMode();
         }
     });
 

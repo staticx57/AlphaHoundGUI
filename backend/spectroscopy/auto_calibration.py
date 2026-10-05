@@ -38,7 +38,10 @@ HYPOTHESES = _hypotheses()
 LABELS = {"thorium_series": "thorium series", "radium_series": "radium series", "Eu-152": "Eu-152", "Ba-133": "Ba-133",
           "Co-60 + K-40": "Co-60 and K-40"}
 
-MIN_PEAK_KEV = 100.0          # below: X-rays and backscatter, which no hypothesis models
+MIN_PEAK_KEV = 150.0          # below: X-rays and backscatter, which no hypothesis models, and where a scintillator's axis bends away
+                              # from any gain + offset (the AlphaHound reads Ac-228 129 keV ~7 % high while its higher lines read
+                              # 3-8 % low). Anchored there, the thorium correction failed confirmation on 7 of 55 Takumar
+                              # captures of 5 min to 8 h once InterSpec reported that line (measured 2026-10-05); was 100.
 MIN_SIGNIFICANCE = 5.0        # fitted peak amplitude over its error, for a peak to count
 DETECTABLE = 0.05             # a line counts in a hypothesis's recall when it is this share of its strongest line (intensity x efficiency)
 CURVATURE_SLACK = 0.015       # a straight gain+offset cannot follow a scintillator's curved axis exactly: this share of the energy
@@ -54,7 +57,14 @@ def _fwhm(r662: float, energy: float) -> float:
 
 
 def measure_peaks(energies, counts, r662: float) -> List[Dict]:
-    """Significant peaks above MIN_PEAK_KEV on the raw axis: centroid, FWHM and significance from the Gaussian fit."""
+    """Significant peaks above MIN_PEAK_KEV on the raw axis: centroid, FWHM and significance from the Gaussian fit
+    (InterSpec's when installed, spectroscopy/interspec_peaks.py; else the search below)."""
+    from spectroscopy import interspec_peaks
+    if interspec_peaks.enabled():
+        found = interspec_peaks.find_peaks(energies, counts, r662, min_energy=MIN_PEAK_KEV)
+        if found is not None:
+            return [{"energy": p["energy"], "error": p["energy_unc"], "fwhm": p["fwhm"], "significance": p["significance"]}
+                    for p in found if p["significance"] >= MIN_SIGNIFICANCE]
     from spectroscopy.spectral_analysis import snip_background, fit_gaussian
     E = np.asarray(energies, dtype=float)
     c = np.asarray(counts, dtype=float)

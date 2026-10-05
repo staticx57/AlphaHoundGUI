@@ -137,7 +137,10 @@ def analyze_mda(request: dict):
         # Extract params
         bg_counts = float(request.get('background_counts', 0))
         energy = float(request.get('energy_keV', 662))
-        branching = float(request.get('branching_ratio', 0.85))
+        # the line's emission probability: no default (it used to be Cs-137's 0.85 for any energy)
+        if request.get('branching_ratio') is None:
+            raise HTTPException(status_code=400, detail="branching_ratio (the line's emission probability, 0-1) is required")
+        branching = float(request['branching_ratio'])
         live_time = float(request.get('live_time_s', 60))
         detector = request.get('detector', 'AlphaHound CsI(Tl)')
         
@@ -149,6 +152,8 @@ def analyze_mda(request: dict):
             detector_name=detector
         )
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
