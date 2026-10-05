@@ -4,6 +4,7 @@ Unifies the analysis pipeline across file uploads (N42/CSV) and live devices (Al
 """
 
 import math
+import re
 from spectroscopy.peak_detection import detect_peaks
 from nuclides.isotope_database import identify_isotopes, identify_decay_chains
 from core import DEFAULT_SETTINGS, UPLOAD_SETTINGS, apply_abundance_weighting, apply_confidence_filtering
@@ -289,6 +290,29 @@ def _auto_calibrate(result: dict, energies, counts):
     return corrected
 
 
+PLACEHOLDER_AXIS_WARNING = (
+    "This file says it was recorded by {device}, but its energy axis is exactly 3 keV per channel from zero (0, 3, 6 ... keV): "
+    "the placeholder that older AlphaHoundGUI builds saved instead of the detector's own axis, so the energies are probably "
+    "wrong (on one such file a thoriated lens read as Eu-152). Isotope and decay-chain identification is skipped. The counts "
+    "are fine: repair the file with the "
+    "real axis of the device it came from (backend/tools/recalibrate_n42.py with a spectrum CSV from that device), or use "
+    "Calibrate.")
+
+
+def claimed_detector(metadata) -> str:
+    """The real detector a file says it was recorded by ("RadView Detection AlphaHound"), or "" when it names none or says it
+    is simulated or synthetic. Taken only from what the file states: a file's device is never assumed."""
+    m = metadata or {}
+    named = " ".join(str(m.get(k) or "").strip() for k in ("manufacturer", "model")).strip()
+    return "" if not named or re.search(r"simulat|synthetic|generator", named, re.I) else named
+
+
+def is_placeholder_axis(energies) -> bool:
+    """The axis older builds saved instead of the device's: 0, 3, 6 ... keV (tools/recalibrate_n42.py repairs such files).
+    Identified on it, a thoriated lens read Eu-152 + Na-22: the peaks sit at the wrong energies and no gain + offset fixes it."""
+    return len(energies) >= 64 and all(abs(float(e) - 3.0 * i) < 1e-6 for i, e in enumerate(energies))
+
+
 def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float = 0.0, use_enhanced: bool = True,
                            auto_calibrate: bool = True) -> dict:
     """
@@ -310,6 +334,13 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
 
     energies = result["energies"]
     counts = result["counts"]
+    # Only a file that says it came from a real detector is taken to carry the placeholder: simulated and generated spectra
+    # (and CSVs, which name no instrument) can genuinely be calibrated at 3 keV per channel from zero
+    device = claimed_detector(result.get("metadata"))
+    placeholder = is_calibrated and bool(device) and is_placeholder_axis(energies)
+    if placeholder:
+        is_calibrated = False
+        result["is_calibrated"] = False
 
     _annotate_detector(result, is_calibrated)
     if auto_calibrate and is_calibrated:
@@ -322,10 +353,9 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     if not is_calibrated:
         result["isotopes"] = []
         result["decay_chains"] = []
-        result["warnings"] = result.get("warnings", []) + [
+        result["warnings"] = result.get("warnings", []) + [PLACEHOLDER_AXIS_WARNING.format(device=device) if placeholder else (
             "No energy calibration: isotope and decay-chain identification skipped. "
-            "Energies are channel numbers or an assumed 3 keV/channel; use Calibrate to assign real energies."
-        ]
+            "Energies are channel numbers or an assumed 3 keV/channel; use Calibrate to assign real energies.")]
         return result
 
     if not peaks:
