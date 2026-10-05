@@ -195,3 +195,65 @@ def test_the_member_states_agree_with_the_isotope_table_on_real_spectra():
                     checked += 1
                 assert status.get(name, {}).get("state") != "detected" or status[name]["total_lines"], f"no line count for {name}"
     assert checked
+
+
+# --------------------------------------------------------------------------- a series parent is a verdict, not a measurement
+def _iso(name, confidence, **extra):
+    return {"isotope": name, "confidence": confidence, "matches": 2, "total_lines": 4, "suppressed": False, **extra}
+
+
+def test_series_parent_takes_the_confidence_of_its_best_daughter_and_sorts_ahead_of_it():
+    from spectroscopy.analysis_utils import _series_parent_entries
+    isotopes = [_iso("Ac-228", 78.0), _iso("Th-232", 61.0), _iso("Pb-212", 67.0)]
+    out = _series_parent_entries([{"parent": "Th-232"}], isotopes)
+    assert [i["isotope"] for i in out] == ["Th-232", "Ac-228", "Pb-212"]                   # equal to its best daughter, listed first
+    parent = out[0]
+    assert parent["confidence"] == 78.0 and parent["role"] == "series" and parent["series_basis"] == "Ac-228"
+    assert [i["confidence"] for i in isotopes] == [78.0, 61.0, 67.0]                         # the input is not changed
+
+
+def test_series_parent_is_never_more_certain_than_its_daughters():
+    from spectroscopy.analysis_utils import _series_parent_entries
+    out = _series_parent_entries([{"parent": "Th-232"}], [_iso("Th-232", 86.0), _iso("Tl-208", 74.0), _iso("Ac-228", 67.0)])
+    assert next(i for i in out if i["isotope"] == "Th-232")["confidence"] == 74.0           # was 12 points above its best daughter
+
+
+def test_series_parent_is_listed_when_the_series_is_reported_and_only_then():
+    from spectroscopy.analysis_utils import _series_parent_entries
+    isotopes = [_iso("Pb-212", 52.0), _iso("Tl-208", 39.0)]
+    listed = _series_parent_entries([{"parent": "Th-232"}], isotopes)
+    assert [i["isotope"] for i in listed][0] == "Th-232" and listed[0]["confidence"] == 52.0
+    assert [i["isotope"] for i in _series_parent_entries([], isotopes)] == ["Pb-212", "Tl-208"]                  # no series reported
+    assert [i["isotope"] for i in _series_parent_entries([{"parent": "Th-232"}], [_iso("Pb-212", 52.0, suppressed=True)])] == ["Pb-212"]
+
+
+def test_uranium_series_uses_u235_as_evidence_for_u238():
+    """A uranium glaze has no radium daughters: the engine's own series definition counts U-235 as accompanying U-238."""
+    from spectroscopy.analysis_utils import _series_parent_entries
+    out = _series_parent_entries([{"parent": "U-238"}], [_iso("U-235", 80.0)])
+    assert out[0]["isotope"] == "U-238" and out[0]["series_basis"] == "U-235"
+    assert (out[0]["matches"], out[0]["total_lines"]) == (2, 4)                    # the counts of the member its verdict rests on
+
+
+WEB_DATA = os.path.join(os.path.dirname(__file__), "data")
+
+
+@pytest.mark.parametrize("path, parent", [
+    ("radiacode_fisicas/Th-232.xml", "Th-232"), ("web_spectra/dmamontov/th-90-pendant.xml", "Th-232"),
+    ("web_spectra/dmamontov/th-90-wt20.xml", "Th-232"), ("web_spectra/ckuethe/data_th232_plus_background.xml", "Th-232"),
+    ("radiacode_fisicas/Ra-226.xml", "U-238"), ("web_spectra/dmamontov/ra-88-spd.xml", "U-238"),
+    ("web_spectra/dmamontov/u-92-glass.xml", "U-238"),
+])
+def test_on_real_spectra_the_series_parent_never_outranks_its_daughters_and_is_listed(path, parent):
+    """Measured on 17 labelled spectra of both device families (tests/scoring_eval.py): the parent outranked its daughters on 7, and was
+    missing from the table on 4, depending on how its borrowed lines happened to score."""
+    from formats.radiacode_xml_parser import parse_radiacode_xml
+    from spectroscopy.source_templates import SERIES_MEMBERS
+    with open(os.path.join(WEB_DATA, path), encoding="utf-8") as handle:
+        parsed = parse_radiacode_xml(handle.read())
+    result = analyze_spectrum_peaks(parsed, True, float(parsed["metadata"].get("live_time") or 0))
+    confidence = {i["isotope"]: i["confidence"] for i in result["isotopes"] if not i.get("suppressed")}
+    assert parent in {c["parent"] for c in result["decay_chains"]}
+    assert parent in confidence
+    daughters = [confidence[d] for d in SERIES_MEMBERS[parent] if d != parent and d in confidence]
+    assert daughters and confidence[parent] <= max(daughters) + 1e-9

@@ -260,6 +260,7 @@ def fit_source_templates(energies, counts, metadata: Optional[dict] = None) -> O
 
     return {
         "detector": detector,
+        "chi2_dof": round(float(rnorm ** 2 / dof), 2),
         "gain": round(float(gain), 4),
         "offset_keV": round(float(offset), 1),
         "resolution_scale": rs,

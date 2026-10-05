@@ -235,6 +235,37 @@ def _identify(peaks, current_settings: dict, use_enhanced: bool, detector=None):
     return all_isotopes, all_chains
 
 
+def _series_parent_entries(decay_chains, isotopes):
+    """
+    A series parent with no gamma line of its own (Th-232, U-238) has no independent evidence: every line its entry lists belongs to a
+    daughter. So it is a verdict on the series, not a measurement: it takes the confidence of the best daughter in the table (never more,
+    never less), it is listed whenever the series is reported, and it is flagged role=series so it sorts ahead of that daughter.
+
+    Without this, whether the parent outranked its daughters depended on how its borrowed lines happened to score: first on 6 of 9
+    thorium spectra, behind Ac-228 on two, behind Tl-208 on one; U-238 behind its daughters on every uranium one.
+    """
+    from spectroscopy.source_templates import SERIES_MEMBERS
+    out = [dict(i) for i in isotopes]
+    for chain in decay_chains:
+        parent = chain.get("parent")
+        if parent not in SERIES_MEMBERS:
+            continue
+        daughters = set(SERIES_MEMBERS[parent]) - {parent}
+        direct = [i for i in out if i.get("isotope") in daughters and not i.get("suppressed")]
+        if not direct:
+            continue
+        best = max(direct, key=lambda i: i.get("confidence", 0))
+        entry = next((i for i in out if i.get("isotope") == parent), None)
+        if entry is None:
+            # no line of its own: the counts are those of the member its verdict rests on ("2/4 lines of its members matched")
+            entry = {"isotope": parent, "matches": best.get("matches", 0), "total_lines": best.get("total_lines", 0), "matched_peaks": [],
+                     "expected_peaks": [], "abundance_weight": 1.0}
+            out.append(entry)
+        entry.update(confidence=best["confidence"], role="series", series_basis=best["isotope"], suppressed=False)
+    out.sort(key=lambda i: (i.get("confidence", 0), i.get("role") == "series"), reverse=True)
+    return out
+
+
 def _attach_member_status(decay_chains, isotopes):
     """Decide, in ONE place, what the chain card says about every member, so the card and the isotope table cannot disagree.
 
@@ -431,6 +462,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
     decay_chains, isotopes = _reconcile_with_template_fit(
         result, energies, counts, peaks, decay_chains, isotopes, current_settings, fit)
     _add_equilibrium_status(decay_chains, result, energies, counts, live_time)
+    isotopes = _series_parent_entries(decay_chains, isotopes)
     _attach_member_status(decay_chains, isotopes)
 
     if current_settings.get("mode") == "simple":

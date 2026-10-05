@@ -650,7 +650,9 @@ export class AlphaHoundUI {
                         </div>
                         ` : ''}
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                            <span>${iso.matches}/${iso.total_lines} peaks matched</span>
+                            ${iso.role === 'series'
+                                ? `<span title="${iso.isotope} has no gamma line of its own. This is the verdict on its decay series, at the confidence of the best member that does: ${iso.series_basis}.">Series verdict, from ${iso.series_basis}${iso.total_lines ? ` &middot; ${iso.matches}/${iso.total_lines} lines of its members matched` : ''}</span>`
+                                : `<span>${iso.matches}/${iso.total_lines} peaks matched</span>`}
                             <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat" onclick="event.stopPropagation();"><img src="/static/icons/book.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> NNDC</a>
                         </div>
                     </div>
