@@ -441,7 +441,7 @@ if (btnGetAccumulated) {
 
             const durationMin = (data.duration / 60).toFixed(1);
             showToast(`Accumulated spectrum loaded (${durationMin} min of device history${analyze ? ', analyzed' : ', view only'})`, 'success');
-            (data.warnings || []).forEach(w => showToast(w, 'info'));
+            toastWarnings(data, 'info');
         } catch (err) {
             console.error('Failed to get accumulated spectrum:', err);
             showToast(err.message || 'Failed to get accumulated spectrum', 'error');
@@ -1076,7 +1076,7 @@ async function handleFile(file) {
         currentData = data;
         ui.resetDropZone();
         ui.renderDashboard(data);
-        (data.warnings || []).forEach(w => showToast(w, 'warning'));
+        toastWarnings(data, 'warning');
 
         // Auto-populate ROI acquisition time from metadata (if available)
         autoPopulateROITime(data);
@@ -1643,6 +1643,13 @@ function showServerManagedUI() {
  * Useful for checking what's accumulated on the device or resuming after browser disconnect.
  * @returns {Promise<void>}
  */
+// The analysis warnings as toasts, except the automatic axis correction: the notice above the results shows it, with Undo
+// (as a toast too it repeated the text and covered the notice's buttons)
+function toastWarnings(data, kind) {
+    const shown = data?.auto_calibration?.applied ? data.auto_calibration.message : null;
+    (data?.warnings || []).filter(w => w !== shown).forEach(w => showToast(w, kind));
+}
+
 async function getCurrentSpectrum(opts = {}) {
     // quiet: used by the AlphaHound auto-refresh, which must not toast every few seconds
     const quiet = !!opts && opts.quiet === true;
@@ -1667,7 +1674,7 @@ async function getCurrentSpectrum(opts = {}) {
 
         if (!quiet) {
             showToast('Current spectrum loaded (cumulative from device)', 'success');
-            (data.warnings || []).forEach(w => showToast(w, 'warning'));
+            toastWarnings(data, 'warning');
         }
 
     } catch (err) {

@@ -43,6 +43,9 @@ licences and a README with what each sample is). Scorecard on those 44: 801/818 
 - The anomaly check ran the ML model without the energy axis (3/9 right on the real benchmark instead of 8/9).
 - SPE files: a unit after the `$MCA_CAL` coefficients (GammaVision) was refused; all-zero coefficients (digiBASE, "not calibrated") gave
   every channel 0 keV. Same guard for CHN.
+- **The axis notice showed *Apply correction* next to *Undo*** after an automatic correction (a button rule set a display that beat
+  `[hidden]`), and the same message was repeated as a toast over the notice's buttons. Found in the live check on the AlphaHound; the
+  browser checks now test what is visible on screen rather than the attribute.
 - **InterSpec and SpecUtils read the app's N42 files on a default 0-3000 keV axis** (the List/ChannelEnergies pair is not N42-2012).
   Exports also carry a standard `EnergyCalibration` (channel boundaries) that the spectrum references; files saved before this still open
   on the wrong axis elsewhere.

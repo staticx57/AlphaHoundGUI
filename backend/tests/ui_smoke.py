@@ -1054,7 +1054,8 @@ with sync_playwright() as p:
     px.set_input_files("#file-input", str(real / "Ra-226.xml"))
     px.wait_for_function("!document.getElementById('cal-notice').hidden", timeout=20000)
     notice = px.inner_text("#cal-notice-text")
-    check("X a clearly shifted capture shows the notice with the gain and offset", "Energy calibration looks low" in notice and "gain 0.97" in notice, notice[:140])
+    check("X a clearly shifted capture shows the notice with the gain and offset", "Energy calibration looks low" in notice and "gain 0.97" in notice
+          and px.is_visible("#btn-apply-axis-correction") and not px.is_visible("#btn-undo-auto-correction"), notice[:140])
     first_x_before = px.evaluate("Chart.getChart(document.getElementById('spectrumChart')).data.datasets[0].data[200].x")
     px.click("#btn-apply-axis-correction")
     px.wait_for_function("document.getElementById('cal-notice').hidden", timeout=20000)
@@ -1093,8 +1094,8 @@ with sync_playwright() as p:
     px2.wait_for_function("!document.getElementById('cal-notice').hidden", timeout=30000)
     notice2 = px2.inner_text("#cal-notice-text")
     check("X2 a drifted capture is corrected automatically and the notice offers Undo, not Apply",
-          "corrected automatically" in notice2 and px2.evaluate("!document.getElementById('btn-undo-auto-correction').hidden")
-          and px2.evaluate("document.getElementById('btn-apply-axis-correction').hidden"), notice2[:140])
+          "corrected automatically" in notice2 and px2.is_visible("#btn-undo-auto-correction")
+          and not px2.is_visible("#btn-apply-axis-correction"), notice2[:140])
     x_corrected = px2.evaluate("Chart.getChart(document.getElementById('spectrumChart')).data.datasets[0].data[200].x")
     original_x = parsed["energies"][200] * 0.943
     px2.click("#btn-undo-auto-correction")

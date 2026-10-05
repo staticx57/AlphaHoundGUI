@@ -2769,6 +2769,8 @@ pre.app-dialog-body {
     font-size: 0.9rem;
 }
 .cal-notice[hidden] { display: none; }
+/* button rules set a display that beats [hidden]: the notice shows either Undo or Apply correction, never both */
+.cal-notice [hidden] { display: none !important; }
 .cal-notice span { flex: 1 1 24rem; min-width: 0; }
 .safety-line { display: flex; flex-direction: column; gap: 0.1rem; }
 .safety-line strong { font-size: 0.9rem; letter-spacing: 0.04em; text-transform: uppercase; }
