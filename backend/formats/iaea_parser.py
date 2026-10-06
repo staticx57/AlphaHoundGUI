@@ -81,7 +81,7 @@ def parse_iaea_csv(filepath: str, min_intensity: float = 0.01, min_energy: float
         gammas.sort(key=lambda x: -x[1])
         
     except Exception as e:
-        logger.error(f"[IAEA Parser] Error parsing {filepath}: {e}")
+        logger.error(f"Error parsing {filepath}: {e}")
         return None
     
     return {
@@ -122,7 +122,7 @@ def load_all_isotopes(min_intensity: float = 0.5, top_n: int = 15) -> Dict[str, 
     isotopes = {}
     
     if not os.path.exists(IAEA_DATA_DIR):
-        logger.info(f"[IAEA Parser] Data directory not found: {IAEA_DATA_DIR}")
+        logger.info(f"Data directory not found: {IAEA_DATA_DIR}")
         return isotopes
     
     for filename in os.listdir(IAEA_DATA_DIR):
@@ -149,7 +149,7 @@ def load_all_isotopes(min_intensity: float = 0.5, top_n: int = 15) -> Dict[str, 
             result['gammas'] = result['gammas'][:top_n]
             isotopes[proper_name] = result
     
-    logger.info(f"[IAEA Parser] Loaded {len(isotopes)} isotopes from IAEA data")
+    logger.info(f"Loaded {len(isotopes)} isotopes from IAEA data")
     return isotopes
 
 

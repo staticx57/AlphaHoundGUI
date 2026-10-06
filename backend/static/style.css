@@ -2945,3 +2945,16 @@ input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
     font-size: 0.7rem;
     white-space: nowrap;
 }
+
+
+/* An unexplained peak that is probably the Compton edge of a stronger line: a hint, not a match. */
+.peak-edge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0 0.4rem;
+    border: 1px dotted var(--text-secondary);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}

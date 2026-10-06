@@ -408,7 +408,8 @@ export class AlphaHoundUI {
             const names = matches[i];
             const matchHtml = names.length
                 ? names.map((n) => `<span class="peak-match">${esc(n)}</span>`).join('')
-                : '<span class="peak-nomatch" aria-label="no match">\u2013</span>';
+                : '<span class="peak-nomatch" aria-label="no match">\u2013</span>'
+                  + (peak.compton_edge_of ? `<span class="peak-edge" title="No isotope claims this peak, and it sits where the Compton edge of the ${esc(Number(peak.compton_edge_of).toFixed(0))} keV line falls (a photon that scatters once through about 180 degrees leaves 2E\u00b2/(511+2E) keV in the crystal). It is probably not a line of its own.">may be the Compton edge of ${esc(Number(peak.compton_edge_of).toFixed(0))} keV</span>` : '');
             const selected = this._selectedPeak === i;
             return `
                 <tr class="peak-row${selected ? ' selected' : ''}" data-peak-index="${i}" tabindex="0" role="button"

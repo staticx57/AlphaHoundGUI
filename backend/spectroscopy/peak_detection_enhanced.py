@@ -339,10 +339,10 @@ def detect_peaks_enhanced(
             from spectroscopy.spectral_analysis import snip_background
             background = snip_background(counts, iterations=snip_iterations)
             net_counts = np.maximum(counts - background, 0)
-            logger.debug(f"[Peak] Applied SNIP: max counts {np.max(counts):.0f} -> net {np.max(net_counts):.0f}")
+            logger.debug(f"Applied SNIP: max counts {np.max(counts):.0f} -> net {np.max(net_counts):.0f}")
             counts_for_detection = net_counts
         except Exception as e:
-            logger.debug(f"[Peak] SNIP failed, using raw counts: {e}")
+            logger.debug(f"SNIP failed, using raw counts: {e}")
             counts_for_detection = counts
     else:
         counts_for_detection = counts
@@ -366,7 +366,7 @@ def detect_peaks_enhanced(
                                                   min_energy, max_energy)
             candidates = merge_candidates(list(candidates), extra, resolution_662)
         except Exception as e:
-            logger.debug(f"[Peak] Resolution-aware search failed: {e}")
+            logger.debug(f"Resolution-aware search failed: {e}")
     
     if not validate_fits:
         # Return simple peak list without validation
@@ -376,7 +376,7 @@ def detect_peaks_enhanced(
     validated_peaks = []
     
     # Debug: show candidates before fitting
-    logger.debug(f"[Peak] Candidates BEFORE fitting: {[f'{e:.1f}' for e in candidates[:15]]}")
+    logger.debug(f"Candidates BEFORE fitting: {[f'{e:.1f}' for e in candidates[:15]]}")
     
     for candidate_energy in candidates:
         # Use SNIP-processed counts for fitting if SNIP was applied

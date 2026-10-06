@@ -243,7 +243,7 @@ def fit_multiplet(
         )
         
     except Exception as e:
-        logger.warning(f"[Multiplet Fit] Failed: {e}")
+        logger.warning(f"Failed: {e}")
         return None
 
 
