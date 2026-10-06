@@ -11,6 +11,7 @@ export class AlphaHoundChart {
         this.decimationThreshold = 2048; // Decimate spectra larger than this
         this.isSyncing = false; // Unified guard for all chart updates and event reactions
         this.annotations = {}; // Master state for annotations (source of truth)
+        this.unassignedExcess = []; // structure the fitted peaks do not explain (display only), set from the analysis
         this.labelOffsets = {}; // Track vertical offsets for label stacking { xValue: offset }
         this.userZoom = null;        // the energy window the user chose (scrubber, wheel, pan); kept across live updates
         this.preserveZoom = false;   // true while a live acquisition re-renders the same spectrum
@@ -268,6 +269,8 @@ export class AlphaHoundChart {
                 });
             }
 
+            this._syncExcessAnnotations(chartData);
+
             // Scale Management: Detect mode switch to snap view
             const modeSwitched = this._lastRenderMode !== this.autoScale;
             debug(`[Chart] autoScale=${this.autoScale}, lastRenderMode=${this._lastRenderMode}, modeSwitched=${modeSwitched}, fullMaxEnergy=${fullMaxEnergy}`);
@@ -356,6 +359,8 @@ export class AlphaHoundChart {
                     };
                 });
             }
+
+            this._syncExcessAnnotations(chartData);
 
             const th = chartTheme();
             this.kind = 'spectrum';
@@ -701,6 +706,37 @@ export class AlphaHoundChart {
         } finally {
             this.isSyncing = false;
         }
+    }
+
+    /**
+     * Mark the unassigned excesses (structure the fitted peaks do not explain: escape peaks, backscatter, an unresolved line) with a hollow
+     * dashed ring on the spectrum: a different mark from a peak, because nothing identifies from it.
+     * @param {Array<{x: number, y: number|null}>} chartData - the points the chart draws
+     */
+    _syncExcessAnnotations(chartData) {
+        Object.keys(this.annotations).forEach(k => {
+            if (k.startsWith('excess')) delete this.annotations[k];
+        });
+        const color = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim() || '#94a3b8';
+        (this.unassignedExcess || []).forEach((ex, idx) => {
+            let best = 0;
+            let bestDiff = Infinity;
+            for (let i = 0; i < chartData.length; i++) {
+                const diff = Math.abs(chartData[i].x - ex.energy);
+                if (diff < bestDiff) { bestDiff = diff; best = i; }
+            }
+            this.annotations[`excess${idx}`] = {
+                type: 'point',
+                xValue: chartData[best]?.x ?? ex.energy,
+                yValue: chartData[best]?.y ?? 0,
+                backgroundColor: 'transparent',
+                radius: 7,
+                borderColor: color,
+                borderWidth: 2,
+                borderDash: [3, 2],
+                drawTime: 'afterDatasetsDraw'
+            };
+        });
     }
 
     /**

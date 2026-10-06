@@ -1183,6 +1183,34 @@ with sync_playwright() as p:
     check("Z the button opens the calibration tool", pz.is_visible("#calibration-modal"))
     check("Z no JS errors or native dialogs", not errs_z, "; ".join(errs_z[:3]))
     ctx_z.close()
+
+    # AA: an unassigned excess (structure the fitted peaks do not explain) is marked on the chart and listed apart from the peaks. A RadiaCode
+    # radium capture: its 242 keV Pb-214 line is missing from the peak list, a plain excess next to it.
+    ctx_aa = browser.new_context(viewport={"width": 1400, "height": 1000})
+    paa = ctx_aa.new_page()
+    errs_aa = []
+    paa.on("pageerror", lambda e: errs_aa.append(f"pageerror: {e}"))
+    paa.on("dialog", lambda d: (errs_aa.append("native dialog: " + d.message), d.dismiss()))
+    paa.goto(URL, wait_until="load")
+    paa.set_input_files("#file-input", os.path.join(HERE, "data", "web_spectra", "dmamontov", "ra-88-spd.xml"))
+    paa.wait_for_selector("#peaks-tbody .peak-row", timeout=30000)
+    rows_aa = paa.evaluate("[...document.querySelectorAll('#excess-tbody .peak-excess')].map(r => r.innerText.replace(/\s+/g, ' ').trim())")
+    check("AA the peak table lists the unassigned excess apart from the peaks, tagged as such",
+          len(rows_aa) >= 1 and "unassigned excess" in rows_aa[0], str(rows_aa)[:160])
+    marks = paa.evaluate("Object.keys(window.chartManager.annotations).filter(k => k.startsWith('excess')).length")
+    peak_marks = paa.evaluate("Object.keys(window.chartManager.annotations).filter(k => k.startsWith('peak')).length")
+    plain_rows = paa.evaluate("document.querySelectorAll('#peaks-tbody .peak-row').length")
+    check("AA the chart marks each excess with its own ring, apart from the peak markers", marks == len(rows_aa) and peak_marks <= plain_rows,
+          f"excess rings {marks}, excess rows {len(rows_aa)}, peak markers {peak_marks}, peak rows {plain_rows}")
+    paa.click("#excess-tbody .peak-excess")
+    check("AA clicking an excess row highlights it on the chart and selects the row",
+          paa.evaluate("'roiHighlight' in window.chartManager.annotations") and paa.evaluate("document.querySelector('#excess-tbody .peak-excess').classList.contains('selected')"))
+    paa.click("#excess-tbody .peak-excess")
+    check("AA clicking it again clears the highlight", not paa.evaluate("'roiHighlight' in window.chartManager.annotations"))
+    ids_aa = paa.evaluate("document.querySelectorAll('#isotopes-container > div').length")
+    check("AA the excess is not an isotope and adds no isotope row", ids_aa >= 1)
+    check("AA no JS errors or native dialogs", not errs_aa, "; ".join(errs_aa[:3]))
+    ctx_aa.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

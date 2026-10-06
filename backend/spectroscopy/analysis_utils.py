@@ -266,6 +266,23 @@ def _series_parent_entries(decay_chains, isotopes):
     return out
 
 
+def _add_unassigned_excess(result: dict, energies, counts, peaks):
+    """Structure the fitted peaks do not explain (escape peaks, backscatter, an unresolved line), for display only: it is kept apart from
+    `peaks` and never reaches identification (spectroscopy/residual_peaks.py). Not for germanium, whose widths and templates differ."""
+    result["unassigned_excess"] = []
+    detector = result.get("detector_profile")
+    try:
+        from spectroscopy import interspec_peaks
+        from spectroscopy.residual_peaks import find_unassigned_excess
+        from spectroscopy.source_templates import _resolution, is_germanium
+        if not detector or is_germanium(detector):
+            return
+        result["unassigned_excess"] = find_unassigned_excess(
+            energies, counts, peaks, _resolution(detector), interspec_peaks.threshold_edge_keV(energies, counts))
+    except Exception as e:
+        logger.warning(f"[Analysis] Unassigned-excess search failed: {e}")
+
+
 def _attach_member_status(decay_chains, isotopes):
     """Decide, in ONE place, what the chain card says about every member, so the card and the isotope table cannot disagree.
 
@@ -478,6 +495,7 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
 
     result["isotopes"] = isotopes
     result["decay_chains"] = decay_chains
+    _add_unassigned_excess(result, energies, counts, peaks)
 
     _add_xrf_detections(result, peaks)
     result["data_quality"] = _assess_data_quality(peaks, energies, counts, live_time)

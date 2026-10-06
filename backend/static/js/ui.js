@@ -14,6 +14,7 @@ export class AlphaHoundUI {
             metadataPanel: document.getElementById('metadata-panel'),
             peaksContainer: document.getElementById('peaks-container'),
             peaksTbody: document.getElementById('peaks-tbody'),
+            excessTbody: document.getElementById('excess-tbody'),
             resultsContainer: document.getElementById('analysis-results'),
             doseDisplay: document.getElementById('rc-dose-display'), // shared live-dose readout in the unified device panel
             acquisitionTimer: document.getElementById('acquisition-timer'),
@@ -114,6 +115,7 @@ export class AlphaHoundUI {
         // Detector lower threshold (keV): auto-scale view starts here and ignores the noise below it
         if (window.chartManager) {
             window.chartManager.displayMinKeV = (typeof data?.display_min_keV === 'number') ? data.display_min_keV : null;
+            window.chartManager.unassignedExcess = Array.isArray(data?.unassigned_excess) ? data.unassigned_excess : [];
         }
         this.elements.dashboard.style.display = 'block';
         document.dispatchEvent(new CustomEvent('spectrum-rendered', { detail: data }));   // export buttons that depend on the data listen
@@ -132,7 +134,7 @@ export class AlphaHoundUI {
         if (!live) this.syncRoiDetector(data);
         this.renderMetadata(data.metadata);
         this.renderDataQualityWarning(data.data_quality);
-        this.renderPeaks(data.peaks, data.isotopes);
+        this.renderPeaks(data.peaks, data.isotopes, data.unassigned_excess);
         this.renderIsotopes(data.isotopes);
         this.renderSummary(data);
         this.renderAiResults();
@@ -380,15 +382,25 @@ export class AlphaHoundUI {
         if (this._metadata) this.renderMetadata(this._metadata);
     }
 
-    renderPeaks(peaks, isotopes) {
+    renderPeaks(peaks, isotopes, excess) {
         this._peaks = Array.isArray(peaks) ? peaks : [];
-        if (!this._peaks.length) {
+        this._excess = Array.isArray(excess) ? excess : [];
+        if (this.elements.excessTbody) this.elements.excessTbody.innerHTML = '';
+        if (!this._peaks.length && !this._excess.length) {
             this.elements.peaksContainer.style.display = 'none';
             return;
         }
         this.elements.peaksContainer.style.display = 'block';
         const matches = peakMatches(this._peaks, isotopes);
         const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const excessRows = this._excess.map((ex, j) => `
+                <tr class="peak-row peak-excess" data-excess-index="${j}" tabindex="0" role="button" aria-pressed="false"
+                    aria-label="${Number(ex.energy).toFixed(0)} keV: unassigned excess, highlight it on the chart">
+                    <td>${Number(ex.energy).toFixed(0)}</td>
+                    <td class="text-right">\u2013</td>
+                    <td class="text-right">${Number(ex.fwhm_expected).toFixed(1)}</td>
+                    <td class="peak-matches"><span class="peak-excess-tag" title="Structure the fitted peaks do not explain: an escape peak, Compton backscatter or an unresolved line. It stands ${Number(ex.significance).toFixed(0)} standard errors over the continuum. It is not used to identify anything.">unassigned excess &middot; ${Number(ex.significance).toFixed(0)}&sigma;</span></td>
+                </tr>`).join('');
         this.elements.peaksTbody.innerHTML = this._peaks.map((peak, i) => {
             const fwhm = Number(peak.fwhm);
             const fwhmText = Number.isFinite(fwhm) && fwhm > 0 ? fwhm.toFixed(1) : '\u2013';
@@ -407,6 +419,14 @@ export class AlphaHoundUI {
                     <td class="peak-matches">${matchHtml}</td>
                 </tr>`;
         }).join('');
+        if (this.elements.excessTbody) this.elements.excessTbody.innerHTML = excessRows;
+        this.elements.excessTbody?.querySelectorAll('.peak-excess').forEach((row) => {
+            const toggle = () => this._toggleExcessHighlight(Number(row.dataset.excessIndex));
+            row.addEventListener('click', toggle);
+            row.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+            });
+        });
         this.elements.peaksTbody.querySelectorAll('.peak-row').forEach((row) => {
             const toggle = () => this._togglePeakHighlight(Number(row.dataset.peakIndex));
             row.addEventListener('click', toggle);
@@ -416,6 +436,26 @@ export class AlphaHoundUI {
         });
     }
 
+    /** Mark an unassigned excess on the spectrum (click again to clear); the band is its expected FWHM either side. */
+    _toggleExcessHighlight(index) {
+        const ex = this._excess?.[index];
+        const chart = window.chartManager;
+        if (!ex || !chart) return;
+        const row = this.elements.excessTbody?.querySelector(`.peak-excess[data-excess-index="${index}"]`);
+        const same = row?.classList.contains('selected');
+        this._selectedPeak = null;
+        chart.clearROIHighlight();
+        document.querySelectorAll('#peaks-tbody .peak-row, #excess-tbody .peak-row').forEach((r) => {
+            r.classList.remove('selected');
+            r.setAttribute('aria-pressed', 'false');
+        });
+        if (!same && row) {
+            chart.highlightROI(ex.energy - ex.fwhm_expected, ex.energy + ex.fwhm_expected, `${Number(ex.energy).toFixed(0)} keV (unassigned)`);
+            row.classList.add('selected');
+            row.setAttribute('aria-pressed', 'true');
+        }
+    }
+
     /** Mark a peak on the spectrum (click again to clear); the band is one FWHM either side. */
     _togglePeakHighlight(index) {
         const peak = this._peaks?.[index];
@@ -423,6 +463,10 @@ export class AlphaHoundUI {
         if (!peak || !chart) return;
         const same = this._selectedPeak === index;
         this._selectedPeak = same ? null : index;
+        this.elements.excessTbody?.querySelectorAll('.peak-excess.selected').forEach((r) => {
+            r.classList.remove('selected');
+            r.setAttribute('aria-pressed', 'false');
+        });
         if (same) {
             chart.clearROIHighlight();
         } else {

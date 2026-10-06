@@ -2933,3 +2933,15 @@ input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .stat-detail { margin-top: 0.3rem; font-size: 0.74rem; line-height: 1.35; color: var(--text-secondary); }
 
 .decay-info { min-height: 1.2em; margin: 0.6rem 0 0; font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); }
+
+
+/* An unassigned excess: structure the fitted peaks do not explain. A dashed tag, not a match. */
+.peak-excess-tag {
+    display: inline-block;
+    padding: 0 0.4rem;
+    border: 1px dashed var(--text-secondary);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
