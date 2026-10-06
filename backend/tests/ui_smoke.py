@@ -1211,6 +1211,34 @@ with sync_playwright() as p:
     check("AA the excess is not an isotope and adds no isotope row", ids_aa >= 1)
     check("AA no JS errors or native dialogs", not errs_aa, "; ".join(errs_aa[:3]))
     ctx_aa.close()
+
+    # AB: a real RadiaCode capture that carries channel numbers only (a 9-hour uranium glass): the calibration dialog offers the known axes with the
+    # best fit first, applying it identifies the uranium chain, a hand-entered axis that makes no sense is refused with the reason
+    ctx_ab = browser.new_context(viewport={"width": 1400, "height": 1000})
+    pab = ctx_ab.new_page()
+    errs_ab = []
+    pab.on("pageerror", lambda e: errs_ab.append(f"pageerror: {e}"))
+    pab.on("dialog", lambda d: (errs_ab.append("native dialog: " + d.message), d.dismiss()))
+    pab.goto(URL, wait_until="load")
+    pab.set_input_files("#file-input", os.path.join(HERE, "data", "real_spectra", "community", "Uranium glass 9 hours.csv"))
+    pab.wait_for_selector("#cal-notice:not([hidden])", timeout=30000)
+    pab.click("#btn-open-calibration")
+    pab.wait_for_function("document.querySelectorAll('#cal-preset-select option').length === 2 && document.querySelector('#cal-preset-note').textContent.length > 20", timeout=20000)
+    pab.evaluate("document.getElementById('cal-presets').open = true")
+    check("AB the dialog preselects the axis that fits: RadiaCode first, with the evidence", pab.evaluate("document.getElementById('cal-preset-select').value") == "radiacode"
+          and "Best fit" in pab.inner_text("#cal-preset-note"), pab.inner_text("#cal-preset-note")[:140])
+    pab.fill("#cal-poly", "0, -1")
+    pab.click("#btn-cal-poly")
+    pab.wait_for_function("[...document.querySelectorAll('.toast')].some(t => /increase/i.test(t.textContent))", timeout=10000)
+    check("AB an axis that does not increase is refused with the reason, and nothing is applied", pab.is_visible("#cal-notice") and pab.is_visible("#calibration-modal"))
+    pab.click("#btn-cal-preset")
+    pab.wait_for_function("[...document.querySelectorAll('.chain-card')].some(c => c.innerText.includes('U-238'))", timeout=40000)
+    check("AB applying the preset identifies the uranium chain and closes the dialog", not pab.is_visible("#calibration-modal"))
+    check("AB the axis notice goes once the axis is known", pab.evaluate("document.getElementById('cal-notice').hidden"))
+    pab.click("#btn-calibrate-mode") if pab.is_visible("#btn-calibrate-mode") else pab.evaluate("window.calibrationUI.show()")
+    pab.wait_for_function("document.querySelector('#cal-preset-note').textContent.length > 0", timeout=20000)
+    check("AB no JS errors or native dialogs", not errs_ab, "; ".join(errs_ab[:3]))
+    ctx_ab.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]

@@ -1206,6 +1206,29 @@
                             style="width: 16px; height: 16px;"></button>
                 </div>
                 <div style="margin: 1rem 0;">
+                    <details id="cal-presets" style="margin-bottom: 1rem;">
+                        <summary style="cursor: pointer; font-weight: 600;">No calibration? Start from a known axis</summary>
+                        <div style="display: grid; gap: 0.6rem; margin-top: 0.6rem; font-size: 0.85rem;">
+                            <div>
+                                <label for="cal-preset-select">Detector family</label>
+                                <select id="cal-preset-select"></select>
+                                <button id="btn-cal-preset" type="button">Use this axis</button>
+                                <p id="cal-preset-note" style="margin: 0.3rem 0 0; color: var(--text-secondary);"></p>
+                            </div>
+                            <div>
+                                <label for="cal-kev-per-channel">keV per channel</label>
+                                <input id="cal-kev-per-channel" type="number" step="any" min="0" style="width: 90px;">
+                                <label for="cal-offset">offset (keV)</label>
+                                <input id="cal-offset" type="number" step="any" value="0" style="width: 80px;">
+                                <button id="btn-cal-linear" type="button">Use this axis</button>
+                            </div>
+                            <div>
+                                <label for="cal-poly">Polynomial a0, a1, a2 ... (keV)</label>
+                                <input id="cal-poly" type="text" placeholder="0, 2.38, 0.0004" style="width: 200px;">
+                                <button id="btn-cal-poly" type="button">Use this axis</button>
+                            </div>
+                        </div>
+                    </details>
                     <p>Click on the chart to add points (Channel), then enter the known energy.</p>
                     <table style="width: 100%; text-align: left; margin-bottom: 1rem;">
                         <thead>

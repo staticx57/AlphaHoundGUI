@@ -992,11 +992,12 @@ def isotope_emissions(isotope: str = Query(..., max_length=20), min_intensity: f
 
 # === Analysis on a given energy axis (calibration dialog, axis correction) ===
 
-def _analyze_on_axis(energies, counts, metadata: dict, live_time: float) -> dict:
+def _analyze_on_axis(energies, counts, metadata: dict, live_time: float, approximate: bool = False) -> dict:
     """The full analysis of a spectrum whose energy axis is already decided (calibrated, since someone chose it)."""
     result = {"counts": counts, "energies": energies, "metadata": metadata}
-    # the axis was chosen (calibration dialog, axis correction): analyse it as given, no automatic correction on top
-    return sanitize_for_json(analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time, auto_calibrate=False))
+    # The axis was chosen (calibration dialog, axis correction): analyse it as given, no automatic correction on top. A detector-family preset is
+    # the exception (`approximate`): it is good to a couple of per cent, and the automatic correction is what refines the rest.
+    return sanitize_for_json(analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time, auto_calibrate=approximate))
 
 
 class ReanalysisRequest(BaseModel):
@@ -1005,6 +1006,7 @@ class ReanalysisRequest(BaseModel):
     counts: List[float] = Field(..., min_length=1, max_length=MAX_SPECTRUM_CHANNELS)
     metadata: dict = Field(default={})
     live_time: float = Field(default=0.0, ge=0.0)
+    approximate: bool = Field(default=False, description="the axis is a detector-family preset: let the automatic correction refine it")
 
     @model_validator(mode='after')
     def _axis_is_usable(self):
@@ -1018,7 +1020,63 @@ class ReanalysisRequest(BaseModel):
 @router.post("/analyze/reanalyze")
 def reanalyze(request: ReanalysisRequest):
     """Analyse the spectrum again on the energy axis given (after the user calibrated it by hand)."""
-    return _analyze_on_axis(request.energies, request.counts, request.metadata, request.live_time)
+    return _analyze_on_axis(request.energies, request.counts, request.metadata, request.live_time, request.approximate)
+
+
+# === Energy axes for spectra that arrive as channel numbers only ===
+
+class EnergyAxisRequest(BaseModel):
+    """An energy axis for `channels` channels: a preset, or a straight line, or polynomial coefficients (lowest order first)."""
+    channels: int = Field(..., ge=2, le=MAX_SPECTRUM_CHANNELS)
+    preset: Optional[str] = None
+    kev_per_channel: Optional[float] = Field(default=None, gt=0.0, le=1000.0)
+    offset_keV: float = Field(default=0.0, ge=-1000.0, le=1000.0)
+    coefficients: Optional[List[float]] = Field(default=None, max_length=6)
+
+
+class PresetSuggestRequest(BaseModel):
+    counts: List[float] = Field(..., min_length=10, max_length=MAX_SPECTRUM_CHANNELS)
+
+
+@router.get("/analyze/energy-presets")
+def energy_presets(channels: Optional[int] = None):
+    """The known detector axes (for a spectrum of `channels` channels, when given)."""
+    from spectroscopy import energy_presets as ep
+    chosen = ep.presets_for(channels) if channels is not None else ep.PRESETS
+    return {"presets": [{k: v for k, v in item.items() if k != "detector"} for item in chosen]}
+
+
+@router.post("/analyze/energy-presets/suggest")
+def energy_presets_suggest(request: PresetSuggestRequest):
+    """The presets for this spectrum, best first, each scored by how well the spectrum fits the known sources on that axis (z < ~10: nothing fits)."""
+    from spectroscopy import energy_presets as ep
+    return {"suggestions": ep.suggest(request.counts)}
+
+
+@router.post("/analyze/energy-axis")
+def energy_axis(request: EnergyAxisRequest):
+    """The energies of `channels` channels for a preset, a straight line (keV per channel and offset) or polynomial coefficients."""
+    from spectroscopy import energy_presets as ep
+    given = [x for x in (request.preset, request.kev_per_channel, request.coefficients) if x is not None]
+    if len(given) != 1:
+        raise HTTPException(status_code=400, detail="give exactly one of: preset, kev_per_channel, coefficients")
+    try:
+        if request.preset is not None:
+            chosen = ep.preset(request.preset)
+            if chosen is None:
+                raise ValueError(f"unknown preset '{request.preset}'")
+            if chosen["channels"] != request.channels:
+                raise ValueError(f"the {chosen['name']} axis is for {chosen['channels']} channels, this spectrum has {request.channels}")
+            coefficients, label = chosen["coefficients"], chosen["name"]
+        elif request.kev_per_channel is not None:
+            coefficients = ep.linear(request.kev_per_channel, request.offset_keV)
+            label = f"{request.kev_per_channel:g} keV per channel, offset {request.offset_keV:g} keV"
+        else:
+            coefficients, label = request.coefficients, "polynomial " + ", ".join(f"{c:g}" for c in request.coefficients)
+        return {"energies": ep.energies(coefficients, request.channels), "coefficients": coefficients, "label": label,
+                "approximate": request.preset is not None}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # === Energy axis correction (from the calibration check) ===

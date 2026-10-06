@@ -730,7 +730,7 @@ function setupEventListeners() {
     setupThemeAndChartControls({ chartManager, reapplyIsotopeHighlights, updateChartScale, getCurrentData: () => currentData });
     setupDeviceControls({ connectDevice, refreshPorts, showRadiacodeDisconnectedUI, startAcquisition, stopAcquisition, stopRadiacodeDosePolling });
     setupComparisonAndBackground({ chartManager, clearBackground, handleBackgroundFile, handleCompareFile, setBackground, toggleCompareMode, updateOverlayCount, getCurrentData: () => currentData, getOverlaySpectra: () => overlaySpectra, setOverlaySpectra: (value) => { overlaySpectra = value; } });
-    setupSnipAndCalibration({ chartManager, applyCalibration, getCurrentData: () => currentData });
+    setupSnipAndCalibration({ chartManager, applyCalibration, applyAxis, getCurrentData: () => currentData });
     setupAnalysisPanels({ ui, isCompareMode: () => compareMode, getCurrentData: () => currentData });
 }
 
@@ -1990,6 +1990,39 @@ function applyAnalysis(data) {
         refreshChartWithBackground();
     } else {
         chartManager.render(data.energies, data.counts, data.peaks || [], chartManager.getScaleType());
+    }
+}
+
+/**
+ * Applies a whole energy axis (a known detector's, a straight line or a polynomial from the calibration dialog's known-axis section): the server
+ * analyses the spectrum again on it. A detector-family preset is approximate, so the automatic correction may refine it; a hand-entered axis is
+ * analysed exactly as given.
+ * @param {{energies: number[], label: string, approximate: boolean, coefficients: number[]}} axis
+ * @returns {Promise<void>}
+ */
+async function applyAxis({ energies, label, approximate, coefficients }) {
+    if (!currentData) return;
+    try {
+        const response = await fetch('/analyze/reanalyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                energies,
+                counts: currentData.counts,
+                metadata: { ...(currentData.metadata || {}), calibration: { label, coefficients } },
+                live_time: Number(currentData.metadata?.live_time) || 0,
+                approximate: !!approximate,
+            }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const detail = Array.isArray(body.detail) ? body.detail.map((d) => d.msg).join('; ') : body.detail;
+            throw new Error(detail || `Request failed (${response.status})`);
+        }
+        applyAnalysis(body);
+        showToast(`Energy axis applied: ${label}`, 'success');
+    } catch (err) {
+        showToast(`Could not apply the axis: ${err.message}`, 'error');
     }
 }
 

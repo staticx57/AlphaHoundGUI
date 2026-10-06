@@ -11,9 +11,11 @@ import { showToast } from './toast.js';
  * @param {object} deps
  * @param {*} deps.chartManager
  * @param {*} deps.applyCalibration
+ * @param {*} deps.applyAxis
  * @param {*} deps.getCurrentData
  */
-export function setupSnipAndCalibration({ chartManager, applyCalibration, getCurrentData } = {}) {
+export function setupSnipAndCalibration({ chartManager, applyCalibration, applyAxis, getCurrentData } = {}) {
+    calUI.getSpectrum = getCurrentData;
     // SNIP Auto-Background Removal (Visual Only - preserves original analysis)
     document.getElementById('btn-snip-bg').addEventListener('click', async () => {
         if (!getCurrentData() || !getCurrentData().counts) {
@@ -93,7 +95,9 @@ export function setupSnipAndCalibration({ chartManager, applyCalibration, getCur
 
     // Listen for calibration application
     document.addEventListener('calibrationApplied', (e) => {
-        applyCalibration(e.detail.slope, e.detail.intercept);
+        // an axis from the known-axis section (energies for every channel) or a line fitted to picked points
+        if (Array.isArray(e.detail.energies)) applyAxis(e.detail);
+        else applyCalibration(e.detail.slope, e.detail.intercept);
     });
 
     // NOTE: Scale toggle, reset zoom, and compare mode listeners are already registered above (lines 347-398)
