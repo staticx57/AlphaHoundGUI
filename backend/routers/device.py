@@ -246,35 +246,31 @@ async def acquire_spectrum(request: SpectrumRequest):
     result = await asyncio.to_thread(analyze_spectrum_peaks, result, is_calibrated=(energy_source == SOURCE_DEVICE),
                                      live_time=float(actual_duration_seconds))
     
-    # Extract results for backward compatibility in the response
-    peaks = result.get("peaks", [])
-    isotopes = result.get("isotopes", [])
-    decay_chains = result.get("decay_chains", [])
-    
     # Calculate acquisition timing for N42 export
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(seconds=actual_duration_seconds)
-    
-    return sanitize_for_json({
-        "counts": counts,
-        "energies": energies,
-        "peaks": peaks,
-        "isotopes": isotopes,
-        "decay_chains": decay_chains,
-        "metadata": {
-            "source": "AlphaHound Device",
-            "channels": len(counts),
-            "energy_calibration": energy_source,
-            **device_readings(),
-            "count_time_minutes": (actual_duration_seconds / 60),
-            # N42 export fields
-            "acquisition_time": actual_duration_seconds,
-            "live_time": actual_duration_seconds,
-            "real_time": actual_duration_seconds,
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat()
-        }
-    })
+
+    # The analysis result as it is, as /device/spectrum/current returns it: peaks, isotopes, chains AND the warnings, the calibration check, the
+    # automatic correction and the data quality, with the axis the analysis used (a corrected one when a correction was applied: the peaks
+    # are at those energies, and this reply sent the device's raw axis beside them). The acquisition's own fields go into the metadata.
+    body = dict(result)
+    body["counts"] = result.get("counts", counts)
+    body["energies"] = result.get("energies", energies)
+    body["metadata"] = {
+        **result.get("metadata", {}),
+        "source": "AlphaHound Device",
+        "channels": len(counts),
+        "energy_calibration": energy_source,
+        **device_readings(),
+        "count_time_minutes": (actual_duration_seconds / 60),
+        # N42 export fields
+        "acquisition_time": actual_duration_seconds,
+        "live_time": actual_duration_seconds,
+        "real_time": actual_duration_seconds,
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat(),
+    }
+    return sanitize_for_json(body)
 
 # ============================================================
 # Server-Side Acquisition Endpoints (Browser-Independent)

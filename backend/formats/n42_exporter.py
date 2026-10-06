@@ -95,6 +95,14 @@ def _prepare_export(spectrum_data: Dict) -> Dict:
 ENERGY_CALIBRATION_ID = "EnergyCalibration-1"
 
 
+def channel_edges(energies) -> List[float]:
+    """The channel boundaries N42-2012 wants (EnergyBoundaryValues): halfway between neighbouring channel energies, the outer two extrapolated.
+    One more value than there are channels."""
+    energies = [float(e) for e in energies]
+    return ([energies[0] - (energies[1] - energies[0]) / 2] + [(a + b) / 2 for a, b in zip(energies, energies[1:])]
+            + [energies[-1] + (energies[-1] - energies[-2]) / 2])
+
+
 def _build_tree(prepared: Dict, spectrum_data: Dict) -> ET.Element:
     """The N42 element tree: measurement times, the spectrum with its calibration, the instrument and the optional extension."""
     ET.register_namespace('', N42_NAMESPACE)
@@ -103,8 +111,7 @@ def _build_tree(prepared: Dict, spectrum_data: Dict) -> ET.Element:
     # a default 0-3000 keV axis): an identified EnergyCalibration with channel boundaries halfway between the channel energies
     energies = [float(e) for e in prepared['energies']]
     if len(energies) > 1:
-        edges = ([energies[0] - (energies[1] - energies[0]) / 2] + [(a + b) / 2 for a, b in zip(energies, energies[1:])]
-                 + [energies[-1] + (energies[-1] - energies[-2]) / 2])
+        edges = channel_edges(energies)
         standard_cal = ET.SubElement(root, "EnergyCalibration", id=ENERGY_CALIBRATION_ID)
         ET.SubElement(standard_cal, "EnergyBoundaryValues").text = " ".join(f"{e:.5f}" for e in edges)
     rad_measurement = ET.SubElement(root, "RadMeasurement")
