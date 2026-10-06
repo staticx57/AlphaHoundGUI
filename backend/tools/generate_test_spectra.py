@@ -49,23 +49,34 @@ def add_gaussian_peak(counts: np.ndarray, energy_keV: float, peak_area: float, f
 
 
 def add_compton_continuum(counts: np.ndarray, peak_energy_keV: float, peak_area: float):
-    """Add Compton continuum below a photopeak."""
-    edge_energy = peak_energy_keV * 2 * peak_energy_keV / (511 + 2 * peak_energy_keV)
-    edge_channel = energy_to_channel(edge_energy)
-    
-    for ch in range(min(edge_channel, CHANNELS)):
-        counts[ch] += peak_area * 0.05 * np.exp(-ch * KEV_PER_CHANNEL / peak_energy_keV)
+    """
+    Add the Compton shelf below a photopeak. The edge is smeared over the detector's resolution at the edge, as a real one is: a hard step
+    makes the peak finder report a "peak" just under it, which no real spectrum has to that degree.
+    """
+    edge_energy = 2 * peak_energy_keV * peak_energy_keV / (511 + 2 * peak_energy_keV)
+    width = max(fwhm_keV(edge_energy) / 2.355, KEV_PER_CHANNEL)
+    energies = np.arange(CHANNELS) * KEV_PER_CHANNEL
+    shelf = np.exp(-energies / peak_energy_keV) / (1.0 + np.exp((energies - edge_energy) / (0.6 * width)))
+    counts += peak_area * 0.05 * shelf
 
 
 def add_background(counts: np.ndarray, level: float = 20):
     """Add exponential background."""
-    for ch in range(CHANNELS):
-        counts[ch] += level * np.exp(-ch * KEV_PER_CHANNEL / 800)
+    counts += level * np.exp(-np.arange(CHANNELS) * KEV_PER_CHANNEL / 800)
 
 
 def apply_poisson_noise(counts: np.ndarray) -> np.ndarray:
-    """Apply Poisson statistical noise."""
-    return np.random.poisson(np.maximum(counts, 0).astype(int))
+    """Poisson statistical noise on the expected counts (a float expectation: truncating it to an integer first biases every channel low)."""
+    return RNG.poisson(np.maximum(counts, 0))
+
+
+RNG = np.random.default_rng()
+
+
+def seed(value=None):
+    """Make the noise reproducible (tests); with no value it is fresh each run."""
+    global RNG
+    RNG = np.random.default_rng(value)
 
 
 def write_n42(filepath: str, counts: np.ndarray, source_name: str, live_time: float = DEFAULT_LIVE_TIME):
@@ -205,33 +216,39 @@ def generate_cesium137():
     return counts
 
 
+GENERATORS = {
+    "synthetic_smoke_detector": (generate_smoke_detector, "Am-241 Smoke Detector"),
+    "synthetic_radium_dial": (generate_radium_dial, "Ra-226 Radium Dial"),
+    "synthetic_potassium_k40": (generate_potassium_background, "K-40 Natural Background"),
+    "synthetic_cobalt60": (generate_cobalt60, "Co-60 Source"),
+    "synthetic_uranium_ore": (generate_uranium_ore, "Uranium Ore (Natural U)"),
+    "synthetic_cesium137": (generate_cesium137, "Cs-137 Source"),
+}
+
+
+def spectrum_dict(name: str) -> dict:
+    """The named spectrum as the parsers return one (counts, energies, calibrated), for tests and tools that skip the file."""
+    counts = GENERATORS[name][0]()
+    return {"counts": [int(c) for c in counts], "energies": [ch * KEV_PER_CHANNEL for ch in range(CHANNELS)], "is_calibrated": True,
+            "metadata": {"live_time": DEFAULT_LIVE_TIME}}
+
+
 def main():
     """Generate all synthetic test spectra."""
-    # Create output directory
     output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "test_spectra")
     os.makedirs(output_dir, exist_ok=True)
-    
+
     print("Generating synthetic test spectra...")
     print("=" * 50)
     print("IMPORTANT: These are SYNTHETIC spectra for testing")
     print("           They are NOT real measurements!")
     print("=" * 50)
-    
-    # Generate each spectrum
-    spectra = [
-        ("synthetic_smoke_detector.n42", generate_smoke_detector(), "Am-241 Smoke Detector"),
-        ("synthetic_radium_dial.n42", generate_radium_dial(), "Ra-226 Radium Dial"),
-        ("synthetic_potassium_k40.n42", generate_potassium_background(), "K-40 Natural Background"),
-        ("synthetic_cobalt60.n42", generate_cobalt60(), "Co-60 Source"),
-        ("synthetic_uranium_ore.n42", generate_uranium_ore(), "Uranium Ore (Natural U)"),
-        ("synthetic_cesium137.n42", generate_cesium137(), "Cs-137 Source"),
-    ]
-    
-    for filename, counts, source_name in spectra:
-        filepath = os.path.join(output_dir, filename)
-        write_n42(filepath, counts, source_name)
-    
-    print("\nAll synthetic test spectra created successfully!")
+
+    for name, (generate, source_name) in GENERATORS.items():
+        write_n42(os.path.join(output_dir, name + ".n42"), generate(), source_name)
+
+    print()
+    print("All synthetic test spectra created successfully!")
     print(f"Location: {output_dir}")
 
 
