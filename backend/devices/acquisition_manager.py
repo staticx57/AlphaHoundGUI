@@ -67,9 +67,9 @@ def recover_interrupted_checkpoints(save_dir: Optional[str] = None, stale_s: flo
             target = _unused_name(save_dir, target)
             os.rename(path, os.path.join(save_dir, target))
         except OSError as e:
-            logger.error(f"[AcquisitionManager] Could not keep interrupted run {name}: {e}")
+            logger.error(f"Could not keep interrupted run {name}: {e}")
             continue
-        logger.warning(f"[AcquisitionManager] Kept an interrupted acquisition as {target}")
+        logger.warning(f"Kept an interrupted acquisition as {target}")
         kept.append(target)
     return kept
 
@@ -234,7 +234,7 @@ class AcquisitionManager:
         # Start background task
         self._task = asyncio.create_task(self._acquisition_loop())
         
-        logger.info(f"[AcquisitionManager] Started {duration_minutes} minute acquisition")
+        logger.info(f"Started {duration_minutes} minute acquisition")
         return {"success": True, "message": f"Acquisition started for {duration_minutes} minutes"}
     
     async def stop(self) -> Dict[str, Any]:
@@ -254,7 +254,7 @@ class AcquisitionManager:
             try:
                 await asyncio.wait_for(self._task, timeout=10.0)
             except asyncio.TimeoutError:
-                logger.info("[AcquisitionManager] Stop timeout, cancelling task")
+                logger.info("Stop timeout, cancelling task")
                 self._task.cancel()
         
         return {
@@ -275,7 +275,7 @@ class AcquisitionManager:
                 
                 # Check if duration expired
                 if self.state.elapsed_seconds >= self.state.duration_seconds:
-                    logger.info(f"[AcquisitionManager] Duration complete: {self.state.elapsed_seconds:.1f}s")
+                    logger.info(f"Duration complete: {self.state.elapsed_seconds:.1f}s")
                     break
                 
                 # Sample dose rate (exposure) and poll spectrum from device
@@ -296,10 +296,10 @@ class AcquisitionManager:
             await self._finalize()
             
         except asyncio.CancelledError:
-            logger.info("[AcquisitionManager] Acquisition cancelled")
+            logger.info("Acquisition cancelled")
             self.state.status = AcquisitionStatus.STOPPED
         except Exception as e:
-            logger.error(f"[AcquisitionManager] Error: {e}")
+            logger.error(f"Error: {e}")
             self.state.status = AcquisitionStatus.ERROR
             self.state.error_message = str(e)
     
@@ -312,7 +312,7 @@ class AcquisitionManager:
         try:
             cps = await asyncio.to_thread(self._cps_fn)
         except Exception as e:
-            logger.warning(f"[AcquisitionManager] CPS read failed: {e}")
+            logger.warning(f"CPS read failed: {e}")
             return
         self.record_cps(cps)
 
@@ -352,7 +352,7 @@ class AcquisitionManager:
         try:
             rate = await asyncio.to_thread(self._dose_rate_fn)
         except Exception as e:
-            logger.warning(f"[AcquisitionManager] Dose-rate read failed: {e}")
+            logger.warning(f"Dose-rate read failed: {e}")
             return
         self.record_dose_rate(rate, time.monotonic())
 
@@ -411,7 +411,7 @@ class AcquisitionManager:
                 # Use the device's own (nonlinear) energy axis; linear fallback only if unusable
                 self.state.last_spectrum_energies, energy_source = energies_from_device_spectrum(spectrum)
                 if energy_source != SOURCE_DEVICE:
-                    logger.warning("[AcquisitionManager] " + fallback_warning())
+                    logger.warning("" + fallback_warning())
                 self._record_device_readings()
                 dur = getattr(self._device, 'device_duration_s', None)
                 if isinstance(dur, (int, float)) and dur >= 0:
@@ -421,7 +421,7 @@ class AcquisitionManager:
                                        getattr(self._device, "calibration_source", "device") == "device")
                 
         except Exception as e:
-            logger.error(f"[AcquisitionManager] Poll error: {e}")
+            logger.error(f"Poll error: {e}")
     
 
     
@@ -464,11 +464,11 @@ class AcquisitionManager:
             await asyncio.to_thread(_write_atomic, os.path.join(SAVE_DIR, name), n42_content)
             self.state.checkpoint_filename = name
 
-            logger.info(f"[AcquisitionManager] Checkpoint saved at {self.state.elapsed_seconds:.0f}s: {name}")
+            logger.info(f"Checkpoint saved at {self.state.elapsed_seconds:.0f}s: {name}")
             return True
 
         except Exception as e:
-            logger.error(f"[AcquisitionManager] Checkpoint error: {e}")
+            logger.error(f"Checkpoint error: {e}")
             return False
     
     async def _finalize(self):
@@ -522,17 +522,17 @@ class AcquisitionManager:
             self.state.final_filename = filename
             self.state.status = AcquisitionStatus.COMPLETE if not self._stop_requested else AcquisitionStatus.STOPPED
             
-            logger.info(f"[AcquisitionManager] Finalized: {filename} ({self.state.elapsed_seconds:.1f}s)")
+            logger.info(f"Finalized: {filename} ({self.state.elapsed_seconds:.1f}s)")
             
             # The final file is written: the partial one is no longer needed (kept if anything above failed)
             if self.state.checkpoint_filename:
                 checkpoint_path = os.path.join(save_dir, self.state.checkpoint_filename)
                 if os.path.exists(checkpoint_path):
                     os.remove(checkpoint_path)
-                    logger.info(f"[AcquisitionManager] Partial file {self.state.checkpoint_filename} replaced by {filename}")
+                    logger.info(f"Partial file {self.state.checkpoint_filename} replaced by {filename}")
                 
         except Exception as e:
-            logger.error(f"[AcquisitionManager] Finalize error: {e}")
+            logger.error(f"Finalize error: {e}")
             self.state.status = AcquisitionStatus.ERROR
             self.state.error_message = str(e)
     

@@ -77,7 +77,7 @@ def _detect_peaks(result: dict, energies, counts, use_enhanced: bool) -> list:
                 peaks = detect_peaks(energies, counts)
                 result["analysis_mode"] = "standard_fallback"
         except Exception as e:
-            logger.warning(f"[Analysis] Enhanced detection failed, falling back: {e}")
+            logger.warning(f"Enhanced detection failed, falling back: {e}")
             peaks = detect_peaks(energies, counts)
             result["analysis_mode"] = "standard"
     else:
@@ -99,7 +99,7 @@ def _fit_templates(result: dict, energies, counts):
         from spectroscopy.source_templates import fit_source_templates
         return fit_source_templates(energies, counts, result.get("metadata"))
     except Exception as e:
-        logger.warning(f"[Analysis] Source template fit failed: {e}")
+        logger.warning(f"Source template fit failed: {e}")
         return None
 
 
@@ -124,11 +124,11 @@ def _reconcile_with_template_fit(result: dict, energies, counts, peaks, decay_ch
                 if check["message"]:
                     result["warnings"] = result.get("warnings", []) + [check["message"]]
             except Exception as e:
-                logger.warning(f"[Analysis] Calibration check failed: {e}")
+                logger.warning(f"Calibration check failed: {e}")
             decay_chains, isotopes = reconcile_with_fit(
                 fit, decay_chains, isotopes, current_settings.get("isotope_min_confidence", 30.0), peaks)
     except Exception as e:
-        logger.warning(f"[Analysis] Source template fit failed: {e}")
+        logger.warning(f"Source template fit failed: {e}")
     return decay_chains, isotopes
 
 
@@ -192,7 +192,7 @@ def _annotate_detector(result: dict, is_calibrated: bool):
                     result["metadata"] = {**metadata, "detector_type": f"{HPGE}: peaks {r662 * 100:.2f} % FWHM at 662 keV"}
         result["detector_profile"] = resolve_detector(result.get("metadata"))
     except Exception as e:
-        logger.debug(f"[Analysis] Detector profile not resolved: {e}")
+        logger.debug(f"Detector profile not resolved: {e}")
 
     # The detector's specified threshold: channels below it hold electronic noise (e.g. the large pile in a RadiaCode's first channels)
     if is_calibrated:
@@ -217,12 +217,13 @@ def _identify(peaks, current_settings: dict, use_enhanced: bool, detector=None, 
             all_chains = identify_decay_chains_enhanced(
                 peaks,
                 energy_tolerance=current_settings['energy_tolerance'],
-                min_score=0.25
+                min_score=0.25,
+                detector=detector,
             )
             # Also enhance isotope confidence scores
             all_isotopes = enhance_isotope_identifications(all_isotopes, peaks, live_time, detector)
         except Exception as e:
-            logger.warning(f"[Analysis] Enhanced chain detection failed: {e}")
+            logger.warning(f"Enhanced chain detection failed: {e}")
             all_chains = identify_decay_chains(
                 peaks, all_isotopes,
                 energy_tolerance=current_settings['energy_tolerance']
@@ -266,6 +267,26 @@ def _series_parent_entries(decay_chains, isotopes):
     return out
 
 
+def _flag_compton_edges(peaks, detector, isotopes):
+    """
+    Marks the UNEXPLAINED peaks that are probably the Compton edge of a much stronger line (spectroscopy/compton_edges.py). Only a peak no isotope
+    claims is marked: real lines do sit on edges (Ra-226's 186 keV beside the edge of Pb-214's 352, Ac-228's 338 beside the edge of Tl-208's 583,
+    Bi-212's 727 beside Ac-228's), so area and position cannot tell them apart; being identified is what does. It is a hint for the page only.
+    """
+    if not detector or not peaks:
+        return
+    try:
+        from spectroscopy.compton_edges import flag_compton_edges
+        from spectroscopy.source_templates import _resolution
+        flag_compton_edges(peaks, _resolution(detector))
+        claimed = {round(m["observed"], 3) for iso in isotopes or [] if not iso.get("suppressed") for m in iso.get("matched_peaks") or []}
+        for peak in peaks:
+            if peak.get("compton_edge_of") and round(peak["energy"], 3) in claimed:
+                del peak["compton_edge_of"]
+    except Exception as e:
+        logger.warning(f"Compton-edge flagging failed: {e}")
+
+
 def _add_unassigned_excess(result: dict, energies, counts, peaks):
     """Structure the fitted peaks do not explain (escape peaks, backscatter, an unresolved line), for display only: it is kept apart from
     `peaks` and never reaches identification (spectroscopy/residual_peaks.py). Not for germanium, whose widths and templates differ."""
@@ -280,7 +301,7 @@ def _add_unassigned_excess(result: dict, energies, counts, peaks):
         result["unassigned_excess"] = find_unassigned_excess(
             energies, counts, peaks, _resolution(detector), interspec_peaks.threshold_edge_keV(energies, counts))
     except Exception as e:
-        logger.warning(f"[Analysis] Unassigned-excess search failed: {e}")
+        logger.warning(f"Unassigned-excess search failed: {e}")
 
 
 def _attach_member_status(decay_chains, isotopes):
@@ -328,7 +349,7 @@ def _add_equilibrium_status(decay_chains, result: dict, energies, counts, live_t
             chain["equilibrium_status"] = check_secular_equilibrium(
                 chain.get("detected_members", {}), chain.get("parent"), energies, counts, detector, live_time)
     except Exception as e:
-        logger.warning(f"[Analysis] Equilibrium check failed: {e}")
+        logger.warning(f"Equilibrium check failed: {e}")
 
 
 def _add_xrf_detections(result: dict, peaks):
@@ -357,7 +378,7 @@ def _auto_calibrate(result: dict, energies, counts):
             return energies
         outcome = auto_calibrate(energies, counts, detector, _resolution(detector))
     except Exception as e:
-        logger.warning(f"[Analysis] Automatic axis correction failed: {e}")
+        logger.warning(f"Automatic axis correction failed: {e}")
         return energies
     result["auto_calibration"] = outcome
     if not outcome.get("applied"):
@@ -467,12 +488,12 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
         if note:
             result["warnings"] = result.get("warnings", []) + [note]
     except Exception as e:
-        logger.warning(f"[Analysis] Fresh-uranium check failed: {e}")
+        logger.warning(f"Fresh-uranium check failed: {e}")
     try:
         from spectroscopy.source_templates import restore_confirmed_series
         all_isotopes = restore_confirmed_series(fit, all_isotopes)
     except Exception as e:
-        logger.warning(f"[Analysis] Series restore failed: {e}")
+        logger.warning(f"Series restore failed: {e}")
     isotopes, decay_chains = apply_confidence_filtering(
         all_isotopes, weighted_chains, {**current_settings, "max_isotopes": 10**6})
 
@@ -491,10 +512,11 @@ def analyze_spectrum_peaks(result: dict, is_calibrated: bool, live_time: float =
             peaks = enhance_peaks_with_multiplet_fitting(energies, counts, peaks)
             result["peaks"] = peaks
         except Exception as e:
-            logger.warning(f"[Analysis] Multiplet fitting failed: {e}")
+            logger.warning(f"Multiplet fitting failed: {e}")
 
     result["isotopes"] = isotopes
     result["decay_chains"] = decay_chains
+    _flag_compton_edges(peaks, result.get("detector_profile"), isotopes)
     _add_unassigned_excess(result, energies, counts, peaks)
 
     _add_xrf_detections(result, peaks)

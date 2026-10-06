@@ -31,7 +31,7 @@ except ImportError as e:
 try:
     from nuclides.isotope_database import ISOTOPE_DATABASE_ADVANCED, get_gamma_intensity, HAS_IAEA_DATA, IAEA_DATA
     HAS_ISOTOPE_DB = True
-    logger.info(f"[ML] Loaded {len(ISOTOPE_DATABASE_ADVANCED)} isotopes from database")
+    logger.info(f"Loaded {len(ISOTOPE_DATABASE_ADVANCED)} isotopes from database")
 except ImportError:
     HAS_ISOTOPE_DB = False
     HAS_IAEA_DATA = False
@@ -44,7 +44,7 @@ except ImportError:
 try:
     from ml.ml_data_loader import load_real_training_data
     HAS_REAL_DATA_LOADER = True
-    logger.info("[ML] Real spectrum loader available")
+    logger.info("Real spectrum loader available")
 except ImportError:
     HAS_REAL_DATA_LOADER = False
     load_real_training_data = None
@@ -280,7 +280,7 @@ class MLIdentifier:
         self.keV_per_channel = profile['keV_per_channel']
         self.reference_fwhm_fraction = profile['fwhm_662']
         
-        logger.info(f"[ML] Model: {ML_MODEL_TYPES[self.model_type]['name']}, Detector: {profile['name']}")
+        logger.info(f"Model: {ML_MODEL_TYPES[self.model_type]['name']}, Detector: {profile['name']}")
         
         
     def energy_to_channel(self, energy_keV: float) -> int:
@@ -335,15 +335,15 @@ class MLIdentifier:
             return
             
         model_config = ML_MODEL_TYPES[self.model_type]
-        logger.info(f"[ML] Training classifier on synthetic data ({model_config['name']})...")
+        logger.info(f"Training classifier on synthetic data ({model_config['name']})...")
 
         isotope_data = self._training_isotopes(model_config)
         isotopes = list(isotope_data.keys())
         base_samples = model_config['samples_per_isotope']  # model-specific sample count
-        logger.info(f"[ML] Training on {len(isotopes)} isotopes with {base_samples} samples each")
+        logger.info(f"Training on {len(isotopes)} isotopes with {base_samples} samples each")
 
         spectra_matrix, labels = self._synthesise_training_set(isotope_data, isotopes, base_samples)
-        logger.info(f"[ML] Synthesised {len(labels)} training spectra")
+        logger.info(f"Synthesised {len(labels)} training spectra")
         spectra_matrix = self._with_real_spectra(spectra_matrix, labels)
 
         unique_isotopes = sorted(set(labels))
@@ -355,9 +355,9 @@ class MLIdentifier:
             index = {name: i for i, name in enumerate(unique_isotopes)}
             self.model.fit(self.features(spectra_matrix), np.array([index[l] for l in labels]))
             self.is_trained = True
-            logger.info(f"[ML] Training complete. Model ready with {len(unique_isotopes)} classes.")
+            logger.info(f"Training complete. Model ready with {len(unique_isotopes)} classes.")
         except Exception as e:
-            logger.warning(f"[ML] Training failed: {e}")
+            logger.warning(f"Training failed: {e}")
             self.is_trained = False
             raise
 
@@ -418,9 +418,9 @@ class MLIdentifier:
                 if len(real_labels) > 0:
                     spectra_matrix = np.vstack([spectra_matrix, real_x])
                     labels.extend(real_labels)
-                    logger.info(f"[ML] Added {len(real_labels)} augmented real spectra")
+                    logger.info(f"Added {len(real_labels)} augmented real spectra")
             except Exception as e:
-                logger.warning(f"[ML] Real spectra loading failed (non-critical): {e}")
+                logger.warning(f"Real spectra loading failed (non-critical): {e}")
         return spectra_matrix
 
     @staticmethod
@@ -534,7 +534,7 @@ class MLIdentifier:
         try:
             probas = self.model.predict_proba(self.features(spectrum))[0]
         except Exception as e:
-            logger.error(f"[ML] Prediction error: {e}")
+            logger.error(f"Prediction error: {e}")
             return []
         results = [
             {'isotope': str(name), 'confidence': round(float(p) * 100, 2), 'method': 'ML (MLP)'}

@@ -52,25 +52,25 @@ def export_pdf(request: ReportRequest):
 @router.post("/export/n42")
 def export_n42(request: N42ExportRequest):
     """Export spectrum data as standards-compliant N42 XML file."""
-    logger.info("[N42 Export] Endpoint called")
+    logger.info("Endpoint called")
     try:
         from formats.n42_exporter import generate_n42_xml
         
         # Convert Pydantic model to dict for exporter
         request_dict = request.model_dump()
         
-        logger.info(f"[N42 Export] Generating XML for {len(request.counts)} channels...")
+        logger.info(f"Generating XML for {len(request.counts)} channels...")
         # Generate N42 XML
         xml_content = generate_n42_xml(request_dict)
-        logger.info(f"[N42 Export] XML generated: {len(xml_content)} chars")
+        logger.info(f"XML generated: {len(xml_content)} chars")
         
         # Get filename from request or use default
         filename = request.filename.replace('.n42', '') + '.n42'
-        logger.info(f"[N42 Export] Filename: {filename}")
+        logger.info(f"Filename: {filename}")
         
         # Encode XML string to bytes for Response
         xml_bytes = xml_content.encode('utf-8')
-        logger.info(f"[N42 Export] Encoded to {len(xml_bytes)} bytes, returning Response...")
+        logger.info(f"Encoded to {len(xml_bytes)} bytes, returning Response...")
         
         return Response(
             content=xml_bytes,
@@ -81,10 +81,10 @@ def export_n42(request: N42ExportRequest):
             }
         )
     except ValueError as e:
-        logger.error(f"[N42 Export] ValueError: {e}")
+        logger.error(f"ValueError: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"[N42 Export] Error: {e}")
+        logger.error(f"Error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -100,7 +100,7 @@ def _export_spectrum_file(request: N42ExportRequest, fmt: str) -> Response:
     except SpecUtilsUnavailable as e:
         raise HTTPException(status_code=501, detail=str(e))
     except Exception as e:
-        logger.error(f"[{fmt.upper()} Export] {e}")
+        logger.error(f"{e}")
         raise HTTPException(status_code=500, detail=str(e))
     stem = os.path.splitext(request.filename or "spectrum")[0] or "spectrum"
     return Response(

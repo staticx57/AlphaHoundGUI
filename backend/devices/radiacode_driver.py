@@ -187,7 +187,7 @@ class RadiacodeDevice:
         t0 = time.monotonic()
 
         def lap(step: str) -> None:
-            logger.info(f"[Radiacode] connect: {step} done at +{time.monotonic() - t0:.1f}s")
+            logger.info(f"connect: {step} done at +{time.monotonic() - t0:.1f}s")
 
         with self._lock:
             lap("lock acquired")
@@ -207,7 +207,7 @@ class RadiacodeDevice:
                             self._last_error = "bleak library not installed. Run: pip install bleak"
                             return False
                         
-                        logger.info(f"[Radiacode] Connecting via BLE (bleak) to {address}...")
+                        logger.info(f"Connecting via BLE (bleak) to {address}...")
                         self._bleak_transport = BleakBluetooth(address)
                         lap("BLE transport (link + GATT discovery)")
                         
@@ -223,18 +223,18 @@ class RadiacodeDevice:
                         # Perform initialization sequence from official library
                         import datetime
                         from radiacode.types import COMMAND
-                        logger.info("[Radiacode] Initializing device (SET_EXCHANGE)...")
+                        logger.info("Initializing device (SET_EXCHANGE)...")
                         self._device.execute(COMMAND.SET_EXCHANGE, b'\x01\xff\x12\xff')
                         
                         lap("SET_EXCHANGE")
-                        logger.info("[Radiacode] Syncing time...")
+                        logger.info("Syncing time...")
                         self._device.set_local_time(datetime.datetime.now())
                         self._device.device_time(0)
                         self._device._base_time = datetime.datetime.now() + datetime.timedelta(seconds=128)
                         
                         lap("time sync")
                         # Firmware and spectrum format check
-                        logger.info("[Radiacode] Fetching device configuration...")
+                        logger.info("Fetching device configuration...")
                         self._device._spectrum_format_version = 0
                         try:
                             config = self._device.configuration()
@@ -243,18 +243,18 @@ class RadiacodeDevice:
                                     self._device._spectrum_format_version = int(line.split('=')[1])
                                     break
                         except Exception as e:
-                            logger.warning(f"[Radiacode] Warning: failed to parse SpecFormatVersion: {e}")
+                            logger.warning(f"Warning: failed to parse SpecFormatVersion: {e}")
                         
                         lap("configuration")
                         self._connection_type = "BLE"
-                        logger.info("[Radiacode] BLE connected and initialized successfully")
+                        logger.info("BLE connected and initialized successfully")
                     else:
                         # Linux: use upstream library's bluepy transport
-                        logger.info(f"[Radiacode] Connecting via Bluetooth (bluepy) to {address}...")
+                        logger.info(f"Connecting via Bluetooth (bluepy) to {address}...")
                         self._device = RadiaCode(bluetooth_mac=address)
                         self._connection_type = "Bluetooth"
                 else:
-                    logger.info("[Radiacode] Connecting via USB...")
+                    logger.info("Connecting via USB...")
                     self._device = RadiaCode()
                     self._connection_type = "USB"
                 
@@ -262,7 +262,7 @@ class RadiacodeDevice:
                 self._device_info = self._fetch_device_info()
                 lap("device info")
                 self._last_error = None
-                logger.info(f"[Radiacode] Connected via {self._connection_type}")
+                logger.info(f"Connected via {self._connection_type}")
                 return True
                 
             except RadiacodeNotFound:
@@ -304,7 +304,7 @@ class RadiacodeDevice:
             self._device_info = {}
             self._connection_type = ""
             self._dsur_warned = False
-            logger.info("[Radiacode] Disconnected")
+            logger.info("Disconnected")
     
     def is_connected(self) -> bool:
         """Check if device is currently connected."""
@@ -340,7 +340,7 @@ class RadiacodeDevice:
                 "connection_type": self._connection_type or "USB"
             }
         except Exception as e:
-            logger.error(f"[Radiacode] Error fetching device info: {e}")
+            logger.error(f"Error fetching device info: {e}")
             return {}
     
     def get_device_info(self) -> Dict[str, Any]:
@@ -392,7 +392,7 @@ class RadiacodeDevice:
             try:
                 return self._device._batch_read_vsfrs([reg])[0]
             except Exception as e:
-                logger.warning(f"[Radiacode] Could not read {name}: {e}")
+                logger.warning(f"Could not read {name}: {e}")
                 return None
 
         with self._lock:
@@ -458,7 +458,7 @@ class RadiacodeDevice:
                 return None
             except Exception as e:
                 import traceback
-                logger.error(f"[Radiacode] Error in get_dose_rate: {e}")
+                logger.error(f"Error in get_dose_rate: {e}")
                 traceback.print_exc()
                 self._last_error = f"Failed to get dose rate: {e}"
                 return None
@@ -486,7 +486,7 @@ class RadiacodeDevice:
                 # RadiaCode uses polynomial calibration: E = a0 + a1*ch + a2*ch^2
                 (a0, a1, a2), calibration_source = resolve_energy_calibration(self._device, spectrum)
                 if calibration_source != CALIBRATION_DEVICE:
-                    logger.warning("[Radiacode] Could not read energy calibration from device; "
+                    logger.warning("Could not read energy calibration from device; "
                                    "assuming 3.0 keV/channel. Peak energies may be wrong.")
                 
                 # Calculate energies from calibration
@@ -516,7 +516,7 @@ class RadiacodeDevice:
                 
             except Exception as e:
                 import traceback
-                logger.error(f"[Radiacode] Error in get_spectrum: {e}")
+                logger.error(f"Error in get_spectrum: {e}")
                 traceback.print_exc()
                 self._last_error = f"Failed to get spectrum: {e}"
                 return [], [], {}
@@ -669,11 +669,11 @@ class RadiacodeDevice:
         with self._lock:
             try:
                 self._device.set_language(language)
-                logger.info(f"[Radiacode] Language set to {language}")
+                logger.info(f"Language set to {language}")
                 return True
             except Exception as e:
                 self._last_error = f"Failed to set language: {e}"
-                logger.error(f"[Radiacode] Error setting language: {e}")
+                logger.error(f"Error setting language: {e}")
                 return False
     
     
@@ -929,7 +929,7 @@ class RadiacodeDevice:
                 spec = self._device.spectrum()
                 return {"a0": spec.a0, "a1": spec.a1, "a2": spec.a2}
             except Exception as e:
-                logger.error(f"[Radiacode] Error getting calibration: {e}")
+                logger.error(f"Error getting calibration: {e}")
                 self._last_error = f"Failed to get calibration: {e}"
                 return None
 
@@ -942,10 +942,10 @@ class RadiacodeDevice:
         with self._lock:
             try:
                 self._device.set_energy_calib([a0, a1, a2])
-                logger.info(f"[Radiacode] Set calibration: a0={a0}, a1={a1}, a2={a2}")
+                logger.info(f"Set calibration: a0={a0}, a1={a1}, a2={a2}")
                 return True
             except Exception as e:
-                logger.error(f"[Radiacode] Error setting calibration: {e}")
+                logger.error(f"Error setting calibration: {e}")
                 self._last_error = f"Failed to set calibration: {e}"
                 return False
 
@@ -967,7 +967,7 @@ class RadiacodeDevice:
                 self._device.set_sound_ctrl(ctrls)
                 return True
             except Exception as e:
-                logger.error(f"[Radiacode] Error setting sound control: {e}")
+                logger.error(f"Error setting sound control: {e}")
                 self._last_error = f"Failed to set sound control: {e}"
                 return False
 
@@ -987,7 +987,7 @@ class RadiacodeDevice:
                 self._device.set_vibro_ctrl(ctrls)
                 return True
             except Exception as e:
-                logger.error(f"[Radiacode] Error setting vibration control: {e}")
+                logger.error(f"Error setting vibration control: {e}")
                 self._last_error = f"Failed to set vibration control: {e}"
                 return False
 
@@ -1000,10 +1000,10 @@ class RadiacodeDevice:
         with self._lock:
             try:
                 self._device.set_device_on(False)
-                logger.info("[Radiacode] Device power off sent")
+                logger.info("Device power off sent")
                 return True
             except Exception as e:
-                logger.error(f"[Radiacode] Error powering off: {e}")
+                logger.error(f"Error powering off: {e}")
                 self._last_error = f"Failed to power off: {e}"
                 return False
 
@@ -1020,7 +1020,7 @@ class RadiacodeDevice:
             try:
                 return self._device.status()
             except Exception as e:
-                logger.error(f"[Radiacode] Error getting status: {e}")
+                logger.error(f"Error getting status: {e}")
                 self._last_error = f"Failed to get status: {e}"
                 return None
 
@@ -1033,7 +1033,7 @@ class RadiacodeDevice:
             try:
                 return self._device.fw_signature()
             except Exception as e:
-                logger.error(f"[Radiacode] Error getting FW signature: {e}")
+                logger.error(f"Error getting FW signature: {e}")
                 self._last_error = f"Failed to get FW signature: {e}"
                 return None
 
@@ -1047,7 +1047,7 @@ class RadiacodeDevice:
                 msg = self._device.text_message()
                 return msg if msg else None
             except Exception as e:
-                logger.error(f"[Radiacode] Error getting text message: {e}")
+                logger.error(f"Error getting text message: {e}")
                 self._last_error = f"Failed to get text message: {e}"
                 return None
 
@@ -1064,7 +1064,7 @@ class RadiacodeDevice:
             try:
                 return self._device.commands()
             except Exception as e:
-                logger.error(f"[Radiacode] Error getting commands: {e}")
+                logger.error(f"Error getting commands: {e}")
                 self._last_error = f"Failed to get commands: {e}"
                 return None
 
@@ -1078,7 +1078,7 @@ class RadiacodeDevice:
                 # _base_time is set during device initialization
                 return str(self._device._base_time) if hasattr(self._device, '_base_time') else None
             except Exception as e:
-                logger.error(f"[Radiacode] Error getting base time: {e}")
+                logger.error(f"Error getting base time: {e}")
                 self._last_error = f"Failed to get base time: {e}"
                 return None
 

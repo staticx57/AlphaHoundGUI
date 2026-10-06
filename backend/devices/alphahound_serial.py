@@ -129,7 +129,7 @@ class AlphaHoundDevice:
     def connect(self, port: str, baudrate: int = 115200) -> bool:
         """Connect to AlphaHound device"""
         try:
-            logger.info(f"[AlphaHound] Connecting to {port}...")
+            logger.info(f"Connecting to {port}...")
             self.last_error = None
             self.port_busy = False
             # write_timeout: without it a stalled USB link blocks write() for good (_write retries, then disconnects)
@@ -141,10 +141,10 @@ class AlphaHoundDevice:
             self.baudrate = baudrate
             self.user_disconnected = False
             self.connected_since = time.time()
-            logger.info("[AlphaHound] Connected and thread started.")
+            logger.info("Connected and thread started.")
             return True
         except Exception as e:
-            logger.error(f"[AlphaHound] Connection error: {e}")
+            logger.error(f"Connection error: {e}")
             self.serial_conn = None
             text = str(e)
             if isinstance(e, PermissionError) or 'PermissionError' in text or 'Access is denied' in text \
@@ -158,7 +158,7 @@ class AlphaHoundDevice:
     
     def disconnect(self, user: bool = False):
         """Disconnect from device. user=True marks a deliberate disconnect (the watchdog then leaves it alone)."""
-        logger.info("[AlphaHound] Disconnecting...")
+        logger.info("Disconnecting...")
         if user:
             self.user_disconnected = True
         self.stop_event.set()
@@ -258,7 +258,7 @@ class AlphaHoundDevice:
         except FileNotFoundError:
             pass
         except OSError as e:
-            logger.warning(f"[AlphaHound] Could not read the dose log {path}: {e}")
+            logger.warning(f"Could not read the dose log {path}: {e}")
         total = len(rows)
         rows = rows[-DOSE_LOG_MAX:]
         try:
@@ -267,13 +267,13 @@ class AlphaHoundDevice:
                 with open(path, 'w', encoding='utf-8') as f:
                     f.writelines(json.dumps(r) + '\n' for r in rows)
         except OSError as e:
-            logger.warning(f"[AlphaHound] Dose log persistence disabled: {e}")
+            logger.warning(f"Dose log persistence disabled: {e}")
             return 0
         with self._log_lock:
             self.dose_log.clear()
             self.dose_log.extend(rows)
             self._log_path = path
-        logger.info(f"[AlphaHound] Dose log: {len(rows)} earlier readings loaded from {path}")
+        logger.info(f"Dose log: {len(rows)} earlier readings loaded from {path}")
         return len(rows)
 
     def _persist_row(self, row: Dict):
@@ -284,7 +284,7 @@ class AlphaHoundDevice:
             with open(path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(row) + '\n')
         except OSError as e:
-            logger.warning(f"[AlphaHound] Dose log persistence disabled: {e}")
+            logger.warning(f"Dose log persistence disabled: {e}")
             self._log_path = None
 
     def get_dose_log(self) -> List[Dict[str, Optional[float]]]:
@@ -302,7 +302,7 @@ class AlphaHoundDevice:
             try:
                 open(path, 'w', encoding='utf-8').close()
             except OSError as e:
-                logger.warning(f"[AlphaHound] Could not clear the dose log file: {e}")
+                logger.warning(f"Could not clear the dose log file: {e}")
         return n
 
     def _log_dose(self, dose: float, now: Optional[float] = None):
@@ -383,7 +383,7 @@ class AlphaHoundDevice:
         started = time.time()
         initial_spectrum_requested = False
         
-        logger.info("[AlphaHound] Read thread active")
+        logger.info("Read thread active")
         
         while not self.stop_event.is_set() and self.serial_conn and self.serial_conn.is_open:
             try:
@@ -413,7 +413,7 @@ class AlphaHoundDevice:
                                 try:
                                     self.cps_callback(self.get_cps())
                                 except Exception as e:
-                                    logger.error(f"[AlphaHound] CPS callback error: {e}")
+                                    logger.error(f"CPS callback error: {e}")
                             continue
 
                         # Parse temperature from spectrum metadata
@@ -432,7 +432,7 @@ class AlphaHoundDevice:
                             
                         # Spectrum Start
                         if line == "Comp":
-                            logger.info("[AlphaHound] Spectrum start detected")
+                            logger.info("Spectrum start detected")
                             spectrum_tmp = []
                             expecting_spectrum = True
                         
@@ -449,7 +449,7 @@ class AlphaHoundDevice:
                             
                             # Check completion
                             if len(spectrum_tmp) >= 1024:
-                                logger.info(f"[AlphaHound] Spectrum complete: {len(spectrum_tmp)} channels")
+                                logger.info(f"Spectrum complete: {len(spectrum_tmp)} channels")
                                 self.spectrum = spectrum_tmp.copy()
                                 self.collecting_spectrum = False
                                 expecting_spectrum = False
@@ -481,7 +481,7 @@ class AlphaHoundDevice:
                 # Poll dose every 1.0s IF NOT collecting spectrum
                 # Using 'DB' command which matches the device display (discovered via probing)
                 if self.collecting_spectrum and curr - self._spectrum_requested_at > SPECTRUM_TIMEOUT_S:
-                    logger.warning("[AlphaHound] Spectrum request timed out; resuming polling")
+                    logger.warning("Spectrum request timed out; resuming polling")
                     self.collecting_spectrum = False
                     expecting_spectrum = False
 
@@ -508,10 +508,10 @@ class AlphaHoundDevice:
                 time.sleep(0.05)
                 
             except Exception as e:
-                logger.error(f"[AlphaHound] Read thread exception: {e}")
+                logger.error(f"Read thread exception: {e}")
                 break
         
-        logger.info("[AlphaHound] Read thread exiting")
+        logger.info("Read thread exiting")
         self.disconnect()
 
 # Global device instance

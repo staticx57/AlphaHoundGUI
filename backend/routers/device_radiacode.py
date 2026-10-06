@@ -185,7 +185,7 @@ def get_radiacode_spectrum(analyze: bool = True):
         "is_calibrated": metadata.get("calibration_source", "device") == "device"
     }
     
-    logger.info(f"[Radiacode] Fetched {len(counts)} channels, duration: {metadata.get('duration_s')}s")
+    logger.info(f"Fetched {len(counts)} channels, duration: {metadata.get('duration_s')}s")
     # Run analysis if requested
     if analyze and len(counts) > 0:
         try:
@@ -193,10 +193,10 @@ def get_radiacode_spectrum(analyze: bool = True):
             duration = metadata.get("duration_s")
             live_time = float(duration) if duration is not None else 0.0
             result = analyze_spectrum_peaks(result, is_calibrated=result["is_calibrated"], live_time=live_time)
-            logger.info(f"[Radiacode] Analysis complete: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
+            logger.info(f"Analysis complete: {len(result.get('peaks', []))} peaks, {len(result.get('isotopes', []))} isotopes")
         except Exception as e:
             import traceback
-            logger.error(f"[Radiacode] Analysis error: {e}")
+            logger.error(f"Analysis error: {e}")
             traceback.print_exc()
             # Return raw spectrum without analysis rather than failing
             result["analysis_error"] = str(e)
@@ -420,7 +420,7 @@ def get_accumulated_spectrum(analyze: bool = False):
         try:
             result = analyze_spectrum_peaks(result, is_calibrated=True, live_time=live_time)
         except Exception as e:
-            logger.error(f"[Radiacode] Accumulated analysis error: {e}")
+            logger.error(f"Accumulated analysis error: {e}")
             result["analysis_error"] = str(e)
         result["warnings"] = result.get("warnings", []) + [ACCUMULATED_ANALYZED_NOTE]
         return result
