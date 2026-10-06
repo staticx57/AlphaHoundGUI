@@ -1,5 +1,101 @@
 # CHANGELOG
 
+## [Session 2026-10-05] - Calibration tool, series verdict, activity estimate, unassigned excess, install scripts
+
+Evaluated on `tests/scoring_eval.py` (33 labelled spectra: RadiaCode CsI, AlphaHound CsI, germanium, calibration sources, backgrounds; verdicts, false
+identifications, the placement of a series parent, stability) and `tests/drift_sweep.py` (the same spectra with the axis drifted by 0.90-1.10, 308
+cases), not on one lens and one detector. Every conclusion was audited a second time before it was committed; the audit overturned three (see
+"Corrections").
+
+### Added
+- **InterSpec as the peak finder** (Sandia, LGPL-2.1, `InterSpec_batch` as a separate process, `spectroscopy/interspec_peaks.py`): it separates the
+  overlapping and shoulder peaks the built-in detector misses. The built-in detector is the fallback and `ALPHAHOUND_PEAKS=builtin` forces it.
+  It runs without a window (the server has no console, so Windows opened one for every analysis) and its default path follows the user's home
+  folder (it was this account's folder, so on any other account it was silently not found). Install notes are in `INSTALL.md`.
+- **Unassigned excess** (`spectroscopy/residual_peaks.py`): structure the fitted peaks do not explain (escape peaks, Compton backscatter, a line the
+  peak search missed) is drawn as a hollow dashed ring on the chart and listed under the peaks, tagged "unassigned excess" with its significance;
+  clicking it highlights it. It is kept apart from `peaks` and never reaches identification: a bump at 140 keV matches Tc-99m, U-235, Co-57 and
+  Tl-201. It stands at 15 standard errors or more over the continuum above 100 keV (a 2 % systematic is added to the counting error), and not
+  on a fitted peak (that is the peak's own misfit). On the 8-hour thoriated lens it marks the 142 keV bump (z 26) and the 199 keV one beside it;
+  on a radium spectrum it marks the 242 keV Pb-214 line the peak list misses. 0-4 per thorium spectrum (median 1); noise alone gives none.
+  Not for germanium. About 0.1-0.2 s an analysis.
+- **Long acquisitions** (late 2026-10-04): a 480-minute run no longer makes the server unresponsive. Acquisition analysis runs in a worker thread, once
+  per new spectrum; each run writes `spectrum_<start>_in_progress.n42` every minute, and a leftover is kept as `..._interrupted.n42`; History lists
+  the runs saved on the server; a page opened during a run shows it; opening a file during a run leaves it running.
+- `backend/tools/check_install.py`: what an installation can do (Python version, required and optional packages, the peak finder).
+- `backend/tests/scoring_eval.py`, `backend/tests/drift_sweep.py`: the two evaluations above, for any later change to the fit, the scoring or the
+  auto-correction.
+
+### Fixed
+- **The calibration tool could not pick points.** The chart click only fired when the dialog's display was 'block' but `show()` sets 'flex', and the
+  dialog was a full-screen overlay over the chart. It is docked bottom-right with no backdrop, a click picks the nearest channel anywhere along the
+  axis, and the dialog is reachable from the axis notice in every UI mode (Simple mode showed it nowhere else).
+- **The decay-chain card and the isotope table disagreed** (Ac-228 "detected", Th-232 not, though the table identified it). One decision per member
+  (`_attach_member_status`): a nuclide the table can judge takes the table's verdict and its line count; one it cannot (Th-228, Ra-224 are not in the
+  database) keeps the chain's own line matches, counted the same way; a member with no gamma line of its own that feeds a detected one is inferred,
+  following the real feeder links (Po-212 is not an ancestor of Tl-208). One label, "DETECTED m/n". Audited on 38 spectra: no disagreements.
+- **A series parent with no gamma line of its own (Th-232, U-238) was ranked by an accident of its borrowed lines**: first on 6 of 9 thorium spectra,
+  behind Ac-228 on two (the 8-hour run among them), behind Tl-208 on one; U-238 behind its daughters, and missing from the table on 4 uranium spectra.
+  It is now a verdict on the series: it takes the confidence of its best daughter, is listed whenever the series is reported and is flagged
+  `role=series` ("Series verdict, from Ac-228"). This is a design property (the parent has no evidence of its own), not a measured gain: verdicts
+  and false identifications did not move.
+- **The activity estimate was wrong in several ways at once**: it divided the spectrum HEIGHT at the peak (not its net area) by a branching ratio of
+  50 % for every isotope and a live time of 60 s for every run, on the AlphaHound's efficiency curve whatever the detector. The error depends on
+  the run: on the 8-hour capture 19,148 Bq where the same peak gives 505 Bq now (38 times too high; the 480 of the live time is partly cancelled by an
+  area 11 times the height); on a 60 s run it was too low. Now: net area / (this detector's efficiency x the line's emission probability x live
+  time), from the matched line with the most expected counts (Th-232's nearest line in energy is its own 63.8 keV at 0.26 %, X-rays in every
+  spectrum), and no estimate without a live time or without emission data. The efficiency curves carry a factor 2-4 spread (8-hour run: Pb-212 505 Bq,
+  Ac-228 233, Bi-212 126, Tl-208 70 where equilibrium puts Tl-208 near 180), and the uncertainty shown is counting statistics only.
+- **A drifted capture got no identification**: the live AlphaHound at 28.8 deg C needs +20.8 keV on top of a 12 % gain error, and the auto-correction
+  refused its correct thorium solution (residual 0.2 keV, fit z 20.9 against 3.2) for an offset beyond +-20 keV by 0.8 keV. The range is +-30 keV, with
+  a stricter proof beyond +-20: the fit must confirm at z >= 15. Widening the range alone looked free on unperturbed spectra and was not: on the
+  drift sweep a drifted Co-60 + Cs-137 mixture was "corrected" as Eu-152 (4 lines, offset 21-22 keV, fit z 7.4) and lost its real isotopes. With the
+  rule: 294 of 308 right (292 before), 10 false identifications (11 before), no wrong correction; 4 cases differ from the old limit, three of them
+  the thorium capture, now corrected.
+- **Placeholder axis** (a capture saved by an older build with 0, 3, 6 ... keV and a 1 s live time) is no longer "identified" (Eu-152 + Na-22): no
+  identification, a message to repair it, and `tools/recalibrate_n42.py --live-time --start-time` restores the run's real length and start.
+- **Estimator and Compare**: the main chart rebuilds after the comparison view (its peak markers were drawn at channel positions); Compare plots each
+  spectrum at its own energies; a spectrum without a live time is not projected; the MDA route no longer assumes Cs-137's 85 %.
+- **The install and run scripts** (`install_deps.bat`, `install_lightweight.bat`, `run.bat`, `run_lightweight.bat`): `python` is a `.bat` shim under
+  pyenv-win, and a batch file that runs another without `call` never gets control back, so the scripts ended silently after their first Python line;
+  every Python call now uses `call`. They work from any folder (`cd /d "%~dp0"`), check Python 3.11 or newer (what scipy 1.16 and scikit-learn 1.8
+  need; the README said 3.10), use `python -m pip`, and finish with the self-check. `run.bat` no longer uses `--reload` (a restart drops a connected
+  device and stops an acquisition), opens the browser when the server answers instead of before (it needs up to half a minute), and opens the running
+  one instead of starting a second. The readiness probe asks `127.0.0.1`, because `localhost` took 2.05 s a request here (IPv6 first), longer than the
+  first probe's 2 s timeout, so the browser never opened; the browser still opens `localhost`, where its saved settings and history live.
+  `run_lightweight.bat` calls `run.bat` (the two were the same server). `INSTALL.md` said the full install adds only scikit-learn; it also brings
+  radioactivedecay, curie, SandiaSpecUtils and the Radiacode packages. Checked by running the app with the lightweight install's missing packages made
+  unavailable (no internet here for a fresh install): a radium spectrum gave the same U-238 answer, and only the shielding and emissions
+  calculators ("The curie package is not installed") were lost.
+
+### Changed
+- **A series reads HIGH when it leads every other source by 3x** with z >= 15 and a share >= 0.15, whatever its absolute z: the same thorium reaches z
+  33-46 on a RadiaCode and about 20 on an AlphaHound (smaller crystal, wider lines), where the next source is at 3-6. Series reading HIGH 11/17 ->
+  15/17 on the same spectra. It lifts five AlphaHound captures (leads 5.5-8.0); the 90-minute lens (lead 1.9) stays MEDIUM. The corpus does not pin the
+  lead (2 to 5 give the same result) and only one detector family exercises the rule.
+- The fit reports its chi2 per degree of freedom (a diagnostic).
+
+### Measured and rejected
+- A relative systematic error floor on the fit's weights (1, 2, 5 %): chi2 falls (200 to 13) but z falls too (21 to 17), series reading HIGH 11, 10, 6 of
+  17; at 5 % a verdict is lost and the 90-minute lens gets a false uranium z of 43.
+- A quadratic term in the fit's axis: z +1-2 on the AlphaHound thorium, nothing elsewhere, analysis time x2. A finer resolution search: noise.
+  The huge chi2 (200-300) on strong spectra is not the axis or the width: 52 % of it is the 200-340 keV peaks and 20-35 % the 2000-3000 keV region
+  (escape peaks and tails the Gaussian templates lack).
+- Scoring from emission x efficiency over all matched lines: no gain (margin 68.8 against 68.4), axis sensitivity 23 to 26 changes, and the
+  calibration nonlinearity pulls high-energy-line isotopes down. A first version made Na-22 "complete" from the annihilation peak alone; ambiguous
+  lines (511, 1460.8, 2614.5) must never set the scale.
+- Fitting below 120 keV, or a Compton-backscatter column per series, to explain the 125-160 keV bump: the U-235 template (143.8 keV) absorbs it and a
+  thorium lens is reported as uranium as well (verdicts 29-30 of 31). The bump is a composite; it is shown as an unassigned excess instead.
+- Widening the fit's 7 % plausibility cap to 10 %: identical; to 12 %: a verdict flips (one case of 58, weak evidence).
+
+### Corrections to claims made earlier the same day
+- "Parent above its best daughter 7/17 -> 0/17" and the score margin 68.4 -> 73.2 for the series verdict are true by construction, not evidence.
+- The activity error was 38x on the 8-hour run, not 480x.
+- The bump is not undetectable: it is the largest residual on both 8-hour runs. It was first dismissed on a wrong count of markers.
+- Widening the offset limit was first judged on unperturbed spectra only; the drift sweep showed the Eu-152 false correction.
+
+Tests: 962 backend, browser smoke 204/204.
+
 ## [Session 2026-10-04 evening] - Analysis engine tuned on real spectra, automatic energy-axis correction
 
 Every analysis route was run against the live AlphaHound and the RadiaCode N42 captures, then the identification engine was tuned on 44
