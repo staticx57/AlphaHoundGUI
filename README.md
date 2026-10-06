@@ -286,7 +286,7 @@
 ## 🚀 Installation
 
 ### Prerequisites
-- **Python**: 3.10 or higher (tested on 3.10.11)
+- **Python**: 3.11 or higher (tested on 3.12). The install scripts check this
 - **Operating System**: Windows (batch scripts), macOS/Linux compatible with manual commands
 - **Hardware**: Optional - RadView Detection AlphaHound™ or Radiacode 103/103G/110 for live acquisition
 - **Note**: Device hardware is **optional** - the application works without any device connected for file analysis
@@ -303,7 +303,9 @@
    ```bash
    install_deps.bat
    ```
-   This installs all required packages to your system Python (no virtual environment needed).
+   This installs all required packages to your system Python (no virtual environment needed), then reports what the installation can
+   do (`python backend/tools/check_install.py` shows it again at any time). For the core only: `install_lightweight.bat`; what each
+   install brings, and the optional InterSpec peak finder, are in [INSTALL.md](INSTALL.md).
 
    **Or manually**:
    ```bash
@@ -324,16 +326,19 @@
    > If `import curie` fails completely, manually locate your `site-packages/curie/data` folder and specify the path directly in the script.
 
 3. **Launch Application**:
-   - **Windows**: Double-click **`run.bat`** in the root directory
+   - **Windows**: Double-click **`run.bat`** in the root directory. It starts the server and opens the browser when the server answers
+     (or opens the one already running instead of starting a second)
    - **Manual**: 
      ```bash
      cd backend
-     python -m uvicorn main:app --reload --port 3200
+     python main.py
      ```
+     For development with automatic restarts, `python -m uvicorn main:app --reload --port 3200` (a restart drops a connected device
+     and stops a running acquisition)
 
 4. **Access Interface**:
    - Open browser to `http://localhost:3200`
-   - Application automatically opens in default browser when using `run.bat`
+   - `run.bat` opens it in your default browser once the server is ready
 
 ---
 
@@ -468,7 +473,10 @@ AlphaHoundGUI/
 │   │   ├── source_analysis.py           # Source-specific analysis (lenses, dials, ore)
 │   │   ├── source_identification.py     # Auto-suggest source type from isotopes
 │   │   ├── source_templates.py          # Full-spectrum fit of U-238 / Th-232 source templates
-│   │   └── calibration_check.py         # Energy-axis check from where known lines actually sit
+│   │   ├── calibration_check.py         # Energy-axis check from where known lines actually sit
+│   │   ├── auto_calibration.py          # Automatic axis correction from the source's own lines, confirmed by the spectrum fit
+│   │   ├── interspec_peaks.py           # InterSpec (optional) as the peak finder; the built-in detector is the fallback
+│   │   └── residual_peaks.py            # Unassigned excesses: structure the fitted peaks do not explain (shown, never used to identify)
 │   ├── nuclides/                        # Isotope database, decay chains and decay engines
 │   │   ├── isotope_database.py          # 100+ isotopes from IAEA/NNDC databases
 │   │   ├── isotope_validation.py        # Validation rules, incompatible-isotope lists
@@ -491,8 +499,8 @@ AlphaHoundGUI/
 │   ├── ml/                              # AI identification (scikit-learn) and its training data
 │   │   ├── ml_analysis.py               # ML identification (scikit-learn)
 │   │   └── ml_data_loader.py            # Real data augmentation for ML training
-│   ├── tools/                           # Scripts: devctl (server and device control), recalibrate_n42, download_iaea_data,
-│   │                                    #   generate_decay_table, generate_test_spectra
+│   ├── tools/                           # Scripts: devctl (server and device control), recalibrate_n42, check_install (what an
+│   │                                    #   installation can do), download_iaea_data, generate_decay_table, generate_test_spectra
 │   └── static/
 │       ├── index.html                   # Main HTML interface
 │       ├── style.css                    # Application styling with CSS variables
@@ -527,9 +535,13 @@ AlphaHoundGUI/
 ├── CHANGELOG.md                         # Detailed version history
 ├── TODO.md                              # Roadmap and open tasks
 ├── LICENSE                              # Apache License 2.0
-├── requirements.txt                     # Python dependencies
-├── install_deps.bat                     # One-time dependency installer
-└── run.bat                              # Quick-start script
+├── requirements.txt                     # Python dependencies (includes backend/requirements.txt)
+├── requirements_lightweight.txt         # The core packages only
+├── INSTALL.md                           # Lightweight and full install, the optional InterSpec peak finder
+├── install_deps.bat                     # One-time installer: everything
+├── install_lightweight.bat              # One-time installer: the core only
+├── run.bat                              # Starts the server and opens the browser when it is ready
+└── run_lightweight.bat                  # The same server (what is not installed is not offered)
 ```
 
 ---
@@ -688,6 +700,11 @@ The browser checks (headless Chrome, with the server running) are scripts in `ba
 `ALPHAHOUND_URL=http://127.0.0.1:3201` to run them against a second instance while a device is connected to the first
 (set `PYTHONIOENCODING=utf-8` on Windows). `tests/test_repo_layout.py` keeps the repository tidy: new root files, backup or
 temporary files, large or unreferenced images, broken document links, tracked user data and loose backend modules fail it.
+
+Two scripts evaluate the identification engine on every labelled spectrum (RadiaCode, AlphaHound, germanium, sources, backgrounds), not on
+one lens: `python backend/tests/scoring_eval.py [--local]` scores verdicts, false identifications, the placement of a series parent and
+stability under another line order and a 3 % axis error; `python backend/tests/drift_sweep.py` drifts the axis 0.90-1.10 on each spectrum
+and checks that no automatic correction names the wrong source. Run them after changing the fit, the scoring or `auto_calibration.py`.
 
 With an AlphaHound connected, `python backend/tests/live_alphahound_check.py` checks it through the real UI and API (live panel, page reload,
 dose stream during heavy uploads, alert banner, dose units, background subtraction, LAN address, checkpoint export, server log). It is

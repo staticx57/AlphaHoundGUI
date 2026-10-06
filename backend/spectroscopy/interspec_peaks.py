@@ -29,7 +29,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BATCH = r"C:\Users\stati\tools\InterSpec\InterSpec-win32-x64_WebView2_v1.0.14\InterSpec_batch.exe"
+# where INSTALL.md says to unpack it: under the user's home folder, which keeps the path short (it was this account's folder, so on any other
+# account InterSpec was silently not found and the built-in detector used)
+DEFAULT_BATCH = os.path.join(os.path.expanduser("~"), "tools", "InterSpec", "InterSpec-win32-x64_WebView2_v1.0.14", "InterSpec_batch.exe")
 TIMEOUT_S = 60.0
 FWHM_PER_SIGMA = 2.354820045
 SOURCE = "InterSpec"
