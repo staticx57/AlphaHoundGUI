@@ -389,59 +389,43 @@ def match_peaks_to_chain_detail(
     peaks: List[Dict],
     parent: str,
     energy_tolerance: float = 15.0,
-    intensity_threshold: float = 1.0
+    intensity_threshold: float = 1.0,
+    detector: Optional[str] = None,
 ) -> Tuple[int, int, List[str], Dict[str, List[Dict]]]:
     """
     Match detected peaks to expected chain gamma lines, keeping what was matched.
 
-    Each gamma line takes the CLOSEST peak within the tolerance (not the first in list order).
+    One peak is evidence for one line: the lines claim peaks strongest first, each taking the CLOSEST peak still free within its tolerance. That is
+    the detector's resolution-aware tolerance (half a FWHM, the calibration error and a floor, in quadrature, never above `energy_tolerance`) when
+    the detector is known, `energy_tolerance` when not. It used to widen to 60 keV whenever any peak held more than 10,000 counts (nearly every
+    long capture) and let one peak explain several lines ("Tl-208: 575.8, 895.3 keV" repeating a peak).
 
     Returns:
         (detected_count, expected_count, detected_nuclides, matches) where matches maps a nuclide to
         [{'energy': peak energy, 'line_energy': gamma line, 'intensity': line intensity %, 'counts': peak net counts}, ...]
     """
+    from nuclides.isotope_database import _line_tolerance
     expected = get_expected_spectrum(parent, intensity_threshold)
-
     peak_energies = [p.get('energy', 0) for p in peaks]
 
-    # Dynamic tolerance: use wider tolerance for high-count spectra
-    # because peaks overlap and shift in strong scintillator spectra
-    max_counts = max((p.get('counts', 0) for p in peaks), default=0)
-    if max_counts > 10000:
-        # Strong spectrum: use 60 keV tolerance (matches ~10% resolution at 600 keV)
-        effective_tolerance = max(energy_tolerance, 60.0)
-        logger.debug("High-count spectrum (%.0f), using tolerance=%s", max_counts, effective_tolerance)
-    else:
-        effective_tolerance = energy_tolerance
+    lines = sorted(((intensity, energy, nuclide) for nuclide, nuclide_lines in expected.items() for energy, intensity in nuclide_lines),
+                   key=lambda t: (-t[0], t[1]))
+    used = set()
+    found: Dict[str, List[Dict]] = {}
+    for intensity, energy, nuclide in lines:
+        tolerance = _line_tolerance(energy, energy_tolerance, detector)
+        candidates = [(abs(peak_energy - energy), i) for i, peak_energy in enumerate(peak_energies) if i not in used and abs(peak_energy - energy) <= tolerance]
+        if candidates:
+            _, i = min(candidates)
+            used.add(i)
+            found.setdefault(nuclide, []).append({'energy': peak_energies[i], 'line_energy': energy, 'intensity': intensity,
+                                                  'counts': _peak_strength(peaks[i])})
 
-    detected_nuclides = []
-    matches = {}  # nuclide -> [matched peaks]
-
-    total_expected = 0
-    total_detected = 0
-
-    for nuclide, gamma_lines in expected.items():
-        matched = []
-
-        for gamma_energy, gamma_intensity in gamma_lines:
-            total_expected += 1
-
-            best_index, best_gap = None, None
-            for i, peak_energy in enumerate(peak_energies):
-                gap = abs(peak_energy - gamma_energy)
-                if gap <= effective_tolerance and (best_gap is None or gap < best_gap):
-                    best_index, best_gap = i, gap
-            if best_index is not None:
-                total_detected += 1
-                matched.append({'energy': peak_energies[best_index], 'line_energy': gamma_energy,
-                                'intensity': gamma_intensity, 'counts': _peak_strength(peaks[best_index])})
-
-        if matched:
-            detected_nuclides.append(nuclide)
-            matches[nuclide] = matched
-
+    detected_nuclides = [nuclide for nuclide in expected if nuclide in found]       # chain order
+    matches = {nuclide: sorted(found[nuclide], key=lambda m: m['line_energy']) for nuclide in detected_nuclides}
+    total_expected = sum(len(nuclide_lines) for nuclide_lines in expected.values())
+    total_detected = sum(len(v) for v in matches.values())
     logger.debug("%s: detected=%s/%s, nuclides=%s", parent, total_detected, total_expected, detected_nuclides)
-
     return total_detected, total_expected, detected_nuclides, matches
 
 
@@ -528,7 +512,8 @@ def identify_decay_chains_enhanced(
     peaks: List[Dict],
     energy_tolerance: float = 15.0,
     min_score: float = 0.3,
-    include_manmade: bool = True
+    include_manmade: bool = True,
+    detector: Optional[str] = None,
 ) -> List[Dict]:
     """
     Identify radioactive decay chains from detected peaks.
@@ -538,9 +523,10 @@ def identify_decay_chains_enhanced(
     
     Args:
         peaks: List of detected peak dictionaries
-        energy_tolerance: Matching tolerance (keV)
+        energy_tolerance: Matching tolerance (keV), the most a line may be from its peak
         min_score: Minimum score to include a chain
         include_manmade: Include man-made sources (Cs-137, Co-60, Am-241)
+        detector: Detector profile name: the tolerance narrows to what that detector resolves where that is smaller
         
     Returns:
         List of detected chain dictionaries (compatible format)
@@ -554,7 +540,7 @@ def identify_decay_chains_enhanced(
     
     for parent in chains_to_check:
         detected_count, expected_count, detected_nuclides, matches = match_peaks_to_chain_detail(
-            peaks, parent, energy_tolerance
+            peaks, parent, energy_tolerance, detector=detector
         )
         
         if detected_count == 0:

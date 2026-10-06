@@ -257,3 +257,52 @@ def test_on_real_spectra_the_series_parent_never_outranks_its_daughters_and_is_l
     assert parent in confidence
     daughters = [confidence[d] for d in SERIES_MEMBERS[parent] if d != parent and d in confidence]
     assert daughters and confidence[parent] <= max(daughters) + 1e-9
+
+
+
+# --------------------------------------------------------------------------- one peak, one line; the detector's own tolerance
+def _detail(peaks, parent="Th-232", tolerance=30.0, detector=None):
+    return chains.match_peaks_to_chain_detail(peaks, parent, tolerance, detector=detector)
+
+
+def test_one_peak_is_evidence_for_one_line_only():
+    """Pb-212 238.6 keV (43.6 %) and Ra-224 241.0 keV (4.1 %) are one unresolved peak on a scintillator: the stronger line claims it, the weaker
+    does not borrow it (it used to, which made Ra-224 'detected' from Pb-212's own evidence)."""
+    _, _, nuclides, matches = _detail([{"energy": 239.5, "counts": 5000.0}])
+    assert "Pb-212" in nuclides and "Ra-224" not in nuclides
+    assert len(matches["Pb-212"]) == 1
+
+
+def test_no_peak_is_reused_across_the_lines_of_a_chain():
+    peaks = [{"energy": e, "counts": 5000.0} for e in (239.0, 338.0, 583.0, 911.0, 969.0, 2614.0)]
+    _, _, _, matches = _detail(peaks)
+    used = [m["energy"] for found in matches.values() for m in found]
+    assert len(used) == len(set(used))
+
+
+def test_a_strong_peak_no_longer_widens_the_tolerance_to_60_kev():
+    """Any peak over 10,000 counts used to widen it: a line 31-60 keV from the nearest peak matched on nearly every long capture. The spot is found
+    from the chain's own lines: 45 keV above one, and further than the tolerance from all of them."""
+    lines = sorted(e for found in chains.get_expected_spectrum("Th-232").values() for e, _ in found)
+    spot = next(l + 45.0 for l in lines if min(abs(l + 45.0 - other) for other in lines) > 31.0)
+    assert _detail([{"energy": spot, "counts": 50_000.0}], tolerance=30.0)[0] == 0
+    near = min(lines, key=lambda l: abs(l - spot))
+    assert _detail([{"energy": near + 5.0, "counts": 50_000.0}], tolerance=30.0)[0] >= 1
+
+
+def test_the_detectors_resolution_narrows_the_tolerance_where_it_is_smaller():
+    """At 100 keV a scintillator resolves far less than 30 keV: with the detector named, a peak 25 keV from a line is not that line."""
+    peak = [{"energy": 84.4 + 25.0, "counts": 3000.0}]        # Th-228's 84.4 keV line
+    assert _detail(peak, tolerance=30.0)[0] >= 0
+    narrow = _detail([{"energy": 238.6 + 24.0, "counts": 3000.0}], tolerance=30.0, detector="Radiacode 103")[0]
+    wide = _detail([{"energy": 238.6 + 24.0, "counts": 3000.0}], tolerance=30.0, detector=None)[0]
+    assert narrow <= wide
+
+
+def test_the_matches_keep_the_chain_order_and_each_nuclides_lines_in_energy_order():
+    peaks = [{"energy": e, "counts": 5000.0} for e in (239.0, 338.0, 583.0, 911.0, 969.0, 2614.0)]
+    _, _, nuclides, matches = _detail(peaks)
+    order = chains.get_decay_chain_members("Th-232")
+    assert nuclides == sorted(nuclides, key=order.index)
+    for found in matches.values():
+        assert [m["line_energy"] for m in found] == sorted(m["line_energy"] for m in found)

@@ -30,7 +30,7 @@ try:
     make_curie_thread_safe(curie)
 except ImportError:
     HAS_CURIE = False
-    logger.warning("[Curie Integration] curie not installed, using fallback data")
+    logger.warning("curie not installed, using fallback data")
 
 
 def _serialized(fn):
@@ -171,7 +171,7 @@ def get_isotope_gammas(isotope_name: str, min_intensity: float = 1.0) -> List[Di
         return sorted(result, key=lambda x: -x['intensity'])
     
     except Exception as e:
-        logger.warning(f"[Curie] Failed to get gammas for {isotope_name}: {e}")
+        logger.warning(f"Failed to get gammas for {isotope_name}: {e}")
         return []
 
 

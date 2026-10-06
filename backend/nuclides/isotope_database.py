@@ -9,15 +9,15 @@ try:
     from formats.iaea_parser import load_all_isotopes
     IAEA_DATA = load_all_isotopes(min_intensity=0.5, top_n=15)
     HAS_IAEA_DATA = True
-    logger.info(f"[Isotope Database] Loaded IAEA data for {len(IAEA_DATA)} isotopes")
+    logger.info(f"Loaded IAEA data for {len(IAEA_DATA)} isotopes")
 except ImportError:
     IAEA_DATA = {}
     HAS_IAEA_DATA = False
-    logger.warning("[Isotope Database] IAEA parser not available, using built-in data only")
+    logger.warning("IAEA parser not available, using built-in data only")
 except Exception as e:
     IAEA_DATA = {}
     HAS_IAEA_DATA = False
-    logger.warning(f"[Isotope Database] IAEA data load failed: {e}")
+    logger.warning(f"IAEA data load failed: {e}")
 
 # ========== CURIE X-RAY DATA INTEGRATION ==========
 # Provides characteristic X-ray emission lines for improved isotope ID
@@ -27,12 +27,12 @@ try:
         get_all_xrays_for_isotope as _get_all_xrays_for_isotope,
         HAS_CURIE
     )
-    logger.info(f"[Isotope Database] Curie X-ray integration loaded (curie available: {HAS_CURIE})")
+    logger.info(f"Curie X-ray integration loaded (curie available: {HAS_CURIE})")
 except ImportError:
     HAS_CURIE = False
     _get_element_xrays = lambda *args, **kwargs: []
     _get_all_xrays_for_isotope = lambda *args, **kwargs: []
-    logger.warning("[Isotope Database] Curie integration not available")
+    logger.warning("Curie integration not available")
 
 
 
@@ -439,6 +439,27 @@ def _detectable_lines(isotope, gamma_energies, detector):
     return sum(1 for w in weights if top > 0 and w >= DETECTABLE_FRACTION * top) if weights else None
 
 
+MIN_SINGLE_LINE_SIGNIFICANCE = 10.0     # standard errors: a peak of a single-line isotope has no second line to corroborate it
+MIN_WIDTH_RATIO, MAX_WIDTH_RATIO = 0.6, 1.6   # its width against the detector's at that energy, in the gap the 41 measured matches leave
+
+
+def _stands_alone(peak) -> bool:
+    """
+    Whether a peak can be the only evidence for an isotope. Measured on the 41 single-line matches of 33 labelled spectra at three axis offsets: the 37
+    genuine ones had a significance of at least 18 and a width 0.70-1.37 times the detector's; the false ones were a 128 keV feature read as Tc-99m
+    (significance 6.6, width 0.56), a 493 keV one read as F-18 (significance 3.0, width 0.45) and, on a Cs-137 spectrum drifted 10 %, a 380 keV
+    Compton-edge bump read as I-131 (width 1.72; it had been hidden by a false Ra-226 match, width 2.03, until that was refused). The bounds sit in
+    the gaps. A peak with no significance or width recorded (not every peak finder gives them) is not judged.
+    """
+    significance = peak.get('significance')
+    if significance is not None and significance < MIN_SINGLE_LINE_SIGNIFICANCE:
+        return False
+    fwhm, expected = peak.get('fwhm'), peak.get('fwhm_expected')
+    if fwhm and expected and not MIN_WIDTH_RATIO <= fwhm / expected <= MAX_WIDTH_RATIO:
+        return False
+    return True
+
+
 def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_rules, detector=None):
     """
     Match one isotope's gamma lines against the detected peaks and score it (intensity weighted, with the single-line,
@@ -456,7 +477,8 @@ def _score_isotope(isotope, gamma_energies, peaks, energy_tolerance, validation_
         total_intensity += intensity
         tolerance = _line_tolerance(gamma_energy, energy_tolerance, detector)
         candidates = [(abs(p['energy'] - gamma_energy), i) for i, p in enumerate(peaks)
-                      if i not in used and abs(p['energy'] - gamma_energy) <= tolerance]
+                      if i not in used and abs(p['energy'] - gamma_energy) <= tolerance
+                      and (len(gamma_energies) > 1 or _stands_alone(p))]
         if not candidates:
             continue
         energy_diff, i = min(candidates)
