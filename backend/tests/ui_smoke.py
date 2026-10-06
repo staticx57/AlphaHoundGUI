@@ -1239,6 +1239,42 @@ with sync_playwright() as p:
     pab.wait_for_function("document.querySelector('#cal-preset-note').textContent.length > 0", timeout=20000)
     check("AB no JS errors or native dialogs", not errs_ab, "; ".join(errs_ab[:3]))
     ctx_ab.close()
+
+    # AC: CSV export, the N42 metadata editor and Load Background File, on an uploaded spectrum
+    ctx_ac = browser.new_context(viewport={"width": 1400, "height": 1000}, accept_downloads=True)
+    pac = ctx_ac.new_page()
+    pac.add_init_script("localStorage.setItem('analysisSettings', JSON.stringify({uiMode: 'expert'}))")   # the metadata editor and background tools are not in the simple mode
+    errs_ac = []
+    pac.on("pageerror", lambda e: errs_ac.append(f"pageerror: {e}"))
+    pac.on("dialog", lambda d: (errs_ac.append("native dialog: " + d.message), d.dismiss()))
+    pac.goto(URL, wait_until="networkidle")
+    pac.set_input_files("#file-input", SPEC)
+    pac.wait_for_selector("#result-summary", state="visible", timeout=30000)
+    with pac.expect_download(timeout=15000) as dl:
+        pac.click("#btn-export-csv")
+    csv_path = dl.value.path()
+    csv_text = open(csv_path, encoding="utf-8", errors="replace").read()
+    check("AC CSV export downloads a file with the counts in it", dl.value.suggested_filename.lower().endswith(".csv") and len(csv_text.splitlines()) > 100,
+          dl.value.suggested_filename)
+    pac.click("#btn-edit-n42")
+    pac.wait_for_function("getComputedStyle(document.getElementById('n42-editor-modal')).display === 'flex'", timeout=15000)
+    pac.wait_for_function("document.getElementById('n42-live-time').value !== ''", timeout=15000)
+    check("AC the N42 metadata editor opens with the spectrum's live time filled in", True)
+    pac.click("#close-n42-editor")
+    check("AC and closes", pac.evaluate("getComputedStyle(document.getElementById('n42-editor-modal')).display") == "none")
+    bg_rows = "\n".join(f"{3.0 + 3.0 * n:.2f},20" for n in range(256))
+    bg_csv = {"name": "bg.csv", "mimeType": "text/csv", "buffer": ("Energy (keV),Counts\n" + bg_rows + "\n").encode()}
+    pac.click("#btn-analysis")                                                                                   # the Background section is in the Analysis panel
+    check("AC the Load Background button is reachable once the section is open", pac.is_visible("#btn-load-bg"))
+    pac.set_input_files("#bg-file-input", files=[bg_csv])
+    pac.wait_for_function("getComputedStyle(document.getElementById('bg-active-indicator')).display !== 'none'", timeout=15000)
+    check("AC Load Background File shows the ACTIVE badge", True)
+    check("AC and the Clear BG button", pac.is_visible("#btn-clear-bg"))
+    pac.click("#btn-clear-bg")
+    pac.wait_for_function("getComputedStyle(document.getElementById('bg-active-indicator')).display === 'none'", timeout=8000)
+    check("AC clearing it hides the badge", True)
+    check("AC no JS errors or native dialogs", not errs_ac, "; ".join(errs_ac[:3]))
+    ctx_ac.close()
     browser.close()
 
 fails = [r for r in results if not r[1]]
