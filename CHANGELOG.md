@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## [Session 2026-10-05, part 2] - TODO closure: presets, chain matching, single-line rule, Compton-edge hint, tests
+
+Evaluation after the changes: `scoring_eval.py --local` 32/32 verdicts, 0 false artificial identifications, 0 parent inversions; `drift_sweep.py` 294 of 308
+right, 9 cases with a false artificial isotope (was 10), no correction naming the wrong source. Full suite 1072 passed; browser suite 217 checks.
+Every TODO item is now either done, closed with its reason beside it, or marked as waiting on you (see "Waiting on you" at the top of `TODO.md`).
+
+### Added
+- **Energy presets** (`spectroscopy/energy_presets.py`, calibration dialog): a file with channel numbers only can take the known RadiaCode or AlphaHound
+  axis (ranked by template fit), a linear axis or a polynomial; auto-correction may refine a preset axis. RadiaCode captures differ from the preset by up to
+  11 keV below 300 keV and 2.6 % above (measured on six real calibrations; an earlier "about 2.5 %" was wrong).
+- **Compton-edge hint** (`spectroscopy/compton_edges.py`): an unexplained peak at the edge of a line at least twice its area reads "may be the Compton edge of
+  662 keV". Only unexplained peaks are marked, and nothing is identified from it (real lines do sit on edges: Ra-226 186, Ac-228 338, Bi-212 727 keV).
+- `tools/standardise_n42.py` for N42 files saved before 2026-10-04; seeded synthetic spectra with golden tests (`tests/test_synthetic_spectra.py`);
+  `tests/test_radiacode_settings_routes.py` (27 tests, fake driver); `tests/test_logging_style.py`; `tests/test_single_line_rule.py`.
+- Browser suite: preset flow (AB), CSV export, N42 metadata editor and Load Background File (AC). Theme sweep: a real thorium capture and the Radiacode tab,
+  102 combinations.
+
+### Changed
+- **Chain member matching** uses the detector's resolution at each line and gives each line its own peak (it widened to 60 keV and let one peak explain
+  several lines; reuse 34 to 0).
+- **Single-line isotopes** need a peak of significance >= 10 and a width 0.6-1.6x the detector's. Measured on 41 single-line matches: all 37 genuine ones
+  pass; the false Tc-99m, F-18 and a drifted Cs-137 Compton bump read as I-131 do not.
+- `POST /device/spectrum` returns the corrected axis, warnings, calibration check, auto-correction and data quality, as the upload route does.
+- No `print` and no log tag repeating the logger name in the library code.
+
+### Corrections
+- The first width bound (0.5-2.0) unmasked a false I-131 that a false Ra-226 match had been hiding; tightened to 0.6-1.6 and re-measured.
+- A Compton flag used as an identification exclusion removed real lines; it is now a post-hoc hint on unexplained peaks only.
+- ML weak-source and background-dominated training was measured and not adopted: same benchmark result (8/9, 3/9), confidences moved both ways.
+
 ## [Session 2026-10-05] - Calibration tool, series verdict, activity estimate, unassigned excess, install scripts
 
 Evaluated on `tests/scoring_eval.py` (33 labelled spectra: RadiaCode CsI, AlphaHound CsI, germanium, calibration sources, backgrounds; verdicts, false

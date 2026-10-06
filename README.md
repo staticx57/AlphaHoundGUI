@@ -499,8 +499,10 @@ AlphaHoundGUI/
 │   ├── ml/                              # AI identification (scikit-learn) and its training data
 │   │   ├── ml_analysis.py               # ML identification (scikit-learn)
 │   │   └── ml_data_loader.py            # Real data augmentation for ML training
-│   ├── tools/                           # Scripts: devctl (server and device control), recalibrate_n42, check_install (what an
+│   ├── tools/                           # Scripts: devctl (server and device control), recalibrate_n42, standardise_n42 (adds the
+│   │                                    #   energy axis InterSpec reads to N42 files saved before 2026-10-04), check_install (what an
 │   │                                    #   installation can do), download_iaea_data, generate_decay_table, generate_test_spectra
+│   │                                    #   (seeded synthetic spectra; golden tests in tests/test_synthetic_spectra.py)
 │   └── static/
 │       ├── index.html                   # Main HTML interface
 │       ├── style.css                    # Application styling with CSS variables
@@ -705,6 +707,12 @@ Two scripts evaluate the identification engine on every labelled spectrum (Radia
 one lens: `python backend/tests/scoring_eval.py [--local]` scores verdicts, false identifications, the placement of a series parent and
 stability under another line order and a 3 % axis error; `python backend/tests/drift_sweep.py` drifts the axis 0.90-1.10 on each spectrum
 and checks that no automatic correction names the wrong source. Run them after changing the fit, the scoring or `auto_calibration.py`.
+`python backend/tests/ui_theme_sweep.py` visits 17 themes at desktop and phone width (a spectrum, a thorium series capture, the Radiacode tab)
+and flags overflow, low contrast and script errors.
+
+A CSV or XML file with channel numbers only can be given an energy axis in the calibration dialog: the known RadiaCode and AlphaHound axes
+(ranked by how well each makes the lines fit), a linear axis, or a polynomial (`spectroscopy/energy_presets.py`). An unexplained peak that sits
+at the Compton edge of a much stronger line says so in the peak list; that hint is never used to identify anything (`spectroscopy/compton_edges.py`).
 
 With an AlphaHound connected, `python backend/tests/live_alphahound_check.py` checks it through the real UI and API (live panel, page reload,
 dose stream during heavy uploads, alert banner, dose units, background subtraction, LAN address, checkpoint export, server log). It is
