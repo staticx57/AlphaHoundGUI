@@ -134,6 +134,7 @@ def test_the_port_is_opened_with_a_write_timeout(monkeypatch):
 
 
 class ClosingSocket:
+    headers = {}          # no Origin: not a web page (the socket checks where it was opened from)
     async def accept(self):
         pass
 

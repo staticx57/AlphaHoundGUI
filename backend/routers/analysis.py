@@ -300,12 +300,21 @@ async def upload_file(file: UploadFile = File(...)):
     filename = file.filename.lower()
     _check_extension(filename)
 
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE_MB}MB"
-        )
+    # Read up to the limit and no further: a file far beyond it is refused without being held in memory
+    limit = MAX_FILE_SIZE_MB * 1024 * 1024
+    chunks, size = [], 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        size += len(chunk)
+        if size > limit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Maximum size: {MAX_FILE_SIZE_MB}MB"
+            )
+        chunks.append(chunk)
+    content = b"".join(chunks)
 
     # Parsing and analysis are CPU work: in a worker thread, so the event loop (the live dose stream, other requests) keeps going
     return await run_in_threadpool(_analyze_upload, content, filename, file.filename)

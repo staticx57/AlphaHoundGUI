@@ -376,6 +376,7 @@ All optional; the defaults give the interactive behaviour.
 |----------|--------|
 | `ALPHAHOUND_LOG_LEVEL` | Log level (`INFO` by default). |
 | `ALPHAHOUND_CORS_ORIGINS` | Comma-separated origins allowed to call the API from another site; none by default. |
+| `ALPHAHOUND_ALLOWED_HOSTS` | Extra host names this computer is reached by (comma-separated). The server refuses state-changing requests from web pages other than its own; its own are those opened at `localhost`, an IP address or this computer's name. Needed only if you open the app through another name (a reverse proxy, a custom DNS entry). |
 | `ALPHAHOUND_AUTOCONNECT_PORT` | Serial port (e.g. `COM8`) to connect to at startup, retried while it is busy. |
 | `ALPHAHOUND_AUTORECONNECT` | `1`: with the port above, keep it connected and reconnect after a USB drop or a silent device (a deliberate Disconnect is respected until the next Connect). Implies `ALPHAHOUND_KEEP_CONNECTED`. |
 | `ALPHAHOUND_KEEP_CONNECTED` | `1`: do not release the AlphaHound when the last browser tab closes. |
@@ -568,7 +569,6 @@ AlphaHoundGUI/
 - `fastapi` - Modern web framework for building APIs
 - `uvicorn` - Lightning-fast ASGI server
 - `python-multipart` - File upload support
-- `slowapi` - API rate limiting (60 req/min per IP)
 
 ### Scientific Computing
 - `numpy` - Numerical arrays and mathematical operations

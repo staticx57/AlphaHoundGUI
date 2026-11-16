@@ -9,6 +9,7 @@ import main
 
 
 class FakeSocket:
+    headers = {}          # no Origin: not a web page (the socket checks where it was opened from)
     def __init__(self, failure):
         self.failure = failure
         self.accepted = False

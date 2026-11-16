@@ -119,10 +119,10 @@ export function setupSettingsAndHistory({ ui, alertCenter, applyUIMode, loadFrom
 
                 return `
                 <div class="history-item" data-index="${index}" style="${statusClass}" title="${statusTitle}">
-                    <div class="history-item-name">${item.filename}</div>
+                    <div class="history-item-name">${escapeHtml(item.filename)}</div>
                     <div class="history-item-date">${new Date(item.timestamp).toLocaleString()}</div>
                     <div style="font-size: 0.875rem; margin-top: 0.5rem;">
-                        ${item.preview.peakCount} peaks | ${(item.preview.isotopes || []).join(', ') || 'No isotopes'}
+                        ${escapeHtml(item.preview.peakCount)} peaks | ${escapeHtml((item.preview.isotopes || []).join(', ')) || 'No isotopes'}
                     </div>
                 </div>
             `;

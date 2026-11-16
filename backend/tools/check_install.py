@@ -16,7 +16,7 @@ MIN_PYTHON = (3, 11)       # scipy 1.16 and scikit-learn 1.8, the oldest version
 # (import name, pip name): the app does not start without these (requirements_lightweight.txt, which backend/requirements.txt includes)
 REQUIRED = [
     ("fastapi", "fastapi"), ("uvicorn", "uvicorn"), ("multipart", "python-multipart"), ("websockets", "websockets"),
-    ("slowapi", "slowapi"), ("pydantic", "pydantic"), ("serial", "pyserial"), ("numpy", "numpy"), ("scipy", "scipy"),
+    ("pydantic", "pydantic"), ("serial", "pyserial"), ("numpy", "numpy"), ("scipy", "scipy"),
     ("pandas", "pandas"), ("matplotlib", "matplotlib"), ("reportlab", "reportlab"),
 ]
 

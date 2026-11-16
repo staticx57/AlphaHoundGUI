@@ -116,7 +116,7 @@ def test_the_root_requirements_file_includes_the_backend_one():
 def test_the_self_check_passes_on_this_installation(capsys):
     assert check_install.main([]) == 0
     out = capsys.readouterr().out
-    assert "Required packages: 12 of 12 present" in out and "Peak finder:" in out
+    assert "Required packages: 11 of 11 present" in out and "Peak finder:" in out
 
 
 def test_the_self_check_reports_a_missing_required_package_and_fails(monkeypatch, capsys):

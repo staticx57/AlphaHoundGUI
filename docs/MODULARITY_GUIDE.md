@@ -449,7 +449,7 @@ Content-Type: application/json
 }
 ```
 
-Custom isotopes persist in `backend/custom_isotopes.json`.
+Custom isotopes persist in `backend/data/custom_isotopes.json`.
 
 ### Adding Decay Chains
 

@@ -193,6 +193,6 @@ clears the device (a timed acquisition, Clear), which was left alone.
 
 ## Good practices
 
-- No `import *`; type hints and Pydantic validation on the API; rate limiting; CORS off by default.
+- No `import *`; type hints and Pydantic validation on the API; requests from other web pages refused (Origin check); CORS off by default.
 - 641 backend tests plus browser checks (smoke, accessibility, theme sweep, channel sweep).
 - Real-spectrum benchmarks (`tests/real_benchmark.py`, `tests/ml_benchmark.py`) guard the analysis numbers.

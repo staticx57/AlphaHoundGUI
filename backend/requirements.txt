@@ -9,7 +9,6 @@ fastapi>=0.126
 uvicorn>=0.37
 python-multipart>=0.0.21
 websockets>=15
-slowapi>=0.1.9
 pydantic>=2                 # request validation (a direct dependency; FastAPI also requires it)
 
 # Numerics, spectra, reports

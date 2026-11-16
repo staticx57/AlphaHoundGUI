@@ -9,8 +9,12 @@ from routers import analysis
 class FakeUpload:
     filename = "spectrum.csv"
 
-    async def read(self):
-        return b"Energy (keV),Counts\n1,1\n2,2\n"
+    def __init__(self):
+        self.left = b"Energy (keV),Counts\n1,1\n2,2\n"
+
+    async def read(self, size=-1):          # read in pieces up to the size limit, like a real upload
+        piece, self.left = (self.left, b"") if size < 0 else (self.left[:size], self.left[size:])
+        return piece
 
 
 def test_a_slow_analysis_does_not_block_the_event_loop(monkeypatch):

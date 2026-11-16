@@ -5,7 +5,6 @@ fastapi
 uvicorn
 python-multipart
 websockets
-slowapi
 pydantic
 pyserial
 numpy

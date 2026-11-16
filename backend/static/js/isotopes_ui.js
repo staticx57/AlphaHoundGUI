@@ -129,11 +129,14 @@ export const isotopeUI = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, energies })
         });
-        if (!res.ok) throw new Error("Failed to add");
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(typeof error.detail === 'string' ? error.detail : "Failed to add");
+        }
     },
 
     async deleteCustomIsotope(name) {
-        const res = await fetch(`/isotopes/custom/${name}`, { method: 'DELETE' });
+        const res = await fetch(`/isotopes/custom/${encodeURIComponent(name)}`, { method: 'DELETE' });
         if (!res.ok) throw new Error("Failed to delete");
     },
 
@@ -187,7 +190,9 @@ export const isotopeUI = {
                 if (!res.ok) throw new Error("Import failed");
 
                 const result = await res.json();
-                notifyAuto(`Successfully imported ${result.imported} isotope(s).`);
+                const skipped = (result.skipped || []).length;
+                notifyAuto(`Successfully imported ${result.imported} isotope(s).`
+                    + (skipped ? ` ${skipped} left out: ${result.skipped[0].reason}` : ''));
                 this.renderList();
             } catch (err) {
                 notifyAuto("Import error: " + err.message);

@@ -619,8 +619,10 @@ export class AlphaHoundAPI {
      * Set energy calibration coefficients
      */
     async setEnergyCalibration(a0, a1, a2) {
-        const response = await fetch(`/radiacode/calibration/energy?a0=${a0}&a1=${a1}&a2=${a2}`, {
-            method: 'POST'
+        const response = await fetch('/radiacode/calibration/energy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ a0, a1, a2 })
         });
         if (!response.ok) {
             const error = await response.json();

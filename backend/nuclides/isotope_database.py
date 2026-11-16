@@ -218,34 +218,112 @@ ISOTOPE_DATABASE_ADVANCED = {
 ISOTOPE_DATABASE = ISOTOPE_DATABASE_SIMPLE
 
 # Custom Isotope Persistence
-CUSTOM_ISOTOPES_FILE = "custom_isotopes.json"
 import logging
 logger = logging.getLogger(__name__)
 import json
+import math
 import os
+import shutil
+import threading
+
+# In backend/data, whatever folder the server was started from. It used to be a bare file name, so it landed in the
+# working directory: a server started from the repository root and one started by run.bat (from backend/) each had
+# their own list. A list left at one of those places is carried over the first time it is needed.
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CUSTOM_ISOTOPES_FILE = os.path.join(_BACKEND_DIR, "data", "custom_isotopes.json")
+_LEGACY_CUSTOM_ISOTOPES_FILES = (
+    os.path.join(_BACKEND_DIR, "custom_isotopes.json"),
+    os.path.join(os.path.dirname(_BACKEND_DIR), "custom_isotopes.json"),
+)
+_custom_lock = threading.Lock()
+
+CUSTOM_NAME_MAX = 64
+CUSTOM_NAME_PUNCTUATION = " -_.()+,:"
+CUSTOM_ENERGIES_MAX = 50
+CUSTOM_ENERGY_MAX_KEV = 20000.0
+CUSTOM_ISOTOPES_MAX = 500
+
+
+def validate_custom_isotope(name, energies):
+    """The name and energies as they will be stored, or ValueError saying what is wrong.
+
+    A name is letters, digits, spaces and - _ . ( ) + , : only. It is shown in the page and used in a URL, and a list
+    imported from someone else's file must not be able to carry markup."""
+    if not isinstance(name, str):
+        raise ValueError("The name must be text")
+    name = name.strip()
+    if not name:
+        raise ValueError("Name required")
+    if len(name) > CUSTOM_NAME_MAX:
+        raise ValueError(f"The name is longer than {CUSTOM_NAME_MAX} characters")
+    bad = sorted({c for c in name if not (c.isalnum() or c in CUSTOM_NAME_PUNCTUATION)})
+    if bad:
+        raise ValueError("The name may hold letters, digits, spaces and - _ . ( ) + , : only (not "
+                         + " ".join(repr(c) for c in bad[:5]) + ")")
+    if not isinstance(energies, (list, tuple)) or not energies:
+        raise ValueError("At least one energy (keV) is required")
+    if len(energies) > CUSTOM_ENERGIES_MAX:
+        raise ValueError(f"More than {CUSTOM_ENERGIES_MAX} energies")
+    clean = []
+    for e in energies:
+        if isinstance(e, bool) or not isinstance(e, (int, float)) or not math.isfinite(e) \
+                or not 0 < e <= CUSTOM_ENERGY_MAX_KEV:
+            raise ValueError(f"Each energy must be a number above 0 and at most {CUSTOM_ENERGY_MAX_KEV:.0f} keV")
+        clean.append(float(e))
+    return name, clean
+
+
+def _carry_over_legacy_file():
+    if os.path.exists(CUSTOM_ISOTOPES_FILE):
+        return
+    for old in _LEGACY_CUSTOM_ISOTOPES_FILES:
+        if os.path.isfile(old):
+            try:
+                os.makedirs(os.path.dirname(CUSTOM_ISOTOPES_FILE), exist_ok=True)
+                shutil.copyfile(old, CUSTOM_ISOTOPES_FILE)
+                logger.info(f"Custom isotopes carried over from {old} to {CUSTOM_ISOTOPES_FILE}")
+            except OSError as e:
+                logger.warning(f"Could not carry over the custom isotopes in {old}: {e}")
+            return
+
+
+def _write_custom_isotopes(custom):
+    """Whole file or nothing: written beside the target and moved over it, so a crash cannot leave half a list."""
+    os.makedirs(os.path.dirname(CUSTOM_ISOTOPES_FILE), exist_ok=True)
+    tmp = CUSTOM_ISOTOPES_FILE + ".tmp"
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(custom, f, indent=2)
+    os.replace(tmp, CUSTOM_ISOTOPES_FILE)
 
 def load_custom_isotopes():
+    _carry_over_legacy_file()
     if not os.path.exists(CUSTOM_ISOTOPES_FILE):
         return {}
     try:
-        with open(CUSTOM_ISOTOPES_FILE, 'r') as f:
-            return json.load(f)
+        with open(CUSTOM_ISOTOPES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
 
 def save_custom_isotope(name, energies):
-    custom = load_custom_isotopes()
-    custom[name] = energies
-    with open(CUSTOM_ISOTOPES_FILE, 'w') as f:
-        json.dump(custom, f, indent=2)
+    """Store one custom isotope (ValueError if the name or the energies are not acceptable). Returns the stored name."""
+    name, energies = validate_custom_isotope(name, energies)
+    with _custom_lock:
+        custom = load_custom_isotopes()
+        if name not in custom and len(custom) >= CUSTOM_ISOTOPES_MAX:
+            raise ValueError(f"The list is full ({CUSTOM_ISOTOPES_MAX} custom isotopes)")
+        custom[name] = energies
+        _write_custom_isotopes(custom)
+    return name
 
 def delete_custom_isotope(name):
-    custom = load_custom_isotopes()
-    if name in custom:
-        del custom[name]
-        with open(CUSTOM_ISOTOPES_FILE, 'w') as f:
-            json.dump(custom, f, indent=2)
-        return True
+    with _custom_lock:
+        custom = load_custom_isotopes()
+        if name in custom:
+            del custom[name]
+            _write_custom_isotopes(custom)
+            return True
     return False
 
 def get_isotope_database(mode='simple'):

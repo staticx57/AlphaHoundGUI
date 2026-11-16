@@ -6,7 +6,7 @@ Mirrors the AlphaHound device API pattern for consistency.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Optional, List, Dict, Any
 import sys
 import os
@@ -545,9 +545,30 @@ def get_energy_calibration():
     return calibration
 
 
+RADIACODE_CHANNELS = 1024
+
+
+class EnergyCalibrationRequest(BaseModel):
+    """Energy = a0 + a1*channel + a2*channel^2. This is written to the device, so it must be a usable axis: finite
+    numbers, in the range a Radiacode's own calibration lies in (about 0 keV, 2.4 keV/channel, 4e-4), and an energy
+    that rises with the channel all the way up."""
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+
+    a0: float = Field(..., ge=-100.0, le=100.0, description="Offset, keV")
+    a1: float = Field(..., ge=0.5, le=10.0, description="keV per channel")
+    a2: float = Field(..., ge=-0.005, le=0.005, description="keV per channel squared")
+
+    @model_validator(mode="after")
+    def _energy_rises_with_channel(self):
+        if self.a1 + 2.0 * self.a2 * (RADIACODE_CHANNELS - 1) <= 0:
+            raise ValueError("the energy must rise with the channel over all 1024 channels")
+        return self
+
+
 @router.post("/calibration/energy")
-def set_energy_calibration(a0: float, a1: float, a2: float):
+def set_energy_calibration(request: EnergyCalibrationRequest):
     """Set energy calibration coefficients (Energy = a0 + a1*channel + a2*channel^2)."""
+    a0, a1, a2 = request.a0, request.a1, request.a2
     if not radiacode_device.is_connected():
         raise HTTPException(status_code=400, detail="Radiacode not connected")
     

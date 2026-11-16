@@ -178,6 +178,7 @@ def test_autoconnect_gives_up_and_skips_when_already_connected(monkeypatch):
 
 
 class _LeavingSocket:
+    headers = {}          # no Origin: not a web page (the socket checks where it was opened from)
     """A websocket that accepts, delivers one message, then fails like a closed browser tab."""
 
     def __init__(self):

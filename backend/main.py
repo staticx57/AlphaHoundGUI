@@ -9,13 +9,16 @@ logging.basicConfig(
 )
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+import math
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 import asyncio
+import ipaddress
+import socket
+from urllib.parse import urlsplit
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -39,8 +42,6 @@ AUTORECONNECT = os.environ.get("ALPHAHOUND_AUTORECONNECT", "").strip().lower() i
 # A watchdog that keeps the device connected must not be undone by the "last browser tab closed" release
 KEEP_CONNECTED = AUTORECONNECT or os.environ.get("ALPHAHOUND_KEEP_CONNECTED", "").strip().lower() in _TRUE
 
-# Rate limiter: 60 requests per minute per IP
-limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(_app):
     """Startup work (on_event handlers are deprecated). The functions are defined below; they are looked up when the server starts."""
@@ -51,8 +52,6 @@ async def lifespan(_app):
 
 
 app = FastAPI(lifespan=lifespan)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS: the UI is served from this same origin, so cross-origin access is off by
 # default. Set ALPHAHOUND_CORS_ORIGINS="http://host1:3000,http://host2" to allow others.
@@ -65,6 +64,104 @@ if _cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# ---- Requests from other web pages ----
+# The server has no login: it trusts whoever can reach it. A browser, though, will also send it requests on behalf of
+# any web page the user has open (a POST without a JSON body needs no permission from the server), and that page could
+# clear the device spectrum, stop a run or switch the Radiacode off. A browser names the page a request comes from in
+# the Origin header, so a state-changing request (and the WebSocket) is refused unless it comes from this server's own
+# pages or an origin listed in ALPHAHOUND_CORS_ORIGINS. Clients that are not browsers (curl, devctl, the tests) send no
+# Origin and are not affected.
+
+# The server's own pages are recognised by Origin == Host. A hostile page can make those equal by pointing its own
+# domain name at this machine (DNS rebinding), so the Host must also be a name this server answers to: localhost, an
+# IP address (a LAN address typed into a phone), this computer's name, or one listed in ALPHAHOUND_ALLOWED_HOSTS.
+_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+def _own_hostnames() -> set:
+    names = {"localhost"}
+    try:
+        host = socket.gethostname().lower()
+        if host:
+            names.update({host, host + ".local", host + ".lan", host + ".home"})
+        fqdn = socket.getfqdn().lower()
+        if fqdn:
+            names.add(fqdn)
+    except OSError:
+        pass
+    names.update(h.strip().lower() for h in os.environ.get("ALPHAHOUND_ALLOWED_HOSTS", "").split(",") if h.strip())
+    return names
+
+
+_OWN_HOSTNAMES = _own_hostnames()
+
+
+def _hostname_of(netloc: str) -> str:
+    """'localhost:3200' -> 'localhost', '[::1]:3200' -> '::1'."""
+    try:
+        return (urlsplit("//" + netloc).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _host_is_ours(netloc: str) -> bool:
+    name = _hostname_of(netloc)
+    if not name:
+        return False
+    try:
+        ipaddress.ip_address(name)
+        return True                      # an address, not a name: DNS rebinding needs a name
+    except ValueError:
+        return name in _OWN_HOSTNAMES
+
+
+def origin_allowed(origin, host) -> bool:
+    """May a request with this Origin header, sent to this Host header, change anything?"""
+    if origin is None:
+        return True                      # not sent by a web page
+    origin = origin.strip().rstrip("/")
+    if origin in _cors_origins:
+        return True
+    try:
+        parts = urlsplit(origin)
+    except ValueError:
+        return False
+    if parts.scheme not in ("http", "https") or not parts.netloc or not host:
+        return False                     # "null" (a sandboxed page, a file:// page) included
+    return parts.netloc.lower() == host.strip().lower() and _host_is_ours(host)
+
+
+@app.middleware("http")
+async def refuse_other_pages(request: Request, call_next):
+    if request.method not in _SAFE_METHODS:
+        origin = request.headers.get("origin")
+        if not origin_allowed(origin, request.headers.get("host")):
+            logger.warning(f"Refused {request.method} {request.url.path} from another web page ({origin})")
+            return JSONResponse(status_code=403, content={
+                "detail": "Refused: this request came from another web page. Open the app at the address the server "
+                          "runs on, or list the page's origin in ALPHAHOUND_CORS_ORIGINS (and an extra host name for "
+                          "this computer in ALPHAHOUND_ALLOWED_HOSTS)."})
+    return await call_next(request)
+
+
+def _json_safe(value):
+    """NaN and Infinity as text: JSON has no way to write them."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request: Request, exc: RequestValidationError):
+    """The usual 422, also when the refused value is NaN or Infinity. The reply quotes the input, and the default
+    handler then failed to write it: the request ended as a 500 with nothing said about what was wrong."""
+    return JSONResponse(status_code=422, content={"detail": _json_safe(jsonable_encoder(exc.errors()))})
+
 
 # Routers
 app.include_router(device.router)
@@ -181,6 +278,11 @@ def _acquisition_running() -> bool:
 @app.websocket("/ws/dose")
 async def websocket_dose_stream(websocket: WebSocket):
     """WebSocket endpoint for real-time dose rate streaming with session management"""
+    # A browser always names the page that opens a WebSocket; another site's page must not read the dose stream
+    # (nor keep the device connected by holding a socket open).
+    if not origin_allowed(websocket.headers.get("origin"), websocket.headers.get("host")):
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
     active_websockets.add(websocket)
     logger.info(f"[WebSocket] Client connected. Active connections: {len(active_websockets)}")
@@ -211,7 +313,7 @@ async def websocket_dose_stream(websocket: WebSocket):
             await asyncio.sleep(WS_DISCONNECT_GRACE_S)
             if len(active_websockets) == 0 and alphahound_device.is_connected() and not _acquisition_running():
                 logger.info("[WebSocket] No active clients. Auto-disconnecting device to prevent port locking...")
-                alphahound_device.disconnect()
+                await asyncio.to_thread(alphahound_device.disconnect)   # serial I/O: not on the event loop
         
         # Safely attempt to close - may already be closed by client
         try:

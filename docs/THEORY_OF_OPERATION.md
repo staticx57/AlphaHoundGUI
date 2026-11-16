@@ -633,7 +633,7 @@ sequenceDiagram
 
 | Feature | Implementation |
 |---------|----------------|
-| **Rate Limiting** | `slowapi` - 60 requests/minute/IP |
+| **Requests from other web pages** | State-changing requests and the WebSocket are refused unless their `Origin` is the server's own address (`main.py`, `origin_allowed`) |
 | **Input Validation** | Pydantic models with Field validators |
 | **File Validation** | Size limits (10 MB), extension whitelist |
 | **Port Sanitization** | Regex pattern matching for COM/tty ports |
@@ -647,7 +647,7 @@ sequenceDiagram
 
 | Data | Location | Format |
 |------|----------|--------|
-| Custom Isotopes | `backend/custom_isotopes.json` | JSON |
+| Custom Isotopes | `backend/data/custom_isotopes.json` | JSON |
 | Auto-saved Spectra | `backend/data/acquisitions/` | CSV |
 | Frontend Settings | Browser localStorage | JSON |
 

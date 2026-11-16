@@ -662,9 +662,9 @@ export class AlphaHoundUI {
                     '<span style="font-size: 0.6rem; background: #3b82f680; padding: 1px 4px; border-radius: 2px; margin-left: 4px;">Enhanced</span>' : '';
 
                 return `
-                    <div class="isotope-result-item" data-isotope="${iso.isotope}" data-iso-index="${idx}" style="cursor: pointer; transition: background 0.2s;">
+                    <div class="isotope-result-item" data-isotope="${escapeHtml(iso.isotope)}" data-iso-index="${idx}" style="cursor: pointer; transition: background 0.2s;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
-                            <strong style="color: var(--text-primary);">${iso.isotope}${modeBadge}</strong>
+                            <strong style="color: var(--text-primary);">${escapeHtml(iso.isotope)}${modeBadge}</strong>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <button class="btn-highlight-isotope" data-iso-idx="${idx}" style="
                                     background: rgba(245, 158, 11, 0.2);
@@ -696,7 +696,7 @@ export class AlphaHoundUI {
                         ` : ''}
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                             ${iso.role === 'series'
-                                ? `<span title="${iso.isotope} has no gamma line of its own. This is the verdict on its decay series, at the confidence of the best member that does: ${iso.series_basis}.">Series verdict, from ${iso.series_basis}${iso.total_lines ? ` &middot; ${iso.matches}/${iso.total_lines} lines of its members matched` : ''}</span>`
+                                ? `<span title="${escapeHtml(iso.isotope)} has no gamma line of its own. This is the verdict on its decay series, at the confidence of the best member that does: ${escapeHtml(iso.series_basis)}.">Series verdict, from ${escapeHtml(iso.series_basis)}${iso.total_lines ? ` &middot; ${iso.matches}/${iso.total_lines} lines of its members matched` : ''}</span>`
                                 : `<span>${iso.matches}/${iso.total_lines} peaks matched</span>`}
                             <a href="${nndcUrl}" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none; font-size: 0.7rem;" title="View on NNDC NuDat" onclick="event.stopPropagation();"><img src="/static/icons/book.svg" class="icon" style="width: 12px; height: 12px; vertical-align: middle;"> NNDC</a>
                         </div>
@@ -779,7 +779,7 @@ export class AlphaHoundUI {
                 const membersHTML = Object.entries(chain.detected_members).map(([isotope, peaks]) => {
                     const energies = peaks.map(p => p.energy.toFixed(1)).join(', ');
                     return `<div style="margin: 0.3rem 0; padding-left: 1rem;">
-                        <img src="/static/icons/check.svg" class="icon" style="width: 14px; height: 14px; margin-right: 0.25rem; filter: invert(1);"><strong>${isotope}</strong>: ${energies} keV
+                        <img src="/static/icons/check.svg" class="icon" style="width: 14px; height: 14px; margin-right: 0.25rem; filter: invert(1);"><strong>${escapeHtml(isotope)}</strong>: ${energies} keV
                     </div>`;
                 }).join('');
 
@@ -848,7 +848,7 @@ export class AlphaHoundUI {
                 return `
                     <div class="chain-card" style="border-left: 4px solid ${chain.confidence_level === 'HIGH' ? colors.confidenceHigh : colors.confidenceMedium};">
                         <div class="chain-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                            <h4 style="margin: 0; color: var(--text-color);">${confidenceBadge} ${chain.chain_name}</h4>
+                            <h4 style="margin: 0; color: var(--text-color);">${confidenceBadge} ${escapeHtml(chain.chain_name)}</h4>
                             <span class="${confidenceClass}" style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
                                 ${chain.confidence_level} (${chain.confidence.toFixed(0)}%)
                             </span>
