@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## [Unreleased: server hardening] - NOT YET VALIDATED BY THE OWNER
+
+Branch `fix/server-hardening`. Automated checks pass (backend suite 1132, browser suite 217/217 on a second instance, ESLint scope check). Not yet
+tried by the owner in normal use, on a phone on the LAN, or against a real Radiacode; nothing here has run on hardware. Revise this entry after that.
+
+### Security
+- **Requests from other web pages are refused.** The server has no login, and a browser sends a POST without a JSON body for any open page, so a page
+  could clear the AlphaHound spectrum, stop a run, reset or switch off the Radiacode, or write its calibration. State-changing requests and the
+  `/ws/dose` socket now need an `Origin` equal to the server's own address (or one in `ALPHAHOUND_CORS_ORIGINS`), and the `Host` must be `localhost`, an
+  IP address, this computer's name or a name in the new `ALPHAHOUND_ALLOWED_HOSTS` (against DNS rebinding). Requests without an `Origin` (curl, devctl, tests)
+  are unaffected. Opening the app through some other name now needs `ALPHAHOUND_ALLOWED_HOSTS`.
+- **Radiacode energy calibration** (`POST /radiacode/calibration/energy`) takes a JSON body `{a0, a1, a2}` instead of query parameters, and refuses values
+  that are not finite, outside a0 +-100 keV, a1 0.5-10 keV/channel, a2 +-0.005, or that do not rise over all 1024 channels. The bounds are a judgement, not
+  taken from RadiaCode documentation.
+- **Custom isotope names** are validated on the server (letters, digits, spaces and `- _ . ( ) + , :`, up to 64 characters; 1-50 energies up to 20,000 keV;
+  at most 500 isotopes) and escaped wherever the page shows an isotope, chain or history file name. An import keeps its good entries and lists the others
+  under `skipped` with the reason.
+
+### Fixed
+- The rate limiter (`slowapi`) was created and never applied to a route, while the documents called it a security feature. Removed, with its requirements
+  entry and the install check.
+- Custom isotopes were stored in `custom_isotopes.json` in the working directory, so a server started from the repository root and one started by `run.bat`
+  had different lists. Now `backend/data/custom_isotopes.json` (not tracked), written whole-file-or-nothing under a lock; a list at the old places is copied
+  over the first time it is read.
+- An upload is read in pieces and refused as soon as it passes 10 MB, instead of being held in memory first.
+- A `NaN` or `Infinity` in a request body ended as a 500 (the error reply could not write it); it is a 422 now.
+- The WebSocket handler disconnected the AlphaHound on the event loop; it runs in a thread like the routes do.
+
+### Tests
+- `tests/test_server_hardening.py` (60 tests). Existing fakes updated: socket `headers`, chunked `read`, 11 required packages instead of 12.
+
 ## [Session 2026-10-05, part 2] - TODO closure: presets, chain matching, single-line rule, Compton-edge hint, tests
 
 Evaluation after the changes: `scoring_eval.py --local` 32/32 verdicts, 0 false artificial identifications, 0 parent inversions; `drift_sweep.py` 294 of 308
